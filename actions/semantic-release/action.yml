@@ -55,9 +55,9 @@ runs:
         NPM_TOKEN: ${{ inputs.npm-token }}
       run: |
         if [ "${{ inputs.dry-run }}" = "true" ]; then
-          npx semantic-release --dry-run
+          semantic-release --dry-run
         else
-          npx semantic-release
+          semantic-release
         fi
 
 branding:

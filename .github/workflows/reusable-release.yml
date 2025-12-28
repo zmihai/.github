@@ -54,11 +54,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
+      - name: Detect build script
+        id: detect-build-script
+        run: |
+          if [ -f package.json ]; then
+            node -e "const pkg = require('./package.json'); const hasBuild = !!(pkg.scripts && pkg.scripts.build); console.log('hasBuild=' + hasBuild);" >> "$GITHUB_OUTPUT"
+          else
+            echo "hasBuild=false" >> "$GITHUB_OUTPUT"
+          fi
+      
       - name: Build
+        if: ${{ steps.detect-build-script.outputs.hasBuild == 'true' }}
         run: npm run build
       
       - name: Version bump
-        run: npm version ${{ inputs.release-type }} -m "chore(release):%s"
+        run: npm version ${{ inputs.release-type }} -m "chore(release): %s"
       
       - name: Get version
         id: version
@@ -68,7 +78,7 @@ jobs:
         run: git push --follow-tags
       
       - name: Publish to NPM
-        if: ${{ secrets.NPM_TOKEN != '' }}
+        if: ${{ secrets.NPM_TOKEN }}
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

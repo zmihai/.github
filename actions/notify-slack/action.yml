@@ -59,21 +59,27 @@ runs:
           done
         fi
         
-        PAYLOAD=$(cat <<EOF
-        {
-          "channel": "${{ inputs.channel }}",
-          "attachments": [
-            {
-              "color": "${{ steps.color.outputs.color }}",
-              "text": "${{ steps.color.outputs.emoji }} ${{ inputs.message }}\n${MENTIONS}",
-              "footer": "GitHub Actions",
-              "footer_icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
-              "ts": $(date +%s)
-            }
-          ]
-        }
-        EOF
-        )
+        PAYLOAD=$(jq -n \
+          --arg channel "${{ inputs.channel }}" \
+          --arg color "${{ steps.color.outputs.color }}" \
+          --arg emoji "${{ steps.color.outputs.emoji }}" \
+          --arg message "${{ inputs.message }}" \
+          --arg mentions "$MENTIONS" \
+          --arg footer "GitHub Actions" \
+          --arg footer_icon "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" \
+          --arg ts "$(date +%s)" \
+          '{
+            attachments: [
+              {
+                color: $color,
+                text: ($emoji + " " + $message + "\n" + $mentions),
+                footer: $footer,
+                footer_icon: $footer_icon,
+                ts: ($ts | tonumber)
+              }
+            ]
+          }
+          + (if $channel != "" then {channel: $channel} else {} end)')
         
         curl -X POST -H 'Content-type: application/json' \
           --data "$PAYLOAD" \
