@@ -75,11 +75,12 @@ jobs:
       
       - name: Create GitHub Release
         if: ${{ inputs.create-github-release }}
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}
-          release_name: Release v${{ steps.version.outputs.VERSION }}
+          name: Release v${{ steps.version.outputs.VERSION }}
           draft: false
           prerelease: false
+          generate_release_notes: true

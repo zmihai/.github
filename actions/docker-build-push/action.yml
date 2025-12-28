@@ -58,12 +58,24 @@ runs:
         username: ${{ inputs.username }}
         password: ${{ inputs.password }}
     
+    - name: Prepare tags
+      id: prep-tags
+      shell: bash
+      run: |
+        TAGS="${{ inputs.tags }}"
+        # Convert comma-separated tags to newline-separated
+        FORMATTED_TAGS=$(echo "$TAGS" | tr ',' '\n' | sed 's/^/type=raw,value=/')
+        echo "formatted<<EOF" >> $GITHUB_OUTPUT
+        echo "$FORMATTED_TAGS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
     - name: Extract metadata
       id: meta
       uses: docker/metadata-action@v5
       with:
         images: ${{ inputs.registry }}/${{ inputs.image-name }}
-        tags: ${{ inputs.tags }}
+        tags: |
+          ${{ steps.prep-tags.outputs.formatted }}
     
     - name: Build and push
       id: build
