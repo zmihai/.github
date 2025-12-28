@@ -1,0 +1,53 @@
+name: 'Setup Node Environment'
+description: 'Setup Node.js with caching and dependency installation'
+author: 'zmihai'
+
+inputs:
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '20'
+  cache:
+    description: 'Cache package manager (npm, yarn, pnpm)'
+    required: false
+    default: 'npm'
+  install-dependencies:
+    description: 'Automatically install dependencies'
+    required: false
+    default: 'true'
+  working-directory:
+    description: 'Working directory'
+    required: false
+    default: '.'
+
+outputs:
+  cache-hit:
+    description: 'Whether cache was hit'
+    value: ${{ steps.setup-node.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      id: setup-node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: ${{ inputs.cache }}
+    
+    - name: Install dependencies
+      if: ${{ inputs.install-dependencies == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ "${{ inputs.cache }}" = "npm" ]; then
+          npm ci
+        elif [ "${{ inputs.cache }}" = "yarn" ]; then
+          yarn install --frozen-lockfile
+        elif [ "${{ inputs.cache }}" = "pnpm" ]; then
+          pnpm install --frozen-lockfile
+        fi
+
+branding:
+  icon: 'package'
+  color: 'green'
