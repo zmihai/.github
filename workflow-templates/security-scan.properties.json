@@ -1,0 +1,7 @@
+{
+  "name": "Security Scan Workflow",
+  "description": "Automated security scanning for dependencies and code",
+  "iconName": "example-icon",
+  "categories": ["Security"],
+  "filePatterns": ["package.json$"]
+}

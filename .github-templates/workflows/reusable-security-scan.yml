@@ -1,0 +1,60 @@
+name: Reusable Security Scan
+
+on:
+  workflow_call:
+    inputs:
+      scan-dependencies:
+        description: 'Scan npm dependencies for vulnerabilities'
+        required: false
+        type: boolean
+        default: true
+      scan-code:
+        description: 'Run CodeQL analysis'
+        required: false
+        type: boolean
+        default: true
+      language:
+        description: 'Language for CodeQL (javascript, python, etc.)'
+        required: false
+        type: string
+        default: 'javascript'
+
+jobs:
+  dependency-scan:
+    if: ${{ inputs.scan-dependencies }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+      
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+  
+  codeql-scan:
+    if: ${{ inputs.scan-code }}
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ inputs.language }}
+      
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3

@@ -1,0 +1,16 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ master, develop ]
+
+jobs:
+  ci:
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    with:
+      node-version: '20'
+      run-lint: true
+      run-test: true
+      run-build: true

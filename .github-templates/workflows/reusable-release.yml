@@ -1,0 +1,96 @@
+name: Reusable Release Workflow
+
+on:
+  workflow_call:
+    inputs:
+      release-type:
+        description: 'Type of release (patch, minor, major)'
+        required: false
+        type: string
+        default: 'patch'
+      node-version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '20'
+      create-github-release:
+        description: 'Create GitHub release'
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      NPM_TOKEN:
+        description: 'NPM token for publishing'
+        required: false
+      GH_TOKEN:
+        description: 'GitHub token for creating releases'
+        required: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Detect build script
+        id: detect-build-script
+        run: |
+          if [ -f package.json ]; then
+            node -e "const pkg = require('./package.json'); const hasBuild = !!(pkg.scripts && pkg.scripts.build); console.log('hasBuild=' + hasBuild);" >> "$GITHUB_OUTPUT"
+          else
+            echo "hasBuild=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        if: ${{ steps.detect-build-script.outputs.hasBuild == 'true' }}
+        run: npm run build
+
+      - name: Version bump
+        run: npm version ${{ inputs.release-type }} -m "chore(release):%s"
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=$(node -p 'require(\"./package.json\").version')" >> $GITHUB_OUTPUT
+
+      - name: Push changes
+        run: git push --follow-tags
+
+      - name: Publish to NPM
+        if: ${{ secrets.NPM_TOKEN }}
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        if: ${{ inputs.create-github-release }}
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: Release v${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
