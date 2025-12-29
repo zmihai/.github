@@ -53,10 +53,10 @@ jobs:
         if: ${{ inputs.run-lint }}
         run: npm run lint
 
-      - name: Run tests
-        if: ${{ inputs.run-test }}
-        run: npm test
-
       - name: Run build
         if: ${{ inputs.run-build }}
         run: npm run build
+
+      - name: Run tests
+        if: ${{ inputs.run-test }}
+        run: npm test
