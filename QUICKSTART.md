@@ -19,7 +19,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@main
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
     with:
       node-version: '20'
 ```
@@ -31,7 +31,7 @@ Add this to any workflow job:
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/setup-node-env@main
+  - uses: zmihai/.github/actions/setup-node-env@master
     with:
       node-version: '20'
 ```

@@ -6,7 +6,7 @@ inputs:
   branches:
     description: 'Branches to release from (JSON array)'
     required: false
-    default: '["main"]'
+    default: '["master"]'
   dry-run:
     description: 'Run in dry-run mode'
     required: false

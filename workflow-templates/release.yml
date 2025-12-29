@@ -15,7 +15,7 @@ on:
 
 jobs:
   release:
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@main
+    uses: zmihai/.github/.github/workflows/reusable-release.yml@master
     with:
       release-type: ${{ inputs.release-type }}
       node-version: '20'

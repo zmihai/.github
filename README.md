@@ -35,7 +35,7 @@ A comprehensive CI workflow that handles linting, testing, and building Node.js 
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@main
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
     with:
       node-version: '20'
       run-lint: true
@@ -62,7 +62,7 @@ Automates the release process including version bumping, npm publishing, and Git
 ```yaml
 jobs:
   release:
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@main
+    uses: zmihai/.github/.github/workflows/reusable-release.yml@master
     with:
       release-type: 'minor'
       create-github-release: true
@@ -86,7 +86,7 @@ Performs security scanning including dependency audits and CodeQL analysis.
 ```yaml
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@main
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@master
     with:
       scan-dependencies: true
       scan-code: true
@@ -118,7 +118,7 @@ Sets up Node.js environment with caching and automatic dependency installation.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/setup-node-env@main
+  - uses: zmihai/.github/actions/setup-node-env@master
     with:
       node-version: '20'
       cache: 'npm'
@@ -149,7 +149,7 @@ Builds and pushes Docker images to container registries.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/docker-build-push@main
+  - uses: zmihai/.github/actions/docker-build-push@master
     with:
       image-name: 'myuser/myapp'
       registry: 'ghcr.io'
@@ -165,7 +165,7 @@ steps:
 Automates versioning and package publishing using semantic-release.
 
 **Inputs:**
-- `branches` (default: '["main"]'): Branches to release from (JSON array)
+- `branches` (default: '["master"]'): Branches to release from (JSON array)
 - `dry-run` (default: 'false'): Run in dry-run mode
 - `plugins` (optional): Additional semantic-release plugins
 - `github-token` (required): GitHub token for releases
@@ -179,7 +179,7 @@ Automates versioning and package publishing using semantic-release.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/semantic-release@main
+  - uses: zmihai/.github/actions/semantic-release@master
     with:
       github-token: ${{ secrets.GITHUB_TOKEN }}
       npm-token: ${{ secrets.NPM_TOKEN }}
@@ -201,7 +201,7 @@ Sends notifications to Slack channels with status indicators.
 **Example Usage:**
 ```yaml
 steps:
-  - uses: zmihai/.github/actions/notify-slack@main
+  - uses: zmihai/.github/actions/notify-slack@master
     if: always()
     with:
       webhook-url: ${{ secrets.SLACK_WEBHOOK }}
@@ -233,20 +233,20 @@ name: CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
   release:
     types: [ created ]
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@main
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
     with:
       node-version: '20'
   
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@main
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@master
     with:
       scan-dependencies: true
       scan-code: true
@@ -254,7 +254,7 @@ jobs:
   release:
     needs: [ci, security]
     if: github.event_name == 'release'
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@main
+    uses: zmihai/.github/.github/workflows/reusable-release.yml@master
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
@@ -266,7 +266,7 @@ name: Build and Deploy
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   build-deploy:
@@ -275,7 +275,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Setup Node
-        uses: zmihai/.github/actions/setup-node-env@main
+        uses: zmihai/.github/actions/setup-node-env@master
         with:
           node-version: '20'
           cache: 'npm'
@@ -284,7 +284,7 @@ jobs:
         run: npm run build
       
       - name: Docker Build and Push
-        uses: zmihai/.github/actions/docker-build-push@main
+        uses: zmihai/.github/actions/docker-build-push@master
         with:
           image-name: 'myuser/myapp'
           registry: 'ghcr.io'
@@ -300,13 +300,13 @@ jobs:
 ### Using Reusable Workflows
 
 1. In your repository, create a workflow file (e.g., `.github/workflows/ci.yml`)
-2. Reference the reusable workflow using `uses: zmihai/.github/.github/workflows/<workflow-name>.yml@main`
+2. Reference the reusable workflow using `uses: zmihai/.github/.github/workflows/<workflow-name>.yml@master`
 3. Pass required inputs and secrets
 
 ### Using Composite Actions
 
 1. Add a step in your workflow
-2. Reference the action using `uses: zmihai/.github/actions/<action-name>@main`
+2. Reference the action using `uses: zmihai/.github/actions/<action-name>@master`
 3. Provide required inputs
 
 ### Using Workflow Templates
@@ -320,9 +320,9 @@ jobs:
 
 ## 📚 Best Practices
 
-1. **Pin versions**: Use specific commit SHAs or tags instead of `@main` in production
+1. **Pin versions**: Use specific commit SHAs or tags instead of `@master` in production
 2. **Security**: Never hardcode secrets, always use GitHub Secrets
-3. **Testing**: Test workflow changes in a separate branch before merging to main
+3. **Testing**: Test workflow changes in a separate branch before merging to master
 4. **Documentation**: Keep this README updated when adding new workflows or actions
 
 ---

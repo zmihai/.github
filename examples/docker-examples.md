@@ -9,7 +9,7 @@ name: Build Docker Image
 
 on:
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   docker:
@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: zmihai/.github/actions/docker-build-push@main
+      - uses: zmihai/.github/actions/docker-build-push@master
         with:
           image-name: 'myusername/myapp'
           registry: 'docker.io'
@@ -33,7 +33,7 @@ name: Build and Push to GHCR
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags: ['v*']
 
 jobs:
@@ -55,7 +55,7 @@ jobs:
             echo "tags=latest,sha-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
           fi
       
-      - uses: zmihai/.github/actions/docker-build-push@main
+      - uses: zmihai/.github/actions/docker-build-push@master
         with:
           image-name: '${{ github.repository }}'
           registry: 'ghcr.io'
@@ -71,7 +71,7 @@ name: Multi-stage Docker Build
 
 on:
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   docker:
@@ -79,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: zmihai/.github/actions/docker-build-push@main
+      - uses: zmihai/.github/actions/docker-build-push@master
         with:
           image-name: 'myusername/myapp'
           registry: 'ghcr.io'
@@ -101,7 +101,7 @@ name: Test Docker Build
 
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   test-docker:
@@ -109,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: zmihai/.github/actions/docker-build-push@main
+      - uses: zmihai/.github/actions/docker-build-push@master
         with:
           image-name: 'myusername/myapp'
           registry: 'docker.io'
