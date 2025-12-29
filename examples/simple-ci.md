@@ -13,7 +13,7 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/workflows/reusable-ci.yml@master
     with:
       node-version: '20'
       run-lint: true
@@ -36,7 +36,7 @@ That's it! This single job will:
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/workflows/reusable-ci.yml@master
     with:
       node-version: '20'
       run-lint: false    # Skip linting
@@ -49,7 +49,7 @@ jobs:
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/workflows/reusable-ci.yml@master
     with:
       node-version: '18'  # Use Node 18
 ```
@@ -59,12 +59,12 @@ jobs:
 ```yaml
 jobs:
   ci-frontend:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/workflows/reusable-ci.yml@master
     with:
       working-directory: './frontend'
       
   ci-backend:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/workflows/reusable-ci.yml@master
     with:
       working-directory: './backend'
 ```

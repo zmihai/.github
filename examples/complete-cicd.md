@@ -16,7 +16,7 @@ on:
 jobs:
   # Run CI on all branches
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/workflows/reusable-ci.yml@master
     with:
       node-version: '20'
       run-lint: true
@@ -26,7 +26,7 @@ jobs:
   # Run security scans
   security:
     needs: ci
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@master
+    uses: zmihai/.github/workflows/reusable-security-scan.yml@master
     with:
       scan-dependencies: true
       scan-code: true

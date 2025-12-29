@@ -35,7 +35,7 @@ A comprehensive CI workflow that handles linting, testing, and building Node.js 
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/workflows/reusable-ci.yml@master
     with:
       node-version: '20'
       run-lint: true
@@ -62,7 +62,7 @@ Automates the release process including version bumping, npm publishing, and Git
 ```yaml
 jobs:
   release:
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@master
+    uses: zmihai/.github/workflows/reusable-release.yml@master
     with:
       release-type: 'minor'
       create-github-release: true
@@ -86,7 +86,7 @@ Performs security scanning including dependency audits and CodeQL analysis.
 ```yaml
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@master
+    uses: zmihai/.github/workflows/reusable-security-scan.yml@master
     with:
       scan-dependencies: true
       scan-code: true
@@ -241,12 +241,12 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/workflows/reusable-ci.yml@master
     with:
       node-version: '20'
   
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@master
+    uses: zmihai/.github/workflows/reusable-security-scan.yml@master
     with:
       scan-dependencies: true
       scan-code: true
@@ -254,7 +254,7 @@ jobs:
   release:
     needs: [ci, security]
     if: github.event_name == 'release'
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@master
+    uses: zmihai/.github/workflows/reusable-release.yml@master
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
@@ -300,7 +300,7 @@ jobs:
 ### Using Reusable Workflows
 
 1. In your repository, create a workflow file (e.g., `.github/workflows/ci.yml`)
-2. Reference the reusable workflow using `uses: zmihai/.github/.github/workflows/<workflow-name>.yml@master`
+2. Reference the reusable workflow using `uses: zmihai/.github/workflows/<workflow-name>.yml@master`
 3. Pass required inputs and secrets
 
 ### Using Composite Actions
