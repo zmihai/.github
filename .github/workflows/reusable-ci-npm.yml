@@ -62,7 +62,7 @@ jobs:
         if: ${{ inputs.run-lint }}
         run: npm run lint
 
-      - name: Run tests (before build)
+      - name: Run tests (pre-build)
         if: ${{ inputs.run-test && !inputs.build-before-test }}
         run: npm test
 
@@ -70,6 +70,6 @@ jobs:
         if: ${{ inputs.run-build }}
         run: npm run build
 
-      - name: Run tests (after build)
+      - name: Run tests (post-build)
         if: ${{ inputs.run-test && inputs.build-before-test }}
         run: npm test
