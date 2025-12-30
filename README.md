@@ -81,7 +81,7 @@ Performs security scanning including dependency audits and CodeQL analysis.
 
 **Inputs:**
 - `scan-dependencies` (boolean, default: true): Scan npm dependencies
-- `scan-code` (boolean, default: true): Run CodeQL analysis
+- `scan-code` (boolean, default: false): Run CodeQL analysis. Defaults to false since it's a paid feature.
 - `language` (string, default: 'javascript'): Language for CodeQL
 
 **Example Usage:**
