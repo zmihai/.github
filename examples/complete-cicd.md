@@ -22,6 +22,7 @@ jobs:
       run-lint: true
       run-test: true
       run-build: true
+      build-before-test: false
 
   # Run security scans
   security:

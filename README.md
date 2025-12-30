@@ -27,6 +27,7 @@ A comprehensive CI workflow that handles linting, testing, and building Node.js 
 - `run-lint` (boolean, default: true): Run linting
 - `run-test` (boolean, default: true): Run tests
 - `run-build` (boolean, default: true): Run build
+- `build-before-test` (boolean, default: false): Run build before tests
 
 **Secrets:**
 - `CUSTOM_TOKEN` (optional): Custom token for private packages
@@ -41,6 +42,7 @@ jobs:
       run-lint: true
       run-test: true
       run-build: true
+      build-before-test: false
 ```
 
 ### Release Workflow

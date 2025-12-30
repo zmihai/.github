@@ -19,6 +19,7 @@ jobs:
       run-lint: true
       run-test: true
       run-build: true
+      build-before-test: false
 ```
 
 That's it! This single job will:
@@ -42,6 +43,7 @@ jobs:
       run-lint: false    # Skip linting
       run-test: true
       run-build: true
+      build-before-test: true # Build the app before running tests, for example if testing includes looking for the presence of build artifacts
 ```
 
 ### Change Node.js version
