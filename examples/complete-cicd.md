@@ -30,7 +30,7 @@ jobs:
     uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.1.0
     with:
       scan-dependencies: true
-      scan-code: true
+      scan-code: false
       language: 'javascript'
 
   # Deploy to staging on develop branch
