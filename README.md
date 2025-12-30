@@ -17,7 +17,7 @@ Reusable workflows are stored in `.github/workflows/` and can be called from oth
 
 ### CI Workflow
 
-**Path:** `.github/workflows/reusable-ci.yml`
+**Path:** `.github/workflows/reusable-ci-npm.yml`
 
 A comprehensive CI workflow that handles linting, testing, and building Node.js projects.
 
@@ -35,7 +35,7 @@ A comprehensive CI workflow that handles linting, testing, and building Node.js 
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@master
     with:
       node-version: '20'
       run-lint: true
@@ -241,7 +241,7 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@master
     with:
       node-version: '20'
   

@@ -19,7 +19,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@master
     with:
       node-version: '20'
 ```

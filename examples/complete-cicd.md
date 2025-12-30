@@ -16,7 +16,7 @@ on:
 jobs:
   # Run CI on all branches
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@master
     with:
       node-version: '20'
       run-lint: true
