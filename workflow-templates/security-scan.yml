@@ -11,7 +11,7 @@ on:
 
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.1.0
     with:
       scan-dependencies: true
       scan-code: true

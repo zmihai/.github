@@ -8,7 +8,7 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.0
     with:
       node-version: '20'
       run-lint: true

@@ -36,7 +36,7 @@ A comprehensive CI workflow that handles linting, testing, and building Node.js 
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.0
     with:
       node-version: '20'
       run-lint: true
@@ -64,7 +64,7 @@ Automates the release process including version bumping, npm publishing, and Git
 ```yaml
 jobs:
   release:
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-release.yml@v0.1.0
     with:
       release-type: 'minor'
       create-github-release: true
@@ -88,7 +88,7 @@ Performs security scanning including dependency audits and CodeQL analysis.
 ```yaml
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.1.0
     with:
       scan-dependencies: true
       scan-code: true
@@ -120,7 +120,7 @@ Sets up Node.js environment with caching and automatic dependency installation.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/setup-node-env@master
+  - uses: zmihai/.github/actions/setup-node-env@v0.1.0
     with:
       node-version: '20'
       cache: 'npm'
@@ -151,7 +151,7 @@ Builds and pushes Docker images to container registries.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/docker-build-push@master
+  - uses: zmihai/.github/actions/docker-build-push@v0.1.0
     with:
       image-name: 'myuser/myapp'
       registry: 'ghcr.io'
@@ -181,7 +181,7 @@ Automates versioning and package publishing using semantic-release.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/semantic-release@master
+  - uses: zmihai/.github/actions/semantic-release@v0.1.0
     with:
       github-token: ${{ secrets.GITHUB_TOKEN }}
       npm-token: ${{ secrets.NPM_TOKEN }}
@@ -203,7 +203,7 @@ Sends notifications to Slack channels with status indicators.
 **Example Usage:**
 ```yaml
 steps:
-  - uses: zmihai/.github/actions/notify-slack@master
+  - uses: zmihai/.github/actions/notify-slack@v0.1.0
     if: always()
     with:
       webhook-url: ${{ secrets.SLACK_WEBHOOK }}
@@ -243,12 +243,12 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.0
     with:
       node-version: '20'
   
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.1.0
     with:
       scan-dependencies: true
       scan-code: true
@@ -256,7 +256,7 @@ jobs:
   release:
     needs: [ci, security]
     if: github.event_name == 'release'
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-release.yml@v0.1.0
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
@@ -277,7 +277,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Setup Node
-        uses: zmihai/.github/actions/setup-node-env@master
+        uses: zmihai/.github/actions/setup-node-env@v0.1.0
         with:
           node-version: '20'
           cache: 'npm'
@@ -286,7 +286,7 @@ jobs:
         run: npm run build
       
       - name: Docker Build and Push
-        uses: zmihai/.github/actions/docker-build-push@master
+        uses: zmihai/.github/actions/docker-build-push@v0.1.0
         with:
           image-name: 'myuser/myapp'
           registry: 'ghcr.io'
@@ -302,13 +302,13 @@ jobs:
 ### Using Reusable Workflows
 
 1. In your repository, create a workflow file (e.g., `.github/workflows/ci.yml`)
-2. Reference the reusable workflow using `uses: zmihai/.github/.github/workflows/<workflow-name>.yml@master`
+2. Reference the reusable workflow using `uses: zmihai/.github/.github/workflows/<workflow-name>.yml@v0.1.0`
 3. Pass required inputs and secrets
 
 ### Using Composite Actions
 
 1. Add a step in your workflow
-2. Reference the action using `uses: zmihai/.github/actions/<action-name>@master`
+2. Reference the action using `uses: zmihai/.github/actions/<action-name>@v0.1.0`
 3. Provide required inputs
 
 ### Using Workflow Templates
