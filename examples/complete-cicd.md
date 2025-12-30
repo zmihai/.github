@@ -16,17 +16,18 @@ on:
 jobs:
   # Run CI on all branches
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.0
     with:
       node-version: '20'
       run-lint: true
       run-test: true
       run-build: true
+      build-before-test: false
 
   # Run security scans
   security:
     needs: ci
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@master
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.1.0
     with:
       scan-dependencies: true
       scan-code: true
@@ -40,14 +41,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: zmihai/.github/actions/setup-node-env@master
+      - uses: zmihai/.github/actions/setup-node-env@v0.1.0
         with:
           node-version: '20'
       
       - name: Build
         run: npm run build
       
-      - uses: zmihai/.github/actions/docker-build-push@master
+      - uses: zmihai/.github/actions/docker-build-push@v0.1.0
         with:
           image-name: 'myuser/myapp'
           registry: 'ghcr.io'
@@ -55,7 +56,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
           tags: 'staging,latest'
       
-      - uses: zmihai/.github/actions/notify-slack@master
+      - uses: zmihai/.github/actions/notify-slack@v0.1.0
         if: always()
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK }}
@@ -70,14 +71,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: zmihai/.github/actions/setup-node-env@master
+      - uses: zmihai/.github/actions/setup-node-env@v0.1.0
         with:
           node-version: '20'
       
       - name: Build
         run: npm run build
       
-      - uses: zmihai/.github/actions/docker-build-push@master
+      - uses: zmihai/.github/actions/docker-build-push@v0.1.0
         with:
           image-name: 'myuser/myapp'
           registry: 'ghcr.io'
@@ -85,7 +86,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
           tags: 'production,${{ github.event.release.tag_name }}'
       
-      - uses: zmihai/.github/actions/notify-slack@master
+      - uses: zmihai/.github/actions/notify-slack@v0.1.0
         if: always()
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK }}

@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: zmihai/.github/actions/docker-build-push@master
+      - uses: zmihai/.github/actions/docker-build-push@v0.1.0
         with:
           image-name: 'myusername/myapp'
           registry: 'docker.io'
@@ -55,7 +55,7 @@ jobs:
             echo "tags=latest,sha-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
           fi
       
-      - uses: zmihai/.github/actions/docker-build-push@master
+      - uses: zmihai/.github/actions/docker-build-push@v0.1.0
         with:
           image-name: '${{ github.repository }}'
           registry: 'ghcr.io'
@@ -79,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: zmihai/.github/actions/docker-build-push@master
+      - uses: zmihai/.github/actions/docker-build-push@v0.1.0
         with:
           image-name: 'myusername/myapp'
           registry: 'ghcr.io'
@@ -109,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: zmihai/.github/actions/docker-build-push@master
+      - uses: zmihai/.github/actions/docker-build-push@v0.1.0
         with:
           image-name: 'myusername/myapp'
           registry: 'docker.io'

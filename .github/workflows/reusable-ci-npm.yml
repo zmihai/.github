@@ -28,6 +28,11 @@ on:
         required: false
         type: boolean
         default: true
+      build-before-test:
+        description: 'Run build before tests'
+        required: false
+        type: boolean
+        default: false
     secrets:
       CUSTOM_TOKEN:
         description: 'Custom token for private packages'
@@ -39,28 +44,32 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run linting
         if: ${{ inputs.run-lint }}
         run: npm run lint
-      
-      - name: Run tests
-        if: ${{ inputs.run-test }}
+
+      - name: Run tests (pre-build)
+        if: ${{ inputs.run-test && !inputs.build-before-test }}
         run: npm test
-      
+
       - name: Run build
         if: ${{ inputs.run-build }}
         run: npm run build
+
+      - name: Run tests (post-build)
+        if: ${{ inputs.run-test && inputs.build-before-test }}
+        run: npm test

@@ -1,4 +1,4 @@
-name: Reusable Release Workflow
+name: Reusable Release Workflow (untested, do not use)
 
 on:
   workflow_call:
