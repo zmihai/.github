@@ -47,6 +47,13 @@ on:
         description: 'The project language (for scanning dependencies)'
         required: false
         default: 'javascript'
+    secrets:
+      GEMINI_API_KEY:
+        description: 'Required for calling the Gemini API'
+        required: true
+      GITHUB_TOKEN:
+        description: 'Required for the workflow to update PRs'
+        required: true
 
 defaults:
   run:
@@ -94,6 +101,7 @@ jobs:
       contents: 'read'
       issues: 'write'
       pull-requests: 'write'
+    secrets: 'inherit'
     outputs:
       command: '${{ steps.extract_command.outputs.command }}'
       request: '${{ steps.extract_command.outputs.request }}'
