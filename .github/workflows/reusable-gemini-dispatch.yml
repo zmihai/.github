@@ -192,7 +192,9 @@ jobs:
       ${{ needs.dispatch.outputs.command == 'merge' || needs.review.outputs.command == 'review-and-merge' }}
     uses: './.github/workflows/gemini-merge.yml'
     permissions:
+      security-events: 'write'
       contents: 'write'
+      actions: 'read'
       id-token: 'write'
       issues: 'write'
       pull-requests: 'write'

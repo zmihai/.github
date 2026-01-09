@@ -74,6 +74,10 @@ jobs:
 
   scan:
     uses: './.github/workflows/reusable-security-scan.yml'
+    permissions:
+      security-events: 'write'
+      contents: 'read'
+      actions: 'read'
     with:
       scan-dependencies: ${{ inputs.scan-dependencies }}
       scan-code: ${{ inputs.scan-code }}
