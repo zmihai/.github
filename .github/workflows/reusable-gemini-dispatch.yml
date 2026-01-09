@@ -131,6 +131,7 @@ jobs:
             const eventType = process.env.EVENT_TYPE;
             const request = process.env.REQUEST;
             const actor = process.env.ACTOR;
+            let additionalContext = '';
             core.setOutput('request', request);
 
             if (eventType === 'pull_request.opened') {
@@ -142,10 +143,10 @@ jobs:
             } else if (request.startsWith("@gemini-cli /review")) {
               if (request.startsWith("@gemini-cli /review-and-merge")) {
                 core.setOutput('command', 'review-and-merge');
-                const additionalContext = request.replace(/^@gemini-cli \/review-and-merge/, '').trim();
+                additionalContext = request.replace(/^@gemini-cli \/review-and-merge/, '').trim();
               } else {
                 core.setOutput('command', 'review');
-                const additionalContext = request.replace(/^@gemini-cli \/review/, '').trim();
+                additionalContext = request.replace(/^@gemini-cli \/review/, '').trim();
               }
               core.setOutput('additional_context', additionalContext);
             } else if (request.startsWith("@gemini-cli /merge")) {
