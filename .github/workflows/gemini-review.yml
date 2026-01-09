@@ -4,15 +4,15 @@ on:
   workflow_call:
     inputs:
       additional_context:
-        type: 'string'
+        type: string
         description: 'Any additional context from the request'
         required: false
       command:
-        type: 'string'
+        type: string
         description: 'The command used to call this workflow'
         required: true
       issue_number:
-        type: 'string'
+        type: string
         description: 'The issue/pull request number'
         required: true
     outputs:

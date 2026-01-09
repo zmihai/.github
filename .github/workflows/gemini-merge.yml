@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       pull_request_number:
-        type: 'string'
+        type: string
         description: 'The pull request number'
         required: true
 
@@ -48,7 +48,7 @@ on:
         type: boolean
         default: false
       scan-dependencies-language:
-        type: 'string'
+        type: string
         description: 'The project language (for scanning dependencies)'
         required: false
         default: 'javascript'
