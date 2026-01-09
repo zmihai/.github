@@ -23,6 +23,7 @@ jobs:
   dependency-scan:
     if: ${{ inputs.scan-dependencies }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -41,6 +42,7 @@ jobs:
   codeql-scan:
     if: ${{ inputs.scan-code }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       security-events: write
       contents: read
