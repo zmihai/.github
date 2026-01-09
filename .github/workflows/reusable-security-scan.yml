@@ -28,10 +28,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node Environment
+        uses: zmihai/.github/actions/setup-node-env@v0.2.1
         with:
           node-version: 'lts/*'
+          install-dependencies: 'false'
 
       - name: Run npm audit
         run: npm audit --audit-level=moderate
