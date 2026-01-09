@@ -69,9 +69,9 @@ For each identified issue, formulate a review comment adhering to the following 
 
 5. **Testing:** Ensure adequate unit tests, integration tests, and end-to-end tests. Evaluate coverage, edge case handling, and overall test quality.
 
-7. **Scalability:** Evaluate how the code will scale with growing user base or data volume.
+6. **Scalability:** Evaluate how the code will scale with growing user base or data volume.
 
-9. **Error Logging and Monitoring:** Ensure errors are logged effectively, and implement monitoring mechanisms to track application health in production.
+7. **Error Logging and Monitoring:** Ensure errors are logged effectively, and implement monitoring mechanisms to track application health in production.
 
 #### Comment Formatting and Content
 
