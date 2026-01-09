@@ -45,34 +45,6 @@ jobs:
       build-before-test: false
 ```
 
-### Release Workflow
-
-**Path:** `.github/workflows/reusable-release.yml`
-
-Automates the release process including version bumping, npm publishing, and GitHub release creation.
-
-**Inputs:**
-- `release-type` (string, default: 'patch'): Type of release (patch, minor, major)
-- `node-version` (string, default: '20'): Node.js version to use
-- `create-github-release` (boolean, default: true): Create GitHub release
-
-**Secrets:**
-- `NPM_TOKEN` (optional): NPM token for publishing
-- `GH_TOKEN` (optional): GitHub token for creating releases
-
-**Example Usage:**
-```yaml
-jobs:
-  release:
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@v0.1.0
-    with:
-      release-type: 'minor'
-      create-github-release: true
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
 ### Security Scan Workflow
 
 **Path:** `.github/workflows/reusable-security-scan.yml`
@@ -160,33 +132,6 @@ steps:
       tags: 'latest,${{ github.sha }}'
 ```
 
-### Semantic Release
-
-**Path:** `actions/semantic-release/action.yml`
-
-Automates versioning and package publishing using semantic-release.
-
-**Inputs:**
-- `branches` (default: '["master"]'): Branches to release from (JSON array)
-- `dry-run` (default: 'false'): Run in dry-run mode
-- `plugins` (optional): Additional semantic-release plugins
-- `github-token` (required): GitHub token for releases
-- `npm-token` (optional): NPM token for publishing
-
-**Outputs:**
-- `new-release-published`: Whether a new release was published
-- `new-release-version`: Version of the new release
-
-**Example Usage:**
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/semantic-release@v0.1.0
-    with:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-      npm-token: ${{ secrets.NPM_TOKEN }}
-```
-
 ### Notify Slack
 
 **Path:** `actions/notify-slack/action.yml`
@@ -219,7 +164,6 @@ Workflow templates are starter workflows that appear in the "Actions" tab of you
 
 Available templates:
 - **CI Workflow** (`workflow-templates/ci.yml`) - Complete CI pipeline
-- **Release Workflow** (`workflow-templates/release.yml`) - Automated releases
 - **Security Scan** (`workflow-templates/security-scan.yml`) - Security scanning
 
 These templates will automatically appear in the GitHub Actions workflow picker when creating new workflows in other repositories.
@@ -228,18 +172,16 @@ These templates will automatically appear in the GitHub Actions workflow picker 
 
 ## 💡 Usage Examples
 
-### Complete CI/CD Pipeline
+### Complete CI Pipeline
 
 ```yaml
-name: CI/CD
+name: CI
 
 on:
   push:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-  release:
-    types: [ created ]
 
 jobs:
   ci:
@@ -252,13 +194,6 @@ jobs:
     with:
       scan-dependencies: true
       scan-code: true
-  
-  release:
-    needs: [ci, security]
-    if: github.event_name == 'release'
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@v0.1.0
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
 ### Custom Workflow with Composite Actions
