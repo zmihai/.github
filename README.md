@@ -5,6 +5,7 @@ This repository contains reusable workflows, composite actions, and workflow tem
 ## 📋 Contents
 
 - [Reusable Workflows](#reusable-workflows)
+- [Gemini AI Workflows](#gemini-ai-workflows)
 - [Composite Actions](#composite-actions)
 - [Workflow Templates](#workflow-templates)
 - [Usage Examples](#usage-examples)
@@ -36,41 +37,13 @@ A comprehensive CI workflow that handles linting, testing, and building Node.js 
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.0
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.3.0
     with:
       node-version: '20'
       run-lint: true
       run-test: true
       run-build: true
       build-before-test: false
-```
-
-### Release Workflow
-
-**Path:** `.github/workflows/reusable-release.yml`
-
-Automates the release process including version bumping, npm publishing, and GitHub release creation.
-
-**Inputs:**
-- `release-type` (string, default: 'patch'): Type of release (patch, minor, major)
-- `node-version` (string, default: '20'): Node.js version to use
-- `create-github-release` (boolean, default: true): Create GitHub release
-
-**Secrets:**
-- `NPM_TOKEN` (optional): NPM token for publishing
-- `GH_TOKEN` (optional): GitHub token for creating releases
-
-**Example Usage:**
-```yaml
-jobs:
-  release:
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@v0.1.0
-    with:
-      release-type: 'minor'
-      create-github-release: true
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ### Security Scan Workflow
@@ -88,12 +61,36 @@ Performs security scanning including dependency audits and CodeQL analysis.
 ```yaml
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.1.0
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.3.0
     with:
       scan-dependencies: true
       scan-code: true
       language: 'javascript'
 ```
+
+---
+
+## 🤖 Gemini AI Workflows
+
+These workflows integrate Google Gemini for automated PR reviews and merging.
+
+### Gemini Dispatch
+
+**Path:** `.github/workflows/reusable-gemini-dispatch.yml`
+
+The entry point for Gemini commands. It parses comments like `@gemini-cli /review` and dispatches to the appropriate workflow.
+
+### Gemini Review
+
+**Path:** `.github/workflows/gemini-review.yml`
+
+Performs an AI-powered review of a Pull Request, providing feedback and suggestions.
+
+### Gemini Test & Merge
+
+**Path:** `.github/workflows/gemini-merge.yml`
+
+Runs CI and Security scans, then uses Gemini to analyze the results and merge the PR if everything passes.
 
 ---
 
@@ -120,7 +117,7 @@ Sets up Node.js environment with caching and automatic dependency installation.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/setup-node-env@v0.1.0
+  - uses: zmihai/.github/actions/setup-node-env@v0.3.0
     with:
       node-version: '20'
       cache: 'npm'
@@ -151,40 +148,13 @@ Builds and pushes Docker images to container registries.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/docker-build-push@v0.1.0
+  - uses: zmihai/.github/actions/docker-build-push@v0.3.0
     with:
       image-name: 'myuser/myapp'
       registry: 'ghcr.io'
       username: ${{ github.actor }}
       password: ${{ secrets.GITHUB_TOKEN }}
       tags: 'latest,${{ github.sha }}'
-```
-
-### Semantic Release
-
-**Path:** `actions/semantic-release/action.yml`
-
-Automates versioning and package publishing using semantic-release.
-
-**Inputs:**
-- `branches` (default: '["master"]'): Branches to release from (JSON array)
-- `dry-run` (default: 'false'): Run in dry-run mode
-- `plugins` (optional): Additional semantic-release plugins
-- `github-token` (required): GitHub token for releases
-- `npm-token` (optional): NPM token for publishing
-
-**Outputs:**
-- `new-release-published`: Whether a new release was published
-- `new-release-version`: Version of the new release
-
-**Example Usage:**
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/semantic-release@v0.1.0
-    with:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-      npm-token: ${{ secrets.NPM_TOKEN }}
 ```
 
 ### Notify Slack
@@ -203,7 +173,7 @@ Sends notifications to Slack channels with status indicators.
 **Example Usage:**
 ```yaml
 steps:
-  - uses: zmihai/.github/actions/notify-slack@v0.1.0
+  - uses: zmihai/.github/actions/notify-slack@v0.3.0
     if: always()
     with:
       webhook-url: ${{ secrets.SLACK_WEBHOOK }}
@@ -219,7 +189,6 @@ Workflow templates are starter workflows that appear in the "Actions" tab of you
 
 Available templates:
 - **CI Workflow** (`workflow-templates/ci.yml`) - Complete CI pipeline
-- **Release Workflow** (`workflow-templates/release.yml`) - Automated releases
 - **Security Scan** (`workflow-templates/security-scan.yml`) - Security scanning
 
 These templates will automatically appear in the GitHub Actions workflow picker when creating new workflows in other repositories.
@@ -228,37 +197,28 @@ These templates will automatically appear in the GitHub Actions workflow picker 
 
 ## 💡 Usage Examples
 
-### Complete CI/CD Pipeline
+### Complete CI Pipeline
 
 ```yaml
-name: CI/CD
+name: CI
 
 on:
   push:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-  release:
-    types: [ created ]
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.0
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.3.0
     with:
       node-version: '20'
   
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.1.0
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.3.0
     with:
       scan-dependencies: true
       scan-code: true
-  
-  release:
-    needs: [ci, security]
-    if: github.event_name == 'release'
-    uses: zmihai/.github/.github/workflows/reusable-release.yml@v0.1.0
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
 ### Custom Workflow with Composite Actions
@@ -302,30 +262,19 @@ jobs:
 ### Using Reusable Workflows
 
 1. In your repository, create a workflow file (e.g., `.github/workflows/ci.yml`)
-2. Reference the reusable workflow using `uses: zmihai/.github/.github/workflows/<workflow-name>.yml@v0.1.0`
-3. Pass required inputs and secrets
-
-### Using Composite Actions
-
-1. Add a step in your workflow
-2. Reference the action using `uses: zmihai/.github/actions/<action-name>@v0.1.0`
-3. Provide required inputs
-
-### Using Workflow Templates
-
-1. Go to your repository's "Actions" tab
-2. Click "New workflow"
-3. Find the templates in the workflow picker
-4. Customize as needed
+2. Reference reusable workflows using `uses: zmihai/.github/.github/workflows/<name>.yml@v0.3.0`
+3. Reference composite actions using `uses: zmihai/.github/actions/<name>@v0.3.0`
+4. Pass required inputs and secrets
 
 ---
 
 ## 📚 Best Practices
 
-1. **Pin versions**: Use specific commit SHAs or tags instead of `@master` in production
-2. **Security**: Never hardcode secrets, always use GitHub Secrets
+1. **Pin versions**: Use specific tags (like `@v0.3.0`) or commit SHAs in production.
+2. **Security**: Use GitHub Secrets for all sensitive information.
 3. **Testing**: Test workflow changes in a separate branch before merging to master
 4. **Documentation**: Keep this README updated when adding new workflows or actions
+5. **Timeouts**: All jobs should have a `timeout-minutes` set.
 
 ---
 
@@ -342,7 +291,7 @@ When adding new workflows or actions:
 
 ## 📄 License
 
-This repository is for internal use within the organization.
+This repository is provided as-is. Keep it mind it was build for personal/internal use, so support may or may not be provided. 
 
 ---
 

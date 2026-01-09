@@ -1,0 +1,184 @@
+name: '🧪🚀 Gemini Test & Merge'
+
+on:
+  workflow_call:
+    inputs:
+      pull_request_number:
+        type: string
+        description: 'The pull request number'
+        required: true
+
+      language-version:
+        description: 'Language version to use'
+        required: false
+        type: string
+        default: '20'
+
+      # CI directives
+      ci-run-lint:
+        description: 'Run linting'
+        required: false
+        type: boolean
+        default: true
+      ci-run-test:
+        description: 'Run tests'
+        required: false
+        type: boolean
+        default: true
+      ci-run-build:
+        description: 'Run build'
+        required: false
+        type: boolean
+        default: true
+      ci-build-before-test:
+        description: 'Run build before tests'
+        required: false
+        type: boolean
+        default: false
+
+      # Dependency scan directives
+      scan-dependencies:
+        description: 'Scan dependencies for vulnerabilities'
+        required: false
+        type: boolean
+        default: true
+      scan-code:
+        description: 'Run CodeQL analysis'
+        required: false
+        type: boolean
+        default: false
+      scan-dependencies-language:
+        type: string
+        description: 'The project language (for scanning dependencies)'
+        required: false
+        default: 'javascript'
+
+concurrency:
+  group: '${{ github.workflow }}-merge-${{ github.event_name }}' # Only one merge should run at a time, to avoid cases where the previous merge causes a conflict
+  cancel-in-progress: ${{ github.actor != 'dependabot[bot]' }}
+
+defaults:
+  run:
+    shell: 'bash'
+
+jobs:
+  ci:
+    uses: './.github/workflows/reusable-ci-npm.yml'
+    with:
+      node-version: ${{ inputs.language-version }}
+      run-lint: ${{ inputs.ci-run-lint }}
+      run-test: ${{ inputs.ci-run-test }}
+      run-build: ${{ inputs.ci-run-build }}
+      build-before-test: ${{ inputs.ci-build-before-test }}
+    secrets: inherit
+
+  scan:
+    uses: './.github/workflows/reusable-security-scan.yml'
+    permissions:
+      security-events: 'write'
+      contents: 'read'
+      actions: 'read'
+    with:
+      scan-dependencies: ${{ inputs.scan-dependencies }}
+      scan-code: ${{ inputs.scan-code }}
+      language: ${{ inputs.scan-dependencies-language }}
+    secrets: inherit
+
+  merge:
+    runs-on: 'ubuntu-latest'
+    needs: [ci, scan]
+    if: always()
+    timeout-minutes: 7
+    permissions:
+      contents: 'write'
+      id-token: 'write'
+      issues: 'write'
+      pull-requests: 'write'
+    steps:
+      - name: 'Mint identity token'
+        id: 'mint_identity_token'
+        if: |-
+          ${{ vars.APP_ID }}
+        uses: 'actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b' # ratchet:actions/create-github-app-token@v2
+        with:
+          app-id: '${{ vars.APP_ID }}'
+          private-key: '${{ secrets.APP_PRIVATE_KEY }}'
+          permission-contents: 'write'
+          permission-issues: 'write'
+          permission-pull-requests: 'write'
+
+      - name: 'Checkout repository'
+        uses: 'actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8' # ratchet:actions/checkout@v5
+
+      - name: 'Run Gemini pull request merge'
+        uses: 'google-github-actions/run-gemini-cli@dd858daef9d698348bc3609698bb4c943ea4d617' # ratchet:exclude
+        id: 'gemini_pr_merge'
+        env:
+          GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          PULL_REQUEST_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
+          PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
+          REPOSITORY: '${{ github.repository }}'
+          TEST_OUTCOME: '${{ needs.ci.result }}'
+          SECURITY_SCAN_OUTCOME: '${{ needs.scan.result }}'
+        with:
+          gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
+          gcp_project_id: '${{ vars.GOOGLE_CLOUD_PROJECT }}'
+          gcp_service_account: '${{ vars.SERVICE_ACCOUNT_EMAIL }}'
+          gcp_workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
+          gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
+          gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'
+          gemini_debug: '${{ fromJSON(vars.DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
+          gemini_model: '${{ vars.GEMINI_MODEL }}'
+          google_api_key: '${{ secrets.GOOGLE_API_KEY }}'
+          use_gemini_code_assist: '${{ vars.GOOGLE_GENAI_USE_GCA }}'
+          use_vertex_ai: '${{ vars.GOOGLE_GENAI_USE_VERTEXAI }}'
+          upload_artifacts: '${{ vars.UPLOAD_ARTIFACTS }}'
+          workflow_name: 'gemini-merge'
+          settings: |-
+            {
+              "model": {
+                "maxSessionTurns": 25
+              },
+              "telemetry": {
+                "enabled": true,
+                "target": "local",
+                "outfile": ".gemini/telemetry.log"
+              },
+              "mcpServers": {
+                "github": {
+                  "command": "docker",
+                  "args": [
+                    "run",
+                    "-i",
+                    "--rm",
+                    "-e",
+                    "GITHUB_PERSONAL_ACCESS_TOKEN",
+                    "ghcr.io/github/github-mcp-server:v0.24.1"
+                  ],
+                  "includeTools": [
+                    "add_pull_request_review_comment_to_pending_review",
+                    "merge_pull_request",
+                    "pull_request_read",
+                    "pull_request_review_write"
+                  ],
+                  "env": {
+                    "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+                  }
+                }
+              },
+              "tools": {
+                "core": [
+                  "run_shell_command(cat)",
+                  "run_shell_command(echo)",
+                  "run_shell_command(env)",
+                  "run_shell_command(git log)",
+                  "run_shell_command(git status)",
+                  "run_shell_command(grep)",
+                  "run_shell_command(head)",
+                  "run_shell_command(printenv)",
+                  "run_shell_command(tail)"
+                ]
+              }
+            }
+          prompt: '/gemini-merge --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --test_outcome=${{ needs.ci.result }} --security_scan_outcome=${{ needs.scan.result }} --merge_strategy=squash'
