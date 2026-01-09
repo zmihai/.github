@@ -120,7 +120,7 @@ jobs:
           ${{ always() }}
         env:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
-          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
           PULL_REQUEST_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
           PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
           REPOSITORY: '${{ github.repository }}'
