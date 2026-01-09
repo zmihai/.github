@@ -89,17 +89,13 @@ Based on the results from your code review and the provided **Test Outcome**, de
 
 2. **Security:** Pinpoint vulnerabilities such as injection attacks, insecure data storage, insufficient access controls, or secrets exposure.
 
-3. **Efficiency:** Locate performance bottlenecks, unnecessary computations, memory leaks, and inefficient data structures.
+3. **Efficiency:** Locate performance bottlenecks, unnecessary computations, memory leaks, and inefficient data structures. If possible, suggest optimizations.
 
 4. **Maintainability:** Assess readability, modularity, and adherence to established language idioms and style guides (e.g., Python PEP 8, Google Java Style Guide). If no style guide is specified, default to the idiomatic standard for the language.
 
 5. **Testing:** Ensure adequate unit tests, integration tests, and end-to-end tests. Evaluate coverage, edge case handling, and overall test quality.
 
-6. **Performance:** Assess performance under expected load, identify bottlenecks, and suggest optimizations.
-
 7. **Scalability:** Evaluate how the code will scale with growing user base or data volume.
-
-8. **Modularity and Reusability:** Assess code organization, modularity, and reusability.
 
 9. **Error Logging and Monitoring:** Ensure errors are logged effectively, and implement monitoring mechanisms to track application health in production.
 
