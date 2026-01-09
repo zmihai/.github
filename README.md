@@ -5,6 +5,7 @@ This repository contains reusable workflows, composite actions, and workflow tem
 ## 📋 Contents
 
 - [Reusable Workflows](#reusable-workflows)
+- [Gemini AI Workflows](#gemini-ai-workflows)
 - [Composite Actions](#composite-actions)
 - [Workflow Templates](#workflow-templates)
 - [Usage Examples](#usage-examples)
@@ -36,7 +37,7 @@ A comprehensive CI workflow that handles linting, testing, and building Node.js 
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.0
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.3.0
     with:
       node-version: '20'
       run-lint: true
@@ -60,12 +61,36 @@ Performs security scanning including dependency audits and CodeQL analysis.
 ```yaml
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.1.0
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.3.0
     with:
       scan-dependencies: true
       scan-code: true
       language: 'javascript'
 ```
+
+---
+
+## 🤖 Gemini AI Workflows
+
+These workflows integrate Google Gemini for automated PR reviews and merging.
+
+### Gemini Dispatch
+
+**Path:** `.github/workflows/reusable-gemini-dispatch.yml`
+
+The entry point for Gemini commands. It parses comments like `@gemini-cli /review` and dispatches to the appropriate workflow.
+
+### Gemini Review
+
+**Path:** `.github/workflows/gemini-review.yml`
+
+Performs an AI-powered review of a Pull Request, providing feedback and suggestions.
+
+### Gemini Test & Merge
+
+**Path:** `.github/workflows/gemini-merge.yml`
+
+Runs CI and Security scans, then uses Gemini to analyze the results and merge the PR if everything passes.
 
 ---
 
@@ -92,7 +117,7 @@ Sets up Node.js environment with caching and automatic dependency installation.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/setup-node-env@v0.1.0
+  - uses: zmihai/.github/actions/setup-node-env@v0.3.0
     with:
       node-version: '20'
       cache: 'npm'
@@ -123,7 +148,7 @@ Builds and pushes Docker images to container registries.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/docker-build-push@v0.1.0
+  - uses: zmihai/.github/actions/docker-build-push@v0.3.0
     with:
       image-name: 'myuser/myapp'
       registry: 'ghcr.io'
@@ -148,7 +173,7 @@ Sends notifications to Slack channels with status indicators.
 **Example Usage:**
 ```yaml
 steps:
-  - uses: zmihai/.github/actions/notify-slack@v0.1.0
+  - uses: zmihai/.github/actions/notify-slack@v0.3.0
     if: always()
     with:
       webhook-url: ${{ secrets.SLACK_WEBHOOK }}
@@ -185,12 +210,12 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.0
+    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.3.0
     with:
       node-version: '20'
   
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.1.0
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.3.0
     with:
       scan-dependencies: true
       scan-code: true
@@ -237,30 +262,19 @@ jobs:
 ### Using Reusable Workflows
 
 1. In your repository, create a workflow file (e.g., `.github/workflows/ci.yml`)
-2. Reference the reusable workflow using `uses: zmihai/.github/.github/workflows/<workflow-name>.yml@v0.1.0`
-3. Pass required inputs and secrets
-
-### Using Composite Actions
-
-1. Add a step in your workflow
-2. Reference the action using `uses: zmihai/.github/actions/<action-name>@v0.1.0`
-3. Provide required inputs
-
-### Using Workflow Templates
-
-1. Go to your repository's "Actions" tab
-2. Click "New workflow"
-3. Find the templates in the workflow picker
-4. Customize as needed
+2. Reference reusable workflows using `uses: zmihai/.github/.github/workflows/<name>.yml@v0.3.0`
+3. Reference composite actions using `uses: zmihai/.github/actions/<name>@v0.3.0`
+4. Pass required inputs and secrets
 
 ---
 
 ## 📚 Best Practices
 
-1. **Pin versions**: Use specific commit SHAs or tags instead of `@master` in production
-2. **Security**: Never hardcode secrets, always use GitHub Secrets
+1. **Pin versions**: Use specific tags (like `@v0.3.0`) or commit SHAs in production.
+2. **Security**: Use GitHub Secrets for all sensitive information.
 3. **Testing**: Test workflow changes in a separate branch before merging to master
 4. **Documentation**: Keep this README updated when adding new workflows or actions
+5. **Timeouts**: All jobs should have a `timeout-minutes` set.
 
 ---
 
@@ -277,7 +291,7 @@ When adding new workflows or actions:
 
 ## 📄 License
 
-This repository is for internal use within the organization.
+This repository is provided as-is. Keep it mind it was build for personal/internal use, so support may or may not be provided. 
 
 ---
 
