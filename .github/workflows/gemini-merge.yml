@@ -95,7 +95,7 @@ jobs:
       - name: 'Run CI'
         id: 'test_step'
         continue-on-error: true
-        uses: './.github/workflows/reusable-ci-npm.yml'
+        uses: 'zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.1'
         with:
           node-version: ${{ inputs.language-version }}
           run-lint: ${{ inputs.ci-run-lint }}
@@ -106,7 +106,7 @@ jobs:
       - name: 'Run Security Scan'
         id: 'scan_step'
         continue-on-error: true
-        uses: './.github/workflows/reusable-security-scan.yml'
+        uses: 'zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.2.1'
         with:
           scan-dependencies: ${{ inputs.scan-dependencies }}
           scan-code: ${{ inputs.scan-code }}
