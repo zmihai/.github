@@ -62,8 +62,28 @@ defaults:
     shell: 'bash'
 
 jobs:
+  ci:
+    uses: 'zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.1'
+    with:
+      node-version: ${{ inputs.language-version }}
+      run-lint: ${{ inputs.ci-run-lint }}
+      run-test: ${{ inputs.ci-run-test }}
+      run-build: ${{ inputs.ci-run-build }}
+      build-before-test: ${{ inputs.ci-build-before-test }}
+    secrets: inherit
+
+  scan:
+    uses: 'zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.2.1'
+    with:
+      scan-dependencies: ${{ inputs.scan-dependencies }}
+      scan-code: ${{ inputs.scan-code }}
+      language: ${{ inputs.scan-dependencies-language }}
+    secrets: inherit
+
   merge:
     runs-on: 'ubuntu-latest'
+    needs: [ci, scan]
+    if: always()
     timeout-minutes: 7
     permissions:
       contents: 'write'
@@ -86,45 +106,17 @@ jobs:
       - name: 'Checkout repository'
         uses: 'actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8' # ratchet:actions/checkout@v5
 
-      # TODO: expand for other languages, like Python
-      - name: 'Setup Node.js'
-        uses: 'actions/setup-node@v4'
-        with:
-          node-version: ${{ inputs.language-version }}
-
-      - name: 'Run CI'
-        id: 'test_step'
-        continue-on-error: true
-        uses: 'zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.2.1'
-        with:
-          node-version: ${{ inputs.language-version }}
-          run-lint: ${{ inputs.ci-run-lint }}
-          run-test: ${{ inputs.ci-run-test }}
-          run-build: ${{ inputs.ci-run-build }}
-          build-before-test: ${{ inputs.ci-build-before-test }}
-
-      - name: 'Run Security Scan'
-        id: 'scan_step'
-        continue-on-error: true
-        uses: 'zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.2.1'
-        with:
-          scan-dependencies: ${{ inputs.scan-dependencies }}
-          scan-code: ${{ inputs.scan-code }}
-          language: ${{ inputs.scan-language }}
-
       - name: 'Run Gemini pull request merge'
-        #        uses: 'google-github-actions/run-gemini-cli@v0' # ratchet:exclude
         uses: 'google-github-actions/run-gemini-cli@dd858daef9d698348bc3609698bb4c943ea4d617' # ratchet:exclude
         id: 'gemini_pr_merge'
-        if: |-
-          ${{ always() }}
         env:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
           GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
           PULL_REQUEST_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
           PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
           REPOSITORY: '${{ github.repository }}'
-          TEST_OUTCOME: '${{ steps.test_step.outcome }}'
+          TEST_OUTCOME: '${{ needs.ci.result }}'
+          SECURITY_SCAN_OUTCOME: '${{ needs.scan.result }}'
         with:
           gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
           gcp_project_id: '${{ vars.GOOGLE_CLOUD_PROJECT }}'
@@ -185,4 +177,4 @@ jobs:
                 ]
               }
             }
-          prompt: '/gemini-merge --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --test_outcome=${{ steps.test_step.outcome }} --security_scan_outcome=${{ steps.scan_step.outcome }} --merge_strategy=squash'
+          prompt: '/gemini-merge --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --test_outcome=${{ needs.ci.result }} --security_scan_outcome=${{ needs.scan.result }} --merge_strategy=squash'
