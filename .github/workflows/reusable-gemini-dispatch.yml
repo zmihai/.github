@@ -172,7 +172,7 @@ jobs:
     needs: 'dispatch'
     if: |-
       ${{ needs.dispatch.outputs.command == 'review' || needs.dispatch.outputs.command == 'review-and-merge' }}
-    uses: 'zmihai/.github/.github/workflows/gemini-review.yml@3af8daa38efb69fd5cb207d9845a8fd9793b5b05'
+    uses: 'zmihai/.github/.github/workflows/gemini-review.yml@2b8f1eeb87dcfb8c3c6c402aba59c3fdd8c3d0c7'
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -190,7 +190,7 @@ jobs:
       - 'review'
     if: |-
       ${{ needs.dispatch.outputs.command == 'merge' || needs.review.outputs.command == 'review-and-merge' }}
-    uses: 'zmihai/.github/.github/workflows/gemini-merge.yml@3af8daa38efb69fd5cb207d9845a8fd9793b5b05'
+    uses: 'zmihai/.github/.github/workflows/gemini-merge.yml@2b8f1eeb87dcfb8c3c6c402aba59c3fdd8c3d0c7'
     permissions:
       contents: 'write'
       id-token: 'write'
