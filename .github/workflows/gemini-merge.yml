@@ -63,7 +63,7 @@ defaults:
 
 jobs:
   ci:
-    uses: 'zmihai/.github/.github/workflows/reusable-ci-npm.yml@2b8f1eeb87dcfb8c3c6c402aba59c3fdd8c3d0c7'
+    uses: './.github/workflows/reusable-ci-npm.yml'
     with:
       node-version: ${{ inputs.language-version }}
       run-lint: ${{ inputs.ci-run-lint }}
@@ -73,7 +73,7 @@ jobs:
     secrets: inherit
 
   scan:
-    uses: 'zmihai/.github/.github/workflows/reusable-security-scan.yml@2b8f1eeb87dcfb8c3c6c402aba59c3fdd8c3d0c7'
+    uses: './.github/workflows/reusable-security-scan.yml'
     with:
       scan-dependencies: ${{ inputs.scan-dependencies }}
       scan-code: ${{ inputs.scan-code }}
