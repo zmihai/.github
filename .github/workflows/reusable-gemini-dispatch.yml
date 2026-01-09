@@ -140,13 +140,14 @@ jobs:
                 core.setOutput('command', 'review');
               }
             } else if (request.startsWith("@gemini-cli /review")) {
-              core.setOutput('command', 'review');
-              const additionalContext = request.replace(/^@gemini-cli \/review/, '').trim();
               core.setOutput('additional_context', additionalContext);
-            } else if (request.startsWith("@gemini-cli /review-and-merge")) {
-              core.setOutput('command', 'review-and-merge');
-              const additionalContext = request.replace(/^@gemini-cli \/review-and-merge/, '').trim();
-              core.setOutput('additional_context', additionalContext);
+              if (request.startsWith("@gemini-cli /review-and-merge")) {
+                core.setOutput('command', 'review-and-merge');
+                const additionalContext = request.replace(/^@gemini-cli \/review-and-merge/, '').trim();
+              } else {
+                core.setOutput('command', 'review');
+                const additionalContext = request.replace(/^@gemini-cli \/review/, '').trim();
+              }
             } else if (request.startsWith("@gemini-cli /merge")) {
               core.setOutput('command', 'merge');
             } else {
