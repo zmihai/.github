@@ -18,13 +18,22 @@ on:
         required: false
         type: string
         default: 'javascript'
+      working-directory:
+        description: 'Working directory for commands'
+        required: false
+        type: string
+        default: '.'
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ${{ inputs.working-directory }}
 
 jobs:
   dependency-scan:
     if: ${{ inputs.scan-dependencies }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -33,6 +42,7 @@ jobs:
         uses: zmihai/.github/actions/setup-node-env@v0.3.0
         with:
           node-version: 'lts/*'
+          working-directory: ${{ inputs.working-directory }}
           install-dependencies: 'false'
 
       - name: Run npm audit
@@ -47,7 +57,6 @@ jobs:
       security-events: write
       contents: read
       actions: read
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
