@@ -27,13 +27,15 @@ on:
 defaults:
   run:
     shell: bash
-    working-directory: ${{ inputs.working-directory }}
 
 jobs:
   dependency-scan:
     if: ${{ inputs.scan-dependencies }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -53,6 +55,9 @@ jobs:
     if: ${{ inputs.scan-code }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     permissions:
       security-events: write
       contents: read

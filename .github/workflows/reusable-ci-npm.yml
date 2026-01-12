@@ -41,12 +41,14 @@ on:
 defaults:
   run:
     shell: bash
-    working-directory: ${{ inputs.working-directory }}
 
 jobs:
   ci:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

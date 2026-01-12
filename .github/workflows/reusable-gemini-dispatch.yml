@@ -63,7 +63,6 @@ on:
 defaults:
   run:
     shell: 'bash'
-    working-directory: ${{ inputs.working-directory }}
 
 jobs:
   debugger:
@@ -189,7 +188,6 @@ jobs:
       command: '${{ needs.dispatch.outputs.command }}'
       issue_number: '${{ needs.dispatch.outputs.issue_number }}'
     secrets: 'inherit'
-
   merge:
     needs:
       - 'dispatch'
@@ -216,7 +214,6 @@ jobs:
       scan-code: ${{ inputs.scan-code }}
       scan-dependencies-language: ${{ inputs.scan-dependencies-language }}
     secrets: 'inherit'
-
   fallthrough:
     needs:
       - 'dispatch'
