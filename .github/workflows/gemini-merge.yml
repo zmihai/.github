@@ -14,6 +14,12 @@ on:
         type: string
         default: '20'
 
+      working-directory:
+        description: 'Working directory for commands'
+        required: false
+        type: string
+        default: '.'
+
       # CI directives
       ci-run-lint:
         description: 'Run linting'
@@ -60,12 +66,14 @@ concurrency:
 defaults:
   run:
     shell: 'bash'
+    working-directory: ${{ inputs.working-directory }}
 
 jobs:
   ci:
     uses: './.github/workflows/reusable-ci-npm.yml'
     with:
       node-version: ${{ inputs.language-version }}
+      working-directory: ${{ inputs.working-directory }}
       run-lint: ${{ inputs.ci-run-lint }}
       run-test: ${{ inputs.ci-run-test }}
       run-build: ${{ inputs.ci-run-build }}
@@ -82,6 +90,7 @@ jobs:
       scan-dependencies: ${{ inputs.scan-dependencies }}
       scan-code: ${{ inputs.scan-code }}
       language: ${{ inputs.scan-dependencies-language }}
+      working-directory: ${{ inputs.working-directory }}
     secrets: inherit
 
   merge:
