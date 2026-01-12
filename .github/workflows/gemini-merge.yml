@@ -97,9 +97,6 @@ jobs:
     needs: [ci, scan]
     if: always()
     timeout-minutes: 7
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
     permissions:
       contents: 'write'
       id-token: 'write'
