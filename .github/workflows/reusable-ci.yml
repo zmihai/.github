@@ -4,16 +4,14 @@ on:
   workflow_call:
     inputs:
       language:
-        description: 'Language to use'
-        required: false
+        description: 'Language to use (javascript, python)'
+        required: true
         type: string
-        default: 'javascript'
 
       language-version:
-        description: 'Language version to use'
-        required: false
+        description: 'Language version to use (20, 3.11, etc)'
+        required: true
         type: string
-        default: '20'
 
       working-directory:
         description: 'Working directory for commands'

@@ -54,6 +54,8 @@ jobs:
   ci:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.4.0
     with:
+      language: 'javascript'
+      language-version: '24'
       run-lint: false    # Skip linting
       run-test: true
       run-build: true
@@ -68,6 +70,7 @@ jobs:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.4.0
     with:
       language: 'javascript'
+      language-version: '22'
       working-directory: './frontend'
       
   ci-backend:

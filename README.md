@@ -24,7 +24,7 @@ A comprehensive CI workflow that handles linting, testing, and building for mult
 
 **Inputs:**
 - `language` (string, default: 'javascript'): Language to use ('javascript' or 'python')
-- `language-version` (string): Version of the language to use (default: '20' for JS, '3.11' for Python)
+- `language-version` (string): Version of the language to use (examples: '20' for JS, '3.11' for Python)
 - `working-directory` (string, default: '.'): Working directory for commands
 - `run-lint` (boolean, default: true): Run linting
 - `run-test` (boolean, default: true): Run tests (JS only)
