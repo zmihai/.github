@@ -29,8 +29,8 @@ defaults:
     shell: bash
 
 jobs:
-  dependency-scan:
-    if: ${{ inputs.scan-dependencies }}
+  dependency-scan-javascript:
+    if: ${{ inputs.scan-dependencies && inputs.language == 'javascript' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -49,6 +49,28 @@ jobs:
 
       - name: Run npm audit
         run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+  dependency-scan-python:
+    if: ${{ inputs.scan-dependencies && inputs.language == 'python' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python Environment
+        uses: zmihai/.github/actions/setup-python-env@e9db21be206a6cf85a90a3eadc0c664288aba42e
+        with:
+          python-version: 'lts/*'
+          working-directory: ${{ inputs.working-directory }}
+          install-dependencies: 'false'
+
+      - name: Run pip audit
+        run: pip install pip-audit && pip-audit
         continue-on-error: true
 
   codeql-scan:
