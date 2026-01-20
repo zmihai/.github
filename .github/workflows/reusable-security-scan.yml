@@ -65,7 +65,7 @@ jobs:
       - name: Setup Python Environment
         uses: zmihai/.github/actions/setup-python-env@e9db21be206a6cf85a90a3eadc0c664288aba42e
         with:
-          python-version: 'lts/*'
+          python-version: '3.11'
           working-directory: ${{ inputs.working-directory }}
           install-dependencies: 'false'
 
