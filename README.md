@@ -128,7 +128,7 @@ steps:
 
 **Path:** `actions/setup-python-env/action.yml`
 
-Sets up Python environment with pip caching and automatic dependency installation from `requirements.txt`.
+Sets up Python environment with pip caching and automatic dependency installation from `requirements.txt` and `pyproject.toml`.
 
 **Inputs:**
 - `python-version` (default: '3.11'): Python version
