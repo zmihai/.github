@@ -3,11 +3,18 @@ name: '🔀 Reusable Gemini Dispatch'
 on:
   workflow_call:
     inputs:
+      language:
+        description: 'The project language (javascript, python)'
+        required: false
+        type: string
+        default: 'javascript'
+
       language-version:
         description: 'Language version to use'
         required: false
         type: string
         default: '20'
+
       working-directory:
         description: 'Working directory for commands'
         required: false
@@ -49,9 +56,9 @@ on:
         default: false
       scan-dependencies-language:
         type: string
-        description: 'The project language (for scanning dependencies)'
+        description: 'The project language (for scanning dependencies) - deprecated, use inputs.language instead'
         required: false
-        default: 'javascript'
+
     secrets:
       GEMINI_API_KEY:
         description: 'Required for calling the Gemini API'
@@ -212,7 +219,7 @@ jobs:
       ci-build-before-test: ${{ inputs.ci-build-before-test }}
       scan-dependencies: ${{ inputs.scan-dependencies }}
       scan-code: ${{ inputs.scan-code }}
-      scan-dependencies-language: ${{ inputs.scan-dependencies-language }}
+      scan-dependencies-language: ${{ inputs.scan-dependencies-language || inputs.language }}
     secrets: 'inherit'
   fallthrough:
     needs:
