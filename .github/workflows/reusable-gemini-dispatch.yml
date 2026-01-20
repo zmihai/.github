@@ -195,6 +195,7 @@ jobs:
       command: '${{ needs.dispatch.outputs.command }}'
       issue_number: '${{ needs.dispatch.outputs.issue_number }}'
     secrets: 'inherit'
+
   merge:
     needs:
       - 'dispatch'
@@ -221,6 +222,7 @@ jobs:
       scan-code: ${{ inputs.scan-code }}
       scan-dependencies-language: ${{ inputs.scan-dependencies-language || inputs.language }}
     secrets: 'inherit'
+
   fallthrough:
     needs:
       - 'dispatch'
