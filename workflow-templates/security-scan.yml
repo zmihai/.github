@@ -15,4 +15,5 @@ jobs:
     with:
       scan-dependencies: true
       scan-code: false
+      # For Python projects, change language to 'python'
       language: 'javascript'
