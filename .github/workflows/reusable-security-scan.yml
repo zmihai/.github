@@ -73,6 +73,16 @@ jobs:
         run: pip install pip-audit && pip-audit
         continue-on-error: true
 
+  dependency-scan-unsupported:
+    if: ${{ inputs.scan-dependencies && inputs.language != 'javascript' && inputs.language != 'python' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fail for unsupported dependency scan language
+        run: |
+          echo "Dependency scanning is not supported for language '${{ inputs.language }}'. Supported languages: javascript, python."
+          exit 1
+
   codeql-scan:
     if: ${{ inputs.scan-code }}
     runs-on: ubuntu-latest

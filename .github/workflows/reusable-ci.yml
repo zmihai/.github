@@ -68,3 +68,13 @@ jobs:
       working-directory: ${{ inputs.working-directory }}
       run-lint: ${{ inputs.run-lint }}
     secrets: inherit
+
+  ci-unsupported:
+    if: ${{ inputs.language != 'javascript' && inputs.language != 'python' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fail for unsupported CI language
+        run: |
+          echo "CI workflow is not supported for language '${{ inputs.language }}'. Supported languages: javascript, python."
+          exit 1
