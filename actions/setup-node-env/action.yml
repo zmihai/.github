@@ -34,8 +34,11 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: ${{ inputs.cache }}
-        cache-dependency-path: ${{ inputs.working-directory != '.' && format('{0}/package-lock.json', inputs.working-directory) || '' }}
-    
+        cache-dependency-path: |
+          ${{ inputs.working-directory }}/package-lock.json
+          ${{ inputs.working-directory }}/yarn.lock
+          ${{ inputs.working-directory }}/pnpm-lock.yaml
+
     - name: Install dependencies
       if: ${{ inputs.install-dependencies == 'true' }}
       shell: bash

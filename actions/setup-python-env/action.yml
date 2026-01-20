@@ -30,7 +30,9 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
-        cache-dependency-path: ${{ inputs.working-directory != '.' && format('{0}/requirements.txt', inputs.working-directory) || '' }}
+        cache-dependency-path: |
+          ${{ inputs.working-directory }}/requirements.txt
+          ${{ inputs.working-directory }}/pyproject.toml
 
     - name: Install dependencies
       if: ${{ inputs.install-dependencies == 'true' }}
