@@ -19,9 +19,10 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci-npm.yml@v0.3.0
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.4.0
     with:
-      node-version: '20'
+      language: 'javascript'
+      language-version: '20'
 ```
 
 ### 2. Use a Composite Action
@@ -31,7 +32,7 @@ Add this to any workflow job:
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/setup-node-env@v0.3.0
+  - uses: zmihai/.github/actions/setup-node-env@v0.4.0
     with:
       node-version: '20'
 ```
@@ -47,18 +48,16 @@ When creating a new workflow in any repository:
 ## What's Available?
 
 ### 🔄 Reusable Workflows
-- **CI** - Complete Node.js CI pipeline
+- **CI** - Complete Node.js & Python CI pipeline
 - **Release** - Automated releases with version bumping
-- **Security Scan** - Dependency and code security scanning
+- **Security Scan** - Dependency and code security scanning (JS & Python)
 
 ### 🎬 Composite Actions
 - **Setup Node Environment** - Node.js with caching
+- **Setup Python Environment** - Python with caching
 - **Docker Build & Push** - Container image building
 - **Semantic Release** - Automated semantic versioning
 - **Notify Slack** - Slack notifications
-
-### 📝 Workflow Templates
-- CI, Release, and Security templates ready to use
 
 ## Learn More
 

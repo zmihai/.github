@@ -8,11 +8,15 @@ on:
         description: 'The pull request number'
         required: true
 
-      language-version:
-        description: 'Language version to use'
-        required: false
+      language:
+        description: 'The project language (javascript, python)'
+        required: true
         type: string
-        default: '20'
+
+      language-version:
+        description: 'Language version to use (20, 3.11, etc)'
+        required: true
+        type: string
 
       working-directory:
         description: 'Working directory for commands'
@@ -53,11 +57,6 @@ on:
         required: false
         type: boolean
         default: false
-      scan-dependencies-language:
-        type: string
-        description: 'The project language (for scanning dependencies)'
-        required: false
-        default: 'javascript'
 
 concurrency:
   group: '${{ github.workflow }}-merge-${{ github.event_name }}' # Only one merge should run at a time, to avoid cases where the previous merge causes a conflict
@@ -69,9 +68,10 @@ defaults:
 
 jobs:
   ci:
-    uses: './.github/workflows/reusable-ci-npm.yml'
+    uses: './.github/workflows/reusable-ci.yml'
     with:
-      node-version: ${{ inputs.language-version }}
+      language: ${{ inputs.language }}
+      language-version: ${{ inputs.language-version }}
       working-directory: ${{ inputs.working-directory }}
       run-lint: ${{ inputs.ci-run-lint }}
       run-test: ${{ inputs.ci-run-test }}
@@ -88,7 +88,7 @@ jobs:
     with:
       scan-dependencies: ${{ inputs.scan-dependencies }}
       scan-code: ${{ inputs.scan-code }}
-      language: ${{ inputs.scan-dependencies-language }}
+      language: ${{ inputs.language }}
       working-directory: ${{ inputs.working-directory }}
     secrets: inherit
 

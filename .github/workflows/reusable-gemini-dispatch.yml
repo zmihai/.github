@@ -3,11 +3,16 @@ name: '🔀 Reusable Gemini Dispatch'
 on:
   workflow_call:
     inputs:
-      language-version:
-        description: 'Language version to use'
-        required: false
+      language:
+        description: 'The project language (javascript, python)'
+        required: true
         type: string
-        default: '20'
+
+      language-version:
+        description: 'Language version to use (20, 3.11, etc)'
+        required: true
+        type: string
+
       working-directory:
         description: 'Working directory for commands'
         required: false
@@ -47,11 +52,7 @@ on:
         required: false
         type: boolean
         default: false
-      scan-dependencies-language:
-        type: string
-        description: 'The project language (for scanning dependencies)'
-        required: false
-        default: 'javascript'
+
     secrets:
       GEMINI_API_KEY:
         description: 'Required for calling the Gemini API'
@@ -188,6 +189,7 @@ jobs:
       command: '${{ needs.dispatch.outputs.command }}'
       issue_number: '${{ needs.dispatch.outputs.issue_number }}'
     secrets: 'inherit'
+
   merge:
     needs:
       - 'dispatch'
@@ -204,6 +206,7 @@ jobs:
       pull-requests: 'write'
     with:
       pull_request_number: '${{ needs.dispatch.outputs.issue_number }}'
+      language: ${{ inputs.language }}
       language-version: ${{ inputs.language-version }}
       working-directory: ${{ inputs.working-directory }}
       ci-run-lint: ${{ inputs.ci-run-lint }}
@@ -212,8 +215,8 @@ jobs:
       ci-build-before-test: ${{ inputs.ci-build-before-test }}
       scan-dependencies: ${{ inputs.scan-dependencies }}
       scan-code: ${{ inputs.scan-code }}
-      scan-dependencies-language: ${{ inputs.scan-dependencies-language }}
     secrets: 'inherit'
+
   fallthrough:
     needs:
       - 'dispatch'
