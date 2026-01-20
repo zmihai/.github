@@ -1,0 +1,72 @@
+name: Reusable CI Workflow
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: 'Language to use'
+        required: false
+        type: string
+        default: 'javascript'
+
+      language-version:
+        description: 'Language version to use'
+        required: false
+        type: string
+        default: '20'
+
+      working-directory:
+        description: 'Working directory for commands'
+        required: false
+        type: string
+        default: '.'
+
+      run-lint:
+        description: 'Run linting'
+        required: false
+        type: boolean
+        default: true
+
+      run-test:
+        description: 'Run tests'
+        required: false
+        type: boolean
+        default: true
+
+      run-build:
+        description: 'Run build'
+        required: false
+        type: boolean
+        default: true
+
+      build-before-test:
+        description: 'Run build before tests'
+        required: false
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ci-npm:
+    if: ${{ inputs.language == 'javascript' }}
+    uses: './.github/workflows/ci-npm.yml'
+    with:
+      node-version: ${{ inputs.language-version }}
+      working-directory: ${{ inputs.working-directory }}
+      run-lint: ${{ inputs.ci-run-lint }}
+      run-test: ${{ inputs.ci-run-test }}
+      run-build: ${{ inputs.ci-run-build }}
+      build-before-test: ${{ inputs.ci-build-before-test }}
+    secrets: inherit
+
+  ci-python:
+    if: ${{ inputs.language == 'python' }}
+    uses: './.github/workflows/ci-python.yml'
+    with:
+      python-version: ${{ inputs.language-version }}
+      working-directory: ${{ inputs.working-directory }}
+      run-lint: ${{ inputs.ci-run-lint }}
+    secrets: inherit
