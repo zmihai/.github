@@ -150,6 +150,22 @@ steps:
 
 Builds and pushes Docker images to container registries.
 
+**Inputs:**
+- `image-name` (required): Name of the Docker image
+- `registry` (default: 'docker.io'): Container registry
+- `username` (required): Registry username
+- `password` (required): Registry password or token
+- `tags` (default: 'latest'): Comma-separated list of tags
+- `dockerfile` (default: './Dockerfile'): Path to Dockerfile
+- `context` (default: '.'): Build context
+- `build-args` (optional): Build arguments
+- `push` (default: 'true'): Push image to registry
+
+**Outputs:**
+- `image-url`: Full image URL with tag
+- `digest`: Image digest
+
+
 **Example Usage:**
 ```yaml
 steps:
@@ -167,6 +183,24 @@ steps:
 **Path:** `actions/notify-slack/action.yml`
 
 Sends notifications to Slack channels with status indicators.
+
+**Inputs:**
+- `webhook-url` (required): Slack webhook URL
+- `message` (required): Message to send
+- `status` (default: 'success'): Status (success, failure, warning)
+- `channel` (optional): Slack channel (overrides webhook default)
+- `mention-users` (optional): Comma-separated list of user IDs to mention
+
+**Example Usage:**
+```yaml
+steps:
+  - uses: zmihai/.github/actions/notify-slack@v0.3.0
+    if: always()
+    with:
+      webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+      message: 'Deployment completed for ${{ github.repository }}'
+      status: ${{ job.status }}
+```
 
 ---
 
@@ -205,6 +239,41 @@ jobs:
     with:
       language: 'python'
       scan-dependencies: true
+      scan-code: true
+```
+
+### Custom Workflow with Composite Actions
+
+```yaml
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: zmihai/.github/actions/setup-node-env@v0.1.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Docker Build and Push
+        uses: zmihai/.github/actions/docker-build-push@v0.1.0
+        with:
+          image-name: 'myuser/myapp'
+          registry: 'ghcr.io'
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          tags: 'latest,${{ github.sha }}'
 ```
 
 ---
