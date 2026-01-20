@@ -56,10 +56,10 @@ jobs:
     with:
       node-version: ${{ inputs.language-version }}
       working-directory: ${{ inputs.working-directory }}
-      run-lint: ${{ inputs.ci-run-lint }}
-      run-test: ${{ inputs.ci-run-test }}
-      run-build: ${{ inputs.ci-run-build }}
-      build-before-test: ${{ inputs.ci-build-before-test }}
+      run-lint: ${{ inputs.run-lint }}
+      run-test: ${{ inputs.run-test }}
+      run-build: ${{ inputs.run-build }}
+      build-before-test: ${{ inputs.build-before-test }}
     secrets: inherit
 
   ci-python:
@@ -68,5 +68,5 @@ jobs:
     with:
       python-version: ${{ inputs.language-version }}
       working-directory: ${{ inputs.working-directory }}
-      run-lint: ${{ inputs.ci-run-lint }}
+      run-lint: ${{ inputs.run-lint }}
     secrets: inherit
