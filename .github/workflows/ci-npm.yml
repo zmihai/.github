@@ -1,4 +1,4 @@
-name: Reusable CI Workflow (npm)
+name: CI Workflow (npm)
 
 on:
   workflow_call:
