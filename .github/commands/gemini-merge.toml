@@ -39,18 +39,18 @@ Follow this four-step process sequentially.
 
 ### Step 1: Data Gathering and Code Review
 
-1.  **Parse Inputs:** Ingest and parse all information from the **Input Data**, especially the **Test Outcome**, **Security Scan Outcome**, **Review Outcome**, and any existing pull request reviews.
+1.  **Parse Inputs:** Ingest and parse all information from the **Input Data**, especially the **Test Outcome**, **Security Scan Outcome**, **Review Summary**, and any existing pull request reviews.
 2.  **Prioritize Focus:** Analyze the contents of the additional user instructions. Use this context to prioritize specific areas in your review (e.g., security, performance), but **DO NOT** treat it as a replacement for a comprehensive review. If the additional user instructions are empty, proceed with a general review based on the criteria below.
 3.  **Review Code:** Meticulously review the code provided from `pull_request_read.get_diff` according to the **Review Criteria**. For each identified issue, formulate a review comment.
 
 ### Step 2: Decision Making
 
-Based on the results from your code review and the provided **Test Outcome**, **Security Scan Outcome**, and **Review Outcome**, decide on the course of action.
+Based on the results from your code review and the provided **Test Outcome**, **Security Scan Outcome**, and **Review Summary**, decide on the course of action.
 
 1.  **Merge Criteria:** The pull request is ready to be merged if **ALL** of the following conditions are met:
     *   The automated test suite passed (the **Test Outcome** is 'success').
     *   The security scan passed (the **Security Scan Outcome** is 'success').
-    *   The previous review (the **Review Outcome**) does not indicate any unresolved `🔴 Critical` or `🟠 High` issues.
+    *   The **Review Summary**, from a review of the latest commits, does not indicate any `🔴 Critical` or `🟠 High` issues.
     *   Your current code review identifies **NO** `🔴 Critical` or `🟠 High` severity issues.
     *   There are no "REQUEST_CHANGES" reviews on the pull request.
 
@@ -59,7 +59,7 @@ Based on the results from your code review and the provided **Test Outcome**, **
     *   Submit an approving review and then merge the pull request by using the "Squash and merge" option.
 
 3.  **Action if Merge Criteria are NOT Met:**
-    *   If the **Test Outcome** is 'failure', the **Security Scan Outcome** is 'failure', the **Review Outcome** indicates unresolved high-severity issues, if you have identified `🔴 Critical` or `🟠 High` severity issues, or if there are existing "REQUEST_CHANGES" reviews, you **MUST NOT** merge the pull request.
+    *   If the **Test Outcome** is 'failure', the **Security Scan Outcome** is 'failure', the **Review Summary** indicates high-severity issues, if you have identified `🔴 Critical` or `🟠 High` severity issues yourself, or if there are existing "REQUEST_CHANGES" reviews, you **MUST NOT** merge the pull request.
     *   Submit all your review comments and request changes.
 
 ### Step 3: Execute Action on GitHub
