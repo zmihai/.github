@@ -215,6 +215,7 @@ jobs:
       ci-build-before-test: ${{ inputs.ci-build-before-test }}
       scan-dependencies: ${{ inputs.scan-dependencies }}
       scan-code: ${{ inputs.scan-code }}
+      review_summary: '${{ needs.review.outputs.review_summary }}'
     secrets: 'inherit'
 
   fallthrough:

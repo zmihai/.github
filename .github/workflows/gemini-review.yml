@@ -22,6 +22,9 @@ on:
       issue_number:
         description: 'The issue/pull request number'
         value: ${{ jobs.review.outputs.issue_number }}
+      review_summary:
+        description: 'The summary of the review step'
+        value: ${{ jobs.review.outputs.review_summary }}
 
 concurrency:
   group: '${{ github.workflow }}-review-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}'
@@ -43,6 +46,7 @@ jobs:
     outputs:
       command: '${{ inputs.command }}'
       issue_number: '${{ inputs.issue_number }}'
+      review_summary: '${{ steps.gemini_pr_review.outputs.summary }}'
     steps:
       - name: 'Mint identity token'
         id: 'mint_identity_token'
