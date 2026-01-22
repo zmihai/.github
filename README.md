@@ -142,8 +142,9 @@ steps:
   - uses: actions/checkout@v4
   - uses: zmihai/.github/actions/setup-php-env@v0.4.0
     with:
-      php-version: '8.3'
-```
+      php-version: '8.2'
+      extensions: 'gd, intl, zip'
+      install-dependencies: 'false'
 
 ### Setup Python Environment
 
