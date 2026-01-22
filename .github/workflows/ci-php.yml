@@ -1,0 +1,67 @@
+name: CI Workflow (php)
+
+on:
+  workflow_call:
+    inputs:
+      php-version:
+        description: 'PHP version to use'
+        required: false
+        type: string
+        default: '8.3'
+      working-directory:
+        description: 'Working directory for commands'
+        required: false
+        type: string
+        default: '.'
+      run-lint:
+        description: 'Run linting'
+        required: false
+        type: boolean
+        default: true
+      run-test:
+        description: 'Run tests'
+        required: false
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP Environment
+        uses: ./actions/setup-php-env
+        with:
+          php-version: ${{ inputs.php-version }}
+          working-directory: ${{ inputs.working-directory }}
+          install-dependencies: 'true'
+
+      - name: Run Lint
+        if: ${{ inputs.run-lint }}
+        run: |
+          if [ -f vendor/bin/phpcs ]; then
+            vendor/bin/phpcs .
+          elif [ -f vendor/bin/php-cs-fixer ]; then
+            vendor/bin/php-cs-fixer fix . --dry-run
+          else
+            echo "No PHP linter found. Skipping linting."
+          fi
+
+      - name: Run Tests
+        if: ${{ inputs.run-test }}
+        run: |
+          if [ -f vendor/bin/phpunit ]; then
+            vendor/bin/phpunit
+          else
+            echo "No PHPUnit found. Skipping tests."
+          fi
