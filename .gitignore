@@ -33,3 +33,5 @@ temp/
 .env
 .env.local
 .env.*.local
+
+conductor/archive
