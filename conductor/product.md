@@ -15,6 +15,6 @@ The main objectives of this repository are:
 - **Rapid Bootstrapping:** Providing easy-to-use workflow templates that allow teams to set up standard CI/CD processes for new projects in minutes.
 
 ## Key Features
-- **Multi-Language CI/CD:** Automated pipelines supporting popular languages like Node.js and Python, handling linting, testing, and building.
-- **Integrated Security:** Built-in security scanning capabilities, including dependency audits and CodeQL analysis, to identify vulnerabilities early.
+- **Multi-Language CI/CD:** Automated pipelines supporting popular languages like Node.js, Python, and PHP, handling linting, testing, and building.
+- **Integrated Security:** Built-in security scanning capabilities, including dependency audits (npm, pip, composer) and CodeQL analysis, to identify vulnerabilities early.
 - **AI-Powered Automation:** Advanced workflows that leverage Google Gemini for automated Pull Request reviews and intelligent merging.
