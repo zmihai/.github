@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       language:
-        description: 'The project language (javascript, python)'
+        description: 'The project language (javascript, python, php)'
         required: true
         type: string
 

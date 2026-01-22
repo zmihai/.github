@@ -3,5 +3,5 @@
   "description": "Automated security scanning for dependencies and code",
   "iconName": "example-icon",
   "categories": ["Security"],
-  "filePatterns": ["package.json$"]
+  "filePatterns": ["package.json$", "composer.json$"]
 }

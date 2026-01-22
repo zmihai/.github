@@ -3,5 +3,5 @@
   "description": "Continuous Integration workflow with lint, test, and build",
   "iconName": "example-icon",
   "categories": ["Continuous Integration"],
-  "filePatterns": ["package.json$"]
+  "filePatterns": ["package.json$", "composer.json$"]
 }

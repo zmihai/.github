@@ -16,4 +16,5 @@ jobs:
       scan-dependencies: true
       scan-code: false
       # For Python projects, change language to 'python'
+      # For PHP projects, change language to 'php'
       language: 'javascript'
