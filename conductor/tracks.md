@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [~] **Track: Add PHP Support**
+- [x] **Track: Add PHP Support**
   *Link: [./tracks/add_php_support_20260122/](./tracks/add_php_support_20260122/)*
