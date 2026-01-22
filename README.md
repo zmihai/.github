@@ -23,11 +23,11 @@ Reusable workflows are stored in `.github/workflows/` and can be called from oth
 A comprehensive CI workflow that handles linting, testing, and building for multiple languages.
 
 **Inputs:**
-- `language` (string, default: 'javascript'): Language to use ('javascript' or 'python')
-- `language-version` (string): Version of the language to use (examples: '20' for JS, '3.11' for Python)
+- `language` (string, default: 'javascript'): Language to use ('javascript', 'python', or 'php')
+- `language-version` (string): Version of the language to use (examples: '20' for JS, '3.11' for Python, '8.3' for PHP)
 - `working-directory` (string, default: '.'): Working directory for commands
 - `run-lint` (boolean, default: true): Run linting
-- `run-test` (boolean, default: true): Run tests (JS only)
+- `run-test` (boolean, default: true): Run tests (JS and PHP only)
 - `run-build` (boolean, default: true): Run build (JS only)
 - `build-before-test` (boolean, default: false): Run build before tests (JS only)
 
@@ -40,8 +40,8 @@ jobs:
   ci:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.4.0
     with:
-      language: 'python'
-      language-version: '3.11'
+      language: 'php'
+      language-version: '8.3'
       run-lint: true
 ```
 
@@ -49,12 +49,12 @@ jobs:
 
 **Path:** `.github/workflows/reusable-security-scan.yml`
 
-Performs security scanning including dependency audits and CodeQL analysis. Supports JavaScript and Python.
+Performs security scanning including dependency audits and CodeQL analysis. Supports JavaScript, Python, and PHP.
 
 **Inputs:**
 - `scan-dependencies` (boolean, default: true): Scan dependencies for vulnerabilities
 - `scan-code` (boolean, default: false): Run CodeQL analysis
-- `language` (string, default: 'javascript'): Language for CodeQL ('javascript' or 'python')
+- `language` (string, default: 'javascript'): Language for CodeQL ('javascript', 'python', or 'php')
 - `working-directory` (string, default: '.'): Working directory
 
 **Example Usage:**
@@ -65,7 +65,7 @@ jobs:
     with:
       scan-dependencies: true
       scan-code: true
-      language: 'python'
+      language: 'php'
 ```
 
 ---
@@ -123,6 +123,28 @@ steps:
       node-version: '20'
       cache: 'npm'
 ```
+
+### Setup PHP Environment
+
+**Path:** `actions/setup-php-env/action.yml`
+
+Sets up PHP environment with composer caching and automatic dependency installation.
+
+**Inputs:**
+- `php-version` (default: '8.3'): PHP version
+- `install-dependencies` (default: 'true'): Auto-install dependencies
+- `working-directory` (default: '.'): Working directory
+- `extensions` (default: 'json, mbstring, xml, iconv'): PHP extensions to install
+
+**Example Usage:**
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: zmihai/.github/actions/setup-php-env@v0.4.0
+    with:
+      php-version: '8.2'
+      extensions: 'gd, intl, zip'
+      install-dependencies: 'false'
 
 ### Setup Python Environment
 
@@ -215,6 +237,32 @@ Available templates:
 ---
 
 ## 💡 Usage Examples
+
+### Complete CI Pipeline (PHP)
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  ci:
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.4.0
+    with:
+      language: 'php'
+      language-version: '8.3'
+  
+  security:
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.4.0
+    with:
+      language: 'php'
+      scan-dependencies: true
+      scan-code: true
+```
 
 ### Complete CI Pipeline (Python)
 

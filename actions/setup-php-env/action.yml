@@ -1,0 +1,62 @@
+name: 'Setup PHP Environment'
+description: 'Setup PHP with composer caching and dependency installation'
+author: 'zmihai'
+
+inputs:
+  php-version:
+    description: 'PHP version to use'
+    required: false
+    default: '8.3'
+  install-dependencies:
+    description: 'Automatically install dependencies'
+    required: false
+    default: 'true'
+  working-directory:
+    description: 'Working directory'
+    required: false
+    default: '.'
+  extensions:
+    description: 'PHP extensions to install'
+    required: false
+    default: 'json, mbstring, xml, iconv'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ inputs.php-version }}
+        extensions: ${{ inputs.extensions }}
+        tools: composer:v2
+        coverage: none
+
+    - name: Get Composer Cache Directory
+      id: composer-cache
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+    - name: Cache Composer dependencies
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-composer-
+
+    - name: Install dependencies
+      if: ${{ inputs.install-dependencies == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ -f composer.lock ]; then
+          composer install --no-progress --prefer-dist --optimize-autoloader
+        else
+          composer install --no-progress --prefer-dist
+        fi
+
+branding:
+  icon: 'code'
+  color: 'purple'

@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       scan-dependencies:
-        description: 'Scan npm dependencies for vulnerabilities'
+        description: 'Scan dependencies for vulnerabilities'
         required: false
         type: boolean
         default: true
@@ -14,7 +14,7 @@ on:
         type: boolean
         default: false
       language:
-        description: 'Language for CodeQL (javascript, python, etc.)'
+        description: 'Language for CodeQL (javascript, python, php, etc.)'
         required: false
         type: string
         default: 'javascript'
@@ -73,14 +73,36 @@ jobs:
         run: pip install pip-audit && pip-audit
         continue-on-error: true
 
+  dependency-scan-php:
+    if: ${{ inputs.scan-dependencies && inputs.language == 'php' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP Environment
+        uses: ./actions/setup-php-env
+        with:
+          php-version: '8.3'
+          working-directory: ${{ inputs.working-directory }}
+          install-dependencies: 'false'
+
+      - name: Run composer audit
+        run: composer audit
+        continue-on-error: true
+
   dependency-scan-unsupported:
-    if: ${{ inputs.scan-dependencies && inputs.language != 'javascript' && inputs.language != 'python' }}
+    if: ${{ inputs.scan-dependencies && inputs.language != 'javascript' && inputs.language != 'python' && inputs.language != 'php' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Fail for unsupported dependency scan language
         run: |
-          echo "Dependency scanning is not supported for language '${{ inputs.language }}'. Supported languages: javascript, python."
+          echo "Dependency scanning is not supported for language '${{ inputs.language }}'. Supported languages: javascript, python, php."
           exit 1
 
   codeql-scan:

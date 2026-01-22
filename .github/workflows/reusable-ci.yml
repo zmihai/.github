@@ -4,12 +4,12 @@ on:
   workflow_call:
     inputs:
       language:
-        description: 'Language to use (javascript, python)'
+        description: 'Language to use (javascript, python, php)'
         required: true
         type: string
 
       language-version:
-        description: 'Language version to use (20, 3.11, etc)'
+        description: 'Language version to use (20, 3.11, 8.3, etc)'
         required: true
         type: string
 
@@ -69,12 +69,22 @@ jobs:
       run-lint: ${{ inputs.run-lint }}
     secrets: inherit
 
+  ci-php:
+    if: ${{ inputs.language == 'php' }}
+    uses: './.github/workflows/ci-php.yml'
+    with:
+      php-version: ${{ inputs.language-version }}
+      working-directory: ${{ inputs.working-directory }}
+      run-lint: ${{ inputs.run-lint }}
+      run-test: ${{ inputs.run-test }}
+    secrets: inherit
+
   ci-unsupported:
-    if: ${{ inputs.language != 'javascript' && inputs.language != 'python' }}
+    if: ${{ inputs.language != 'javascript' && inputs.language != 'python' && inputs.language != 'php' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Fail for unsupported CI language
         run: |
-          echo "CI workflow is not supported for language '${{ inputs.language }}'. Supported languages: javascript, python."
+          echo "CI workflow is not supported for language '${{ inputs.language }}'. Supported languages: javascript, python, php."
           exit 1
