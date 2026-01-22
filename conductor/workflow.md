@@ -46,7 +46,7 @@ All tasks follow a strict lifecycle:
 
 8. **Commit Code Changes:**
    - Stage all code changes related to the task.
-   - Propose a clear, concise commit message e.g, `feat(ui): Create basic HTML structure for calculator`.
+   - Propose a clear, concise commit message e.g., `feat(ui): Create basic HTML structure for calculator`.
    - Perform the commit.
 
 9. **Attach Task Summary with Git Notes:**

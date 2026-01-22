@@ -6,8 +6,8 @@
 
 ## Supported Languages & Environments
 - **Node.js:** Support for JavaScript/TypeScript projects, including automated environment setup, dependency caching, and standard CI tasks (lint, test, build).
-- **Python:** Support for Python projects, including automated setup with \pip\ caching and dependency installation.
-- **PHP:** Support for PHP projects, including automated setup with \composer\ caching and dependency installation.
+- **Python:** Support for Python projects, including automated setup with `pip` caching and dependency installation.
+- **PHP:** Support for PHP projects, including automated setup with `composer` caching and dependency installation.
 
 ## Infrastructure & Deployment
 - **Docker:** Support for building and pushing Docker images to various container registries.
