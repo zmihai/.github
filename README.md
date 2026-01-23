@@ -145,6 +145,7 @@ steps:
       php-version: '8.2'
       extensions: 'gd, intl, zip'
       install-dependencies: 'false'
+```
 
 ### Setup Python Environment
 
