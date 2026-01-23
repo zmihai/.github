@@ -15,11 +15,6 @@ on:
         type: string
         description: 'The issue/pull request number'
         required: true
-      projects:
-        type: string
-        description: 'JSON list of projects'
-        required: false
-        default: '[]'
     outputs:
       command:
         description: 'The command used to call this workflow'
@@ -138,4 +133,4 @@ jobs:
                 ]
               }
             }
-          prompt: '/gemini-review --repository=${{ github.repository }} --pr=${{ inputs.issue_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}"'
+          prompt: '/gemini-review --repository=${{ github.repository }} --pr=${{ inputs.issue_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }}'
