@@ -64,6 +64,12 @@ on:
         type: string
         default: ''
 
+      projects:
+        description: 'JSON list of projects'
+        required: false
+        type: string
+        default: '[]'
+
 concurrency:
   group: '${{ github.workflow }}-merge-${{ github.event_name }}' # Only one merge should run at a time, to avoid cases where the previous merge causes a conflict
   cancel-in-progress: ${{ github.actor != 'dependabot[bot]' }}
@@ -196,4 +202,4 @@ jobs:
                 ]
               }
             }
-          prompt: '/gemini-merge --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --test_outcome=${{ needs.ci.result }} --security_scan_outcome=${{ needs.scan.result }} --review_summary="${{ inputs.review_summary }}" --merge_strategy=squash'
+          prompt: '/gemini-merge --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --test_outcome=${{ needs.ci.result }} --security_scan_outcome=${{ needs.scan.result }} --review_summary="${{ inputs.review_summary }}" --merge_strategy=squash --projects="${{ inputs.projects }}"'

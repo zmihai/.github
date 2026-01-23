@@ -53,6 +53,12 @@ on:
         type: boolean
         default: false
 
+      projects:
+        description: 'JSON list of projects with their language, version, directory, and outcomes'
+        required: false
+        type: string
+        default: '[]'
+
     secrets:
       GEMINI_API_KEY:
         description: 'Required for calling the Gemini API'
@@ -112,6 +118,7 @@ jobs:
       request: '${{ steps.extract_command.outputs.request }}'
       additional_context: '${{ steps.extract_command.outputs.additional_context }}'
       issue_number: '${{ github.event.pull_request.number || github.event.issue.number }}'
+      projects: '${{ inputs.projects }}'
     steps:
       - name: 'Mint identity token'
         id: 'mint_identity_token'
@@ -188,6 +195,7 @@ jobs:
       additional_context: '${{ needs.dispatch.outputs.additional_context }}'
       command: '${{ needs.dispatch.outputs.command }}'
       issue_number: '${{ needs.dispatch.outputs.issue_number }}'
+      projects: '${{ needs.dispatch.outputs.projects }}'
     secrets: 'inherit'
 
   merge:
@@ -216,6 +224,7 @@ jobs:
       scan-dependencies: ${{ inputs.scan-dependencies }}
       scan-code: ${{ inputs.scan-code }}
       review_summary: '${{ needs.review.outputs.review_summary }}'
+      projects: '${{ needs.dispatch.outputs.projects }}'
     secrets: 'inherit'
 
   fallthrough:
