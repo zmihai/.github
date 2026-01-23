@@ -20,7 +20,7 @@ Reusable workflows are stored in `.github/workflows/` and can be called from oth
 
 **Path:** `.github/workflows/reusable-ci.yml`
 
-A comprehensive CI workflow that handles linting, testing, and building for multiple languages.
+A comprehensive CI workflow that handles linting, testing, and building for multiple languages.  Consider using this workflow to generate the `ci-outcome` for the Gemini Merge workflow.
 
 **Inputs:**
 - `language` (string, default: 'javascript'): Language to use ('javascript', 'python', or 'php')
@@ -49,7 +49,7 @@ jobs:
 
 **Path:** `.github/workflows/reusable-security-scan.yml`
 
-Performs security scanning including dependency audits and CodeQL analysis. Supports JavaScript, Python, and PHP.
+Performs security scanning including dependency audits and CodeQL analysis. Supports JavaScript, Python, and PHP. Consider using this workflow to generate the `scan-outcome` for the Gemini Merge workflow.
 
 **Inputs:**
 - `scan-dependencies` (boolean, default: true): Scan dependencies for vulnerabilities
@@ -90,7 +90,7 @@ Performs an AI-powered review of a Pull Request, providing feedback and suggesti
 
 **Path:** `.github/workflows/gemini-merge.yml`
 
-Runs CI and Security scans, then uses Gemini to analyze the results and merge the PR if everything passes.
+Runs CI and Security scans, then uses Gemini to analyze the results and merge the PR if everything passes.  It now expects a JSON list of projects, each including the `ci-outcome` and `scan-outcome`.
 
 ---
 
@@ -237,6 +237,77 @@ Available templates:
 ---
 
 ## 💡 Usage Examples
+
+### Gemini Merge Workflow
+
+To use the Gemini Merge workflow, you'll need to provide a JSON list of projects as input.  Here's an example of how to call the `gemini-merge.yml` workflow, incorporating the `reusable-ci.yml` and `reusable-security-scan.yml` workflows to generate the necessary inputs:
+
+```yaml
+name: Merge Request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate:
+    name: Validate and Merge
+    runs-on: ubuntu-latest
+    outputs:
+      merge_allowed: ${{ steps.merge_check.outputs.merge_allowed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run CI and Security Scan for Project A
+        uses: ./.github/workflows/reusable-ci.yml@main
+        id: project_a_ci
+        with:
+          language: 'python'
+          language-version: '3.11'
+          working-directory: './project_a'
+
+      - name: Run Security Scan for Project A
+        uses: ./.github/workflows/reusable-security-scan.yml@main
+        id: project_a_security
+        with:
+          language: 'python'
+          working-directory: './project_a'
+
+      - name: Run CI and Security Scan for Project B
+        uses: ./.github/workflows/reusable-ci.yml@main
+        id: project_b_ci
+        with:
+          language: 'javascript'
+          language-version: '20'
+          working-directory: './project_b'
+
+      - name: Run Security Scan for Project B
+        uses: ./.github/workflows/reusable-security-scan.yml@main
+        id: project_b_security
+        with:
+          language: 'javascript'
+          working-directory: './project_b'
+
+      - name: Check Merge Conditions
+        id: merge_check
+        run: |
+          # Construct the JSON payload for the projects input
+          PROJECTS_JSON="[{\"working-directory\": \"./project_a\", \"language\": \"python\", \"language-version\": \"3.11\", \"ci-outcome\": \"${{ steps.project_a_ci.outputs.outcome }}\", \"scan-outcome\": \"${{ steps.project_a_security.outputs.outcome }}\" }, {\"working-directory\": \"./project_b\", \"language\": \"javascript\", \"language-version\": \"20\", \"ci-outcome\": \"${{ steps.project_b_ci.outputs.outcome }}\", \"scan-outcome\": \"${{ steps.project_b_security.outputs.outcome }}\" }]"
+          echo "projects_json=$PROJECTS_JSON" >> $GITHUB_ENV
+
+  gemini_merge:
+    name: Gemini Merge
+    needs: validate
+    if: ${{ needs.validate.outputs.merge_allowed == 'true' }}
+    uses: zmihai/.github/.github/workflows/gemini-merge.yml@main
+    with:
+      pull_request_number: ${{ github.event.pull_request.number }}
+      projects: ${{ env.projects_json }}
+```
+
+This example demonstrates how to structure your workflow to leverage the `reusable-ci.yml` and `reusable-security-scan.yml` workflows, capture their outputs, and format them into the JSON structure expected by the `gemini-merge.yml` workflow.
 
 ### Complete CI Pipeline (PHP)
 
