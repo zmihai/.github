@@ -43,6 +43,11 @@ on:
         type: boolean
         default: false
 
+    outputs:
+      outcome:
+        description: 'The CI outcome'
+        value: ${{ (jobs.ci-npm.result != 'skipped' && jobs.ci-npm.result) || (jobs.ci-python.result != 'skipped' && jobs.ci-python.result) || (jobs.ci-php.result != 'skipped' && jobs.ci-php.result) || 'failure' }}
+
 defaults:
   run:
     shell: bash
