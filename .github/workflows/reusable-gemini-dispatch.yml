@@ -145,6 +145,7 @@ jobs:
       additional_context: '${{ needs.dispatch.outputs.additional_context }}'
       command: '${{ needs.dispatch.outputs.command }}'
       issue_number: '${{ needs.dispatch.outputs.issue_number }}'
+      projects: '${{ needs.dispatch.outputs.projects }}'
     secrets: 'inherit'
 
   merge:
