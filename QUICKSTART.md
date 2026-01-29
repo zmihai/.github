@@ -59,8 +59,6 @@ When creating a new workflow in any repository:
 - **Setup Node Environment** - Node.js with caching
 - **Setup Python Environment** - Python with caching
 - **Setup PHP Environment** - PHP with composer caching
-- **Docker Build & Push** - Container image building
-- **Notify Slack** - Slack notifications
 
 ## Learn More
 

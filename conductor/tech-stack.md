@@ -9,10 +9,6 @@
 - **Python:** Support for Python projects, including automated setup with `pip` caching and dependency installation.
 - **PHP:** Support for PHP projects, including automated setup with `composer` caching and dependency installation.
 
-## Infrastructure & Deployment
-- **Docker:** Support for building and pushing Docker images to various container registries.
-- **Slack:** Integration for sending real-time build and deployment notifications.
-
 ## Advanced Capabilities
 - **Google Gemini AI:** Specialized workflows for AI-powered code reviews and automated merge decision-making.
 - **Multi-Project Support:** JSON-based project configuration for monorepos, allowing unified reviews and merge decisions across multiple subdirectories and languages.
