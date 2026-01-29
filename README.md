@@ -213,46 +213,44 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  validate:
-    name: Validate Projects
+  ci_project_a:
+    name: CI - Project A
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.0
+    with:
+      language: 'python'
+      language-version: '3.11'
+      working-directory: './project_a'
+
+  security_project_a:
+    name: Security - Project A
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.0
+    with:
+      language: 'python'
+      working-directory: './project_a'
+
+  ci_project_b:
+    name: CI - Project B
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.0
+    with:
+      language: 'javascript'
+      language-version: '20'
+      working-directory: './project_b'
+
+  security_project_b:
+    name: Security - Project B
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.0
+    with:
+      language: 'javascript'
+      working-directory: './project_b'
+
+  aggregate:
+    name: Aggregate Results
     runs-on: ubuntu-latest
+    needs: [ci_project_a, security_project_a, ci_project_b, security_project_b]
     outputs:
       projects_json: ${{ steps.build_json.outputs.projects }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: CI - Project A
-        uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.0
-        id: ci_a
-        with:
-          language: 'python'
-          language-version: '3.11'
-          working-directory: './project_a'
-
-      - name: Security - Project A
-        uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.0
-        id: sec_a
-        with:
-          language: 'python'
-          working-directory: './project_a'
-
-      - name: CI - Project B
-        uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.0
-        id: ci_b
-        with:
-          language: 'javascript'
-          language-version: '20'
-          working-directory: './project_b'
-
-      - name: Security - Project B
-        uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.0
-        id: sec_b
-        with:
-          language: 'javascript'
-          working-directory: './project_b'
-
       - name: Build Projects JSON
         id: build_json
         run: |
@@ -262,15 +260,15 @@ jobs:
               "working-directory": "./project_a",
               "language": "python",
               "language-version": "3.11",
-              "ci-outcome": "${{ steps.ci_a.outputs.outcome }}",
-              "scan-outcome": "${{ steps.sec_a.outputs.outcome }}"
+              "ci-outcome": "${{ needs.ci_project_a.outputs.outcome }}",
+              "scan-outcome": "${{ needs.security_project_a.outputs.outcome }}"
             },
             {
               "working-directory": "./project_b",
               "language": "javascript",
               "language-version": "20",
-              "ci-outcome": "${{ steps.ci_b.outputs.outcome }}",
-              "scan-outcome": "${{ steps.sec_b.outputs.outcome }}"
+              "ci-outcome": "${{ needs.ci_project_b.outputs.outcome }}",
+              "scan-outcome": "${{ needs.security_project_b.outputs.outcome }}"
             }
           ]
           EOF
@@ -280,11 +278,11 @@ jobs:
 
   gemini_merge:
     name: Gemini Merge
-    needs: validate
+    needs: aggregate
     uses: zmihai/.github/.github/workflows/gemini-merge.yml@v0.6.0
     with:
       pull_request_number: ${{ github.event.pull_request.number }}
-      projects: ${{ needs.validate.outputs.projects_json }}
+      projects: ${{ needs.aggregate.outputs.projects_json }}
     secrets: inherit
 ```
 
