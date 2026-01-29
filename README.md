@@ -247,6 +247,7 @@ jobs:
     name: Aggregate Results
     runs-on: ubuntu-latest
     needs: [ci_project_a, security_project_a, ci_project_b, security_project_b]
+    if: always()
     outputs:
       projects_json: ${{ steps.build_json.outputs.projects }}
 
