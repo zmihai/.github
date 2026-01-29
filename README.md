@@ -276,7 +276,7 @@ jobs:
           EOF
           )
           # Escape for GitHub Actions output
-          echo "projects=$(echo $PROJECTS | jq -c .)" >> $GITHUB_OUTPUT
+          echo "projects=$(echo "$PROJECTS" | jq -c .)" >> $GITHUB_OUTPUT
 
   gemini_merge:
     name: Gemini Merge
