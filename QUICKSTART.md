@@ -19,7 +19,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.4.0
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.0
     with:
       language: 'javascript'
       language-version: '20'
@@ -32,7 +32,7 @@ Add this to any workflow job:
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/setup-node-env@v0.4.0
+  - uses: zmihai/.github/actions/setup-node-env@v0.6.0
     with:
       node-version: '20'
 ```
@@ -48,16 +48,17 @@ When creating a new workflow in any repository:
 ## What's Available?
 
 ### 🔄 Reusable Workflows
-- **CI** - Complete Node.js & Python CI pipeline
-- **Release** - Automated releases with version bumping
-- **Security Scan** - Dependency and code security scanning (JS & Python)
+- **CI** - Complete Node.js, Python & PHP CI pipeline (v0.6.0+)
+- **Security Scan** - Dependency and code security scanning (JS, Python & PHP) (v0.6.0+)
+
+### 🤖 Gemini AI Workflows
+- **Gemini Review** - AI-powered PR review
+- **Gemini Test & Merge** - Automated merging based on CI/Security outcomes (v0.6.0+)
 
 ### 🎬 Composite Actions
 - **Setup Node Environment** - Node.js with caching
 - **Setup Python Environment** - Python with caching
-- **Docker Build & Push** - Container image building
-- **Semantic Release** - Automated semantic versioning
-- **Notify Slack** - Slack notifications
+- **Setup PHP Environment** - PHP with composer caching
 
 ## Learn More
 

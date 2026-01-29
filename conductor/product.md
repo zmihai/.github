@@ -17,4 +17,4 @@ The main objectives of this repository are:
 ## Key Features
 - **Multi-Language CI/CD:** Automated pipelines supporting popular languages like Node.js, Python, and PHP, handling linting, testing, and building.
 - **Integrated Security:** Built-in security scanning capabilities, including dependency audits (npm, pip, composer) and CodeQL analysis, to identify vulnerabilities early.
-- **AI-Powered Automation:** Advanced workflows that leverage Google Gemini for automated Pull Request reviews and intelligent merging.
+- **AI-Powered Automation:** Advanced workflows that leverage Google Gemini for automated Pull Request reviews and intelligent merging, with support for monorepos and multiple projects.

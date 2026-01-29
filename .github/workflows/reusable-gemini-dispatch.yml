@@ -3,55 +3,11 @@ name: '🔀 Reusable Gemini Dispatch'
 on:
   workflow_call:
     inputs:
-      language:
-        description: 'The project language (javascript, python, php)'
+      projects:
+        description: 'JSON list of projects with their language, version, directory, and outcomes.'
         required: true
         type: string
-
-      language-version:
-        description: 'Language version to use (20, 3.11, etc)'
-        required: true
-        type: string
-
-      working-directory:
-        description: 'Working directory for commands'
-        required: false
-        type: string
-        default: '.'
-
-      # CI directives
-      ci-run-lint:
-        description: 'Run linting'
-        required: false
-        type: boolean
-        default: true
-      ci-run-test:
-        description: 'Run tests'
-        required: false
-        type: boolean
-        default: true
-      ci-run-build:
-        description: 'Run build'
-        required: false
-        type: boolean
-        default: true
-      ci-build-before-test:
-        description: 'Run build before tests'
-        required: false
-        type: boolean
-        default: false
-
-      # Dependency scan directives
-      scan-dependencies:
-        description: 'Scan dependencies for vulnerabilities'
-        required: false
-        type: boolean
-        default: true
-      scan-code:
-        description: 'Run CodeQL analysis'
-        required: false
-        type: boolean
-        default: false
+        default: '[]'
 
     secrets:
       GEMINI_API_KEY:
@@ -112,6 +68,7 @@ jobs:
       request: '${{ steps.extract_command.outputs.request }}'
       additional_context: '${{ steps.extract_command.outputs.additional_context }}'
       issue_number: '${{ github.event.pull_request.number || github.event.issue.number }}'
+      projects: '${{ inputs.projects }}'
     steps:
       - name: 'Mint identity token'
         id: 'mint_identity_token'
@@ -188,6 +145,7 @@ jobs:
       additional_context: '${{ needs.dispatch.outputs.additional_context }}'
       command: '${{ needs.dispatch.outputs.command }}'
       issue_number: '${{ needs.dispatch.outputs.issue_number }}'
+      projects: '${{ needs.dispatch.outputs.projects }}'
     secrets: 'inherit'
 
   merge:
@@ -206,16 +164,8 @@ jobs:
       pull-requests: 'write'
     with:
       pull_request_number: '${{ needs.dispatch.outputs.issue_number }}'
-      language: ${{ inputs.language }}
-      language-version: ${{ inputs.language-version }}
-      working-directory: ${{ inputs.working-directory }}
-      ci-run-lint: ${{ inputs.ci-run-lint }}
-      ci-run-test: ${{ inputs.ci-run-test }}
-      ci-run-build: ${{ inputs.ci-run-build }}
-      ci-build-before-test: ${{ inputs.ci-build-before-test }}
-      scan-dependencies: ${{ inputs.scan-dependencies }}
-      scan-code: ${{ inputs.scan-code }}
       review_summary: '${{ needs.review.outputs.review_summary }}'
+      projects: '${{ needs.dispatch.outputs.projects }}'
     secrets: 'inherit'
 
   fallthrough:

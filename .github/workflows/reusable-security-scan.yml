@@ -24,6 +24,11 @@ on:
         type: string
         default: '.'
 
+    outputs:
+      outcome:
+        description: 'The overall security scan outcome'
+        value: ${{ (jobs.dependency-scan-unsupported.result != 'skipped') && 'failure' || ((jobs.dependency-scan-javascript.result == 'success' || jobs.dependency-scan-javascript.result == 'skipped') && (jobs.dependency-scan-python.result == 'success' || jobs.dependency-scan-python.result == 'skipped') && (jobs.dependency-scan-php.result == 'success' || jobs.dependency-scan-php.result == 'skipped') && (jobs.codeql-scan.result == 'success' || jobs.codeql-scan.result == 'skipped') && 'success' || 'failure') }}
+
 defaults:
   run:
     shell: bash
@@ -49,7 +54,6 @@ jobs:
 
       - name: Run npm audit
         run: npm audit --audit-level=moderate
-        continue-on-error: true
 
   dependency-scan-python:
     if: ${{ inputs.scan-dependencies && inputs.language == 'python' }}
@@ -71,7 +75,6 @@ jobs:
 
       - name: Run pip audit
         run: pip install pip-audit && pip-audit
-        continue-on-error: true
 
   dependency-scan-php:
     if: ${{ inputs.scan-dependencies && inputs.language == 'php' }}
@@ -93,7 +96,6 @@ jobs:
 
       - name: Run composer audit
         run: composer audit
-        continue-on-error: true
 
   dependency-scan-unsupported:
     if: ${{ inputs.scan-dependencies && inputs.language != 'javascript' && inputs.language != 'python' && inputs.language != 'php' }}
