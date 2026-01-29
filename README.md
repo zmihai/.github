@@ -20,7 +20,7 @@ Reusable workflows are stored in `.github/workflows/` and can be called from oth
 
 **Path:** `.github/workflows/reusable-ci.yml`
 
-A comprehensive CI workflow that handles linting, testing, and building for multiple languages.  Consider using this workflow to generate the `ci-outcome` for the Gemini Merge workflow.
+A comprehensive CI workflow that handles linting, testing, and building for multiple languages. Use this workflow to generate the `ci-outcome` for the Gemini Review/Merge workflows.
 
 **Inputs:**
 - `language` (string, default: 'javascript'): Language to use ('javascript', 'python', or 'php')
@@ -31,6 +31,9 @@ A comprehensive CI workflow that handles linting, testing, and building for mult
 - `run-build` (boolean, default: true): Run build (JS only)
 - `build-before-test` (boolean, default: false): Run build before tests (JS only)
 
+**Outputs:**
+- `outcome`: The result of the CI run (`success` or `failure`).
+
 **Secrets:**
 - `CUSTOM_TOKEN` (optional): Custom token for private packages (JS only)
 
@@ -38,7 +41,7 @@ A comprehensive CI workflow that handles linting, testing, and building for mult
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.4.0
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.0
     with:
       language: 'php'
       language-version: '8.3'
@@ -49,7 +52,7 @@ jobs:
 
 **Path:** `.github/workflows/reusable-security-scan.yml`
 
-Performs security scanning including dependency audits and CodeQL analysis. Supports JavaScript, Python, and PHP. Consider using this workflow to generate the `scan-outcome` for the Gemini Merge workflow.
+Performs security scanning including dependency audits and CodeQL analysis. Supports JavaScript, Python, and PHP. Use this workflow to generate the `scan-outcome` for the Gemini Review/Merge workflows.
 
 **Inputs:**
 - `scan-dependencies` (boolean, default: true): Scan dependencies for vulnerabilities
@@ -57,11 +60,14 @@ Performs security scanning including dependency audits and CodeQL analysis. Supp
 - `language` (string, default: 'javascript'): Language for CodeQL ('javascript', 'python', or 'php')
 - `working-directory` (string, default: '.'): Working directory
 
+**Outputs:**
+- `outcome`: The overall result of the security scans (`success` or `failure`).
+
 **Example Usage:**
 ```yaml
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.4.0
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.0
     with:
       scan-dependencies: true
       scan-code: true
@@ -78,7 +84,7 @@ These workflows integrate Google Gemini for automated PR reviews and merging.
 
 **Path:** `.github/workflows/reusable-gemini-dispatch.yml`
 
-The entry point for Gemini commands. It parses comments like `@gemini-cli /review` and dispatches to the appropriate workflow. Now supports Python projects.
+The entry point for Gemini commands. It parses comments like `@gemini-cli /review` and dispatches to the appropriate workflow.
 
 ### Gemini Review
 
@@ -90,7 +96,21 @@ Performs an AI-powered review of a Pull Request, providing feedback and suggesti
 
 **Path:** `.github/workflows/gemini-merge.yml`
 
-Runs CI and Security scans, then uses Gemini to analyze the results and merge the PR if everything passes.  It now expects a JSON list of projects, each including the `ci-outcome` and `scan-outcome`.
+Uses Gemini to analyze CI/Security results and merge the PR if everything passes. It expects a JSON list of projects, each including the `ci-outcome` and `scan-outcome`.
+
+**Inputs:**
+- `pull_request_number` (string, required): The PR number.
+- `projects` (string, required): A JSON array of project objects. Each object must follow this schema:
+  ```json
+  {
+    "working-directory": "./python-server",
+    "language": "python",
+    "language-version": "3.11",
+    "ci-outcome": "success",
+    "scan-outcome": "failure"
+  }
+  ```
+- `review_summary` (string, optional): Summary from a previous review step.
 
 ---
 
@@ -118,7 +138,7 @@ Sets up Node.js environment with caching and automatic dependency installation.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/setup-node-env@v0.4.0
+  - uses: zmihai/.github/actions/setup-node-env@v0.6.0
     with:
       node-version: '20'
       cache: 'npm'
@@ -140,7 +160,7 @@ Sets up PHP environment with composer caching and automatic dependency installat
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/setup-php-env@v0.4.0
+  - uses: zmihai/.github/actions/setup-php-env@v0.6.0
     with:
       php-version: '8.2'
       extensions: 'gd, intl, zip'
@@ -162,7 +182,7 @@ Sets up Python environment with pip caching and automatic dependency installatio
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/setup-python-env@v0.4.0
+  - uses: zmihai/.github/actions/setup-python-env@v0.6.0
     with:
       python-version: '3.11'
 ```
@@ -193,7 +213,7 @@ Builds and pushes Docker images to container registries.
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: zmihai/.github/actions/docker-build-push@v0.4.0
+  - uses: zmihai/.github/actions/docker-build-push@v0.6.0
     with:
       image-name: 'myuser/myapp'
       registry: 'ghcr.io'
@@ -217,7 +237,7 @@ Sends notifications to Slack channels with status indicators.
 **Example Usage:**
 ```yaml
 steps:
-  - uses: zmihai/.github/actions/notify-slack@v0.3.0
+  - uses: zmihai/.github/actions/notify-slack@v0.6.0
     if: always()
     with:
       webhook-url: ${{ secrets.SLACK_WEBHOOK }}
@@ -239,9 +259,9 @@ Available templates:
 
 ## 💡 Usage Examples
 
-### Gemini Merge Workflow
+### Gemini Merge Workflow (Multi-Project)
 
-To use the Gemini Merge workflow, you'll need to provide a JSON list of projects as input.  Here's an example of how to call the `gemini-merge.yml` workflow, incorporating the `reusable-ci.yml` and `reusable-security-scan.yml` workflows to generate the necessary inputs:
+To use the Gemini Merge workflow, you'll need to provide a JSON list of projects as input. Here's how to call it by capturing outputs from the reusable workflows:
 
 ```yaml
 name: Merge Request
@@ -252,63 +272,79 @@ on:
 
 jobs:
   validate:
-    name: Validate and Merge
+    name: Validate Projects
     runs-on: ubuntu-latest
     outputs:
-      merge_allowed: ${{ steps.merge_check.outputs.merge_allowed }}
+      projects_json: ${{ steps.build_json.outputs.projects }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Run CI and Security Scan for Project A
-        uses: ./.github/workflows/reusable-ci.yml@main
-        id: project_a_ci
+      - name: CI - Project A
+        uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.0
+        id: ci_a
         with:
           language: 'python'
           language-version: '3.11'
           working-directory: './project_a'
 
-      - name: Run Security Scan for Project A
-        uses: ./.github/workflows/reusable-security-scan.yml@main
-        id: project_a_security
+      - name: Security - Project A
+        uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.0
+        id: sec_a
         with:
           language: 'python'
           working-directory: './project_a'
 
-      - name: Run CI and Security Scan for Project B
-        uses: ./.github/workflows/reusable-ci.yml@main
-        id: project_b_ci
+      - name: CI - Project B
+        uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.0
+        id: ci_b
         with:
           language: 'javascript'
           language-version: '20'
           working-directory: './project_b'
 
-      - name: Run Security Scan for Project B
-        uses: ./.github/workflows/reusable-security-scan.yml@main
-        id: project_b_security
+      - name: Security - Project B
+        uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.0
+        id: sec_b
         with:
           language: 'javascript'
           working-directory: './project_b'
 
-      - name: Check Merge Conditions
-        id: merge_check
+      - name: Build Projects JSON
+        id: build_json
         run: |
-          # Construct the JSON payload for the projects input
-          PROJECTS_JSON="[{\"working-directory\": \"./project_a\", \"language\": \"python\", \"language-version\": \"3.11\", \"ci-outcome\": \"${{ steps.project_a_ci.outputs.outcome }}\", \"scan-outcome\": \"${{ steps.project_a_security.outputs.outcome }}\" }, {\"working-directory\": \"./project_b\", \"language\": \"javascript\", \"language-version\": \"20\", \"ci-outcome\": \"${{ steps.project_b_ci.outputs.outcome }}\", \"scan-outcome\": \"${{ steps.project_b_security.outputs.outcome }}\" }]"
-          echo "projects_json=$PROJECTS_JSON" >> $GITHUB_ENV
+          PROJECTS=$(cat <<EOF
+          [
+            {
+              "working-directory": "./project_a",
+              "language": "python",
+              "language-version": "3.11",
+              "ci-outcome": "${{ steps.ci_a.outputs.outcome }}",
+              "scan-outcome": "${{ steps.sec_a.outputs.outcome }}"
+            },
+            {
+              "working-directory": "./project_b",
+              "language": "javascript",
+              "language-version": "20",
+              "ci-outcome": "${{ steps.ci_b.outputs.outcome }}",
+              "scan-outcome": "${{ steps.sec_b.outputs.outcome }}"
+            }
+          ]
+          EOF
+          )
+          # Escape for GitHub Actions output
+          echo "projects=$(echo $PROJECTS | jq -c .)" >> $GITHUB_OUTPUT
 
   gemini_merge:
     name: Gemini Merge
     needs: validate
-    if: ${{ needs.validate.outputs.merge_allowed == 'true' }}
-    uses: zmihai/.github/.github/workflows/gemini-merge.yml@main
+    uses: zmihai/.github/.github/workflows/gemini-merge.yml@v0.6.0
     with:
       pull_request_number: ${{ github.event.pull_request.number }}
-      projects: ${{ env.projects_json }}
+      projects: ${{ needs.validate.outputs.projects_json }}
+    secrets: inherit
 ```
-
-This example demonstrates how to structure your workflow to leverage the `reusable-ci.yml` and `reusable-security-scan.yml` workflows, capture their outputs, and format them into the JSON structure expected by the `gemini-merge.yml` workflow.
 
 ### Complete CI Pipeline (PHP)
 
@@ -323,13 +359,13 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.4.0
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.0
     with:
       language: 'php'
       language-version: '8.3'
   
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.4.0
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.0
     with:
       language: 'php'
       scan-dependencies: true
@@ -362,40 +398,6 @@ jobs:
       scan-code: true
 ```
 
-### Custom Workflow with Composite Actions
-
-```yaml
-name: Build and Deploy
-
-on:
-  push:
-    branches: [ master ]
-
-jobs:
-  build-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node
-        uses: zmihai/.github/actions/setup-node-env@v0.1.0
-        with:
-          node-version: '20'
-          cache: 'npm'
-      
-      - name: Build
-        run: npm run build
-      
-      - name: Docker Build and Push
-        uses: zmihai/.github/actions/docker-build-push@v0.1.0
-        with:
-          image-name: 'myuser/myapp'
-          registry: 'ghcr.io'
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-          tags: 'latest,${{ github.sha }}'
-```
-
 ---
 
 ## 🚀 Getting Started
@@ -403,15 +405,15 @@ jobs:
 ### Using Reusable Workflows
 
 1. In your repository, create a workflow file (e.g., `.github/workflows/ci.yml`)
-2. Reference reusable workflows using `uses: zmihai/.github/.github/workflows/<name>.yml@v0.4.0`
-3. Reference composite actions using `uses: zmihai/.github/actions/<name>@v0.4.0`
+2. Reference reusable workflows using `uses: zmihai/.github/.github/workflows/<name>.yml@v0.6.0`
+3. Reference composite actions using `uses: zmihai/.github/actions/<name>@v0.6.0`
 4. Pass required inputs and secrets
 
 ---
 
 ## 📚 Best Practices
 
-1. **Pin versions**: Use specific tags (like `@v0.4.0`) or commit SHAs in production.
+1. **Pin versions**: Use specific tags (like `@v0.6.0`) or commit SHAs in production.
 2. **Security**: Use GitHub Secrets for all sensitive information.
 3. **Testing**: Test workflow changes in a separate branch before merging to master
 4. **Documentation**: Keep this README updated when adding new workflows or actions
