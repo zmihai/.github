@@ -15,4 +15,4 @@
 
 ## Advanced Capabilities
 - **Google Gemini AI:** Specialized workflows for AI-powered code reviews and automated merge decision-making.
-  - **Multi-Project Support:** JSON-based project configuration for monorepos, allowing unified reviews and merge decisions across multiple subdirectories and languages.
+- **Multi-Project Support:** JSON-based project configuration for monorepos, allowing unified reviews and merge decisions across multiple subdirectories and languages.
