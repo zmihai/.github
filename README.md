@@ -327,13 +327,13 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.4.0
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.0
     with:
       language: 'python'
       language-version: '3.11'
   
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.4.0
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.0
     with:
       language: 'python'
       scan-dependencies: true
