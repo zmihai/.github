@@ -40,6 +40,10 @@ defaults:
 jobs:
   resolve-ref:
     runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      issues: 'read'
+      pull-requests: 'read'
     outputs:
       ref: ${{ steps.resolve.outputs.result }}
     steps:
