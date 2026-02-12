@@ -33,6 +33,10 @@ on:
         required: false
         type: boolean
         default: false
+      ref:
+        description: 'The branch, tag or SHA to checkout'
+        required: false
+        type: string
     secrets:
       CUSTOM_TOKEN:
         description: 'Custom token for private packages'
@@ -52,6 +56,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node Environment
         uses: zmihai/.github/actions/setup-node-env@v0.4.0

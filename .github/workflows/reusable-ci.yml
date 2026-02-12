@@ -43,6 +43,11 @@ on:
         type: boolean
         default: false
 
+      ref:
+        description: 'The branch, tag or SHA to checkout'
+        required: false
+        type: string
+
     outputs:
       outcome:
         description: 'The CI outcome'
@@ -63,6 +68,7 @@ jobs:
       run-test: ${{ inputs.run-test }}
       run-build: ${{ inputs.run-build }}
       build-before-test: ${{ inputs.build-before-test }}
+      ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
     secrets: inherit
 
   ci-python:
@@ -72,6 +78,7 @@ jobs:
       python-version: ${{ inputs.language-version }}
       working-directory: ${{ inputs.working-directory }}
       run-lint: ${{ inputs.run-lint }}
+      ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
     secrets: inherit
 
   ci-php:
@@ -82,6 +89,7 @@ jobs:
       working-directory: ${{ inputs.working-directory }}
       run-lint: ${{ inputs.run-lint }}
       run-test: ${{ inputs.run-test }}
+      ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
     secrets: inherit
 
   ci-unsupported:
