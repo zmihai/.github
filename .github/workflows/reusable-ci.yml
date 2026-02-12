@@ -43,6 +43,11 @@ on:
         type: boolean
         default: false
 
+      ref:
+        description: 'The branch, tag or SHA to checkout'
+        required: false
+        type: string
+
     outputs:
       outcome:
         description: 'The CI outcome'
@@ -53,7 +58,45 @@ defaults:
     shell: bash
 
 jobs:
+  resolve-ref:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      issues: 'read'
+      pull-requests: 'read'
+    outputs:
+      ref: ${{ steps.resolve.outputs.result }}
+    steps:
+      - id: resolve
+        uses: actions/github-script@v7
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+        with:
+          script: |
+            const inputRef = process.env.INPUT_REF;
+            if (inputRef) return inputRef;
+            if (context.payload.pull_request) return context.payload.pull_request.head.sha;
+            if (['issue_comment', 'pull_request_review_comment', 'pull_request_review'].includes(context.eventName)) {
+              const issueNumber = context.payload.issue?.number || context.payload.pull_request?.number;
+              if (issueNumber) {
+                try {
+                  const { data: pr } = await github.rest.pulls.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: issueNumber,
+                  });
+                  console.log(`Resolved PR head SHA: ${pr.head.sha}`);
+                  return pr.head.sha;
+                } catch (e) {
+                  throw new Error(`Could not resolve PR head SHA for issue ${issueNumber}: ${e.message}`);
+                }
+              }
+            }
+            return context.sha;
+          result-encoding: string
+
   ci-npm:
+    needs: resolve-ref
     if: ${{ inputs.language == 'javascript' }}
     uses: './.github/workflows/ci-npm.yml'
     with:
@@ -63,18 +106,22 @@ jobs:
       run-test: ${{ inputs.run-test }}
       run-build: ${{ inputs.run-build }}
       build-before-test: ${{ inputs.build-before-test }}
+      ref: ${{ needs.resolve-ref.outputs.ref }}
     secrets: inherit
 
   ci-python:
+    needs: resolve-ref
     if: ${{ inputs.language == 'python' }}
     uses: './.github/workflows/ci-python.yml'
     with:
       python-version: ${{ inputs.language-version }}
       working-directory: ${{ inputs.working-directory }}
       run-lint: ${{ inputs.run-lint }}
+      ref: ${{ needs.resolve-ref.outputs.ref }}
     secrets: inherit
 
   ci-php:
+    needs: resolve-ref
     if: ${{ inputs.language == 'php' }}
     uses: './.github/workflows/ci-php.yml'
     with:
@@ -82,6 +129,7 @@ jobs:
       working-directory: ${{ inputs.working-directory }}
       run-lint: ${{ inputs.run-lint }}
       run-test: ${{ inputs.run-test }}
+      ref: ${{ needs.resolve-ref.outputs.ref }}
     secrets: inherit
 
   ci-unsupported:

@@ -9,6 +9,11 @@ on:
         type: string
         default: '[]'
 
+      ref:
+        description: 'The branch, tag or SHA to checkout'
+        required: false
+        type: string
+
     secrets:
       GEMINI_API_KEY:
         description: 'Required for calling the Gemini API'
@@ -69,6 +74,7 @@ jobs:
       additional_context: '${{ steps.extract_command.outputs.additional_context }}'
       issue_number: '${{ github.event.pull_request.number || github.event.issue.number }}'
       projects: '${{ inputs.projects }}'
+      resolved_ref: '${{ steps.extract_command.outputs.resolved_ref }}'
     steps:
       - name: 'Mint identity token'
         id: 'mint_identity_token'
@@ -82,21 +88,25 @@ jobs:
           permission-issues: 'write'
           permission-pull-requests: 'write'
 
-      - name: 'Extract command'
+      - name: 'Extract command and resolve ref'
         id: 'extract_command'
         uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # ratchet:actions/github-script@v7
         env:
           EVENT_TYPE: '${{ github.event_name }}.${{ github.event.action }}'
           REQUEST: '${{ github.event.comment.body || github.event.review.body || github.event.issue.body }}'
           ACTOR: '${{ github.actor }}'
+          INPUT_REF: '${{ inputs.ref }}'
         with:
+          github-token: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
           script: |
             const eventType = process.env.EVENT_TYPE;
             const request = process.env.REQUEST;
             const actor = process.env.ACTOR;
+            const inputRef = process.env.INPUT_REF;
             let additionalContext = '';
             core.setOutput('request', request);
 
+            // 1. Resolve Command
             if (eventType === 'pull_request.opened') {
               if (actor === 'dependabot[bot]') {
                 core.setOutput('command', 'review-and-merge');
@@ -117,6 +127,27 @@ jobs:
             } else {
               core.setOutput('command', 'fallthrough');
             }
+
+            // 2. Resolve Ref
+            let resolvedRef = inputRef || context.payload.pull_request?.head?.sha || context.sha;
+
+            if (!inputRef && (context.eventName === 'issue_comment' || context.eventName === 'pull_request_review_comment' || context.eventName === 'pull_request_review')) {
+              const issueNumber = context.payload.issue?.number || context.payload.pull_request?.number;
+              if (issueNumber) {
+                try {
+                  const { data: pr } = await github.rest.pulls.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: issueNumber,
+                  });
+                  resolvedRef = pr.head.sha;
+                  console.log(`Resolved PR head SHA: ${resolvedRef}`);
+                } catch (e) {
+                  console.log(`Could not resolve PR head SHA for issue ${issueNumber}. Falling back to default ref.`);
+                }
+              }
+            }
+            core.setOutput('resolved_ref', resolvedRef);
 
       - name: 'Acknowledge request'
         env:
@@ -146,6 +177,7 @@ jobs:
       command: '${{ needs.dispatch.outputs.command }}'
       issue_number: '${{ needs.dispatch.outputs.issue_number }}'
       projects: '${{ needs.dispatch.outputs.projects }}'
+      ref: ${{ needs.dispatch.outputs.resolved_ref }}
     secrets: 'inherit'
 
   merge:
@@ -166,6 +198,7 @@ jobs:
       pull_request_number: '${{ needs.dispatch.outputs.issue_number }}'
       review_summary: '${{ needs.review.outputs.review_summary }}'
       projects: '${{ needs.dispatch.outputs.projects }}'
+      ref: ${{ needs.dispatch.outputs.resolved_ref }}
     secrets: 'inherit'
 
   fallthrough:

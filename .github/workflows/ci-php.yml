@@ -23,6 +23,10 @@ on:
         required: false
         type: boolean
         default: true
+      ref:
+        description: 'The branch, tag or SHA to checkout'
+        required: false
+        type: string
 
 defaults:
   run:
@@ -38,6 +42,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup PHP Environment
         uses: ./actions/setup-php-env
