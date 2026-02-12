@@ -103,7 +103,7 @@ Performs an AI-powered review of a Pull Request, providing feedback and suggesti
 - `issue_number` (string, required): The issue/pull request number.
 - `projects` (string, optional): JSON list of projects.
 - `additional_context` (string, optional): Any additional context from the request.
-- `ref` (string, optional): The branch, tag or SHA to checkout. Automatically resolves the PR head SHA for comment-triggered events. Defaults to `github.sha` for other events.
+- `ref` (string, optional): The branch, tag or SHA to checkout. Automatically resolves the PR head SHA when called via `reusable-gemini-dispatch`. Defaults to the event's ref or PR head SHA for other invocations.
 
 ### Gemini Test & Merge
 
@@ -124,7 +124,7 @@ Uses Gemini to analyze CI/Security results and merge the PR if everything passes
   }
   ```
 - `review_summary` (string, optional): Summary from a previous review step.
-- `ref` (string, optional): The branch, tag or SHA to checkout. Automatically resolves the PR head SHA for comment-triggered events. Defaults to `github.sha` for other events.
+- `ref` (string, optional): The branch, tag or SHA to checkout. Automatically resolves the PR head SHA when called via `reusable-gemini-dispatch`. Defaults to the event's ref or PR head SHA for other invocations.
 
 ---
 
