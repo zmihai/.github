@@ -38,7 +38,41 @@ defaults:
     shell: bash
 
 jobs:
+  resolve-ref:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.resolve.outputs.result }}
+    steps:
+      - id: resolve
+        uses: actions/github-script@v7
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+        with:
+          script: |
+            const inputRef = process.env.INPUT_REF;
+            if (inputRef) return inputRef;
+            if (context.payload.pull_request) return context.payload.pull_request.head.sha;
+            if (['issue_comment', 'pull_request_review_comment', 'pull_request_review'].includes(context.eventName)) {
+              const issueNumber = context.payload.issue?.number || context.payload.pull_request?.number;
+              if (issueNumber) {
+                try {
+                  const { data: pr } = await github.rest.pulls.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: issueNumber,
+                  });
+                  console.log(`Resolved PR head SHA: ${pr.head.sha}`);
+                  return pr.head.sha;
+                } catch (e) {
+                  console.log(`Could not resolve PR head SHA for issue ${issueNumber}. Falling back to default ref.`);
+                }
+              }
+            }
+            return context.sha;
+          result-encoding: string
+
   dependency-scan-javascript:
+    needs: resolve-ref
     if: ${{ inputs.scan-dependencies && inputs.language == 'javascript' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -49,7 +83,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Node Environment
         uses: zmihai/.github/actions/setup-node-env@v0.4.0
@@ -62,6 +96,7 @@ jobs:
         run: npm audit --audit-level=moderate
 
   dependency-scan-python:
+    needs: resolve-ref
     if: ${{ inputs.scan-dependencies && inputs.language == 'python' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -72,7 +107,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Python Environment
         uses: zmihai/.github/actions/setup-python-env@v0.4.0
@@ -85,6 +120,7 @@ jobs:
         run: pip install pip-audit && pip-audit
 
   dependency-scan-php:
+    needs: resolve-ref
     if: ${{ inputs.scan-dependencies && inputs.language == 'php' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -95,7 +131,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup PHP Environment
         uses: ./actions/setup-php-env
@@ -118,6 +154,7 @@ jobs:
           exit 1
 
   codeql-scan:
+    needs: resolve-ref
     if: ${{ inputs.scan-code }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -132,7 +169,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
