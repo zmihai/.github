@@ -30,7 +30,7 @@ A comprehensive CI workflow that handles linting, testing, and building for mult
 - `run-test` (boolean, default: true): Run tests (JS and PHP only)
 - `run-build` (boolean, default: true): Run build (JS only)
 - `build-before-test` (boolean, default: false): Run build before tests (JS only)
-- `ref` (string, optional): The branch, tag or SHA to checkout. Defaults to the event's ref or PR head SHA.
+- `ref` (string, optional): The branch, tag or SHA to checkout. Defaults to `github.event.pull_request.head.sha` when available, otherwise `github.sha`.
 
 **Outputs:**
 - `outcome`: The result of the CI run (`success` or `failure`).
