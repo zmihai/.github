@@ -107,7 +107,7 @@ jobs:
             core.setOutput('request', request);
 
             // 1. Resolve Command
-            if (eventType === 'pull_request.opened') {
+            if (eventType.startsWith("pull_request.")) {
               if (actor === 'dependabot[bot]') {
                 core.setOutput('command', 'review-and-merge');
               } else {
