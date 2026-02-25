@@ -243,7 +243,7 @@ jobs:
     uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.3
     with:
       language: 'python'
-      language-version: '3.13'
+      language-version: '3.11'
       working-directory: './project_a'
 
   ci_project_b:
@@ -259,7 +259,7 @@ jobs:
     uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.3
     with:
       language: 'javascript'
-      language-version: '24'
+      language-version: '20'
       working-directory: './project_b'
 
   aggregate:
@@ -322,7 +322,7 @@ jobs:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.3
     with:
       language: 'php'
-      language-version: '8.4'
+      language-version: '8.5'
   
   security:
     uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.3
@@ -349,7 +349,7 @@ jobs:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.3
     with:
       language: 'python'
-      language-version: '3.11'
+      language-version: '3.13'
   
   security:
     uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.3
