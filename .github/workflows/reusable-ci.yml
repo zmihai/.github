@@ -22,6 +22,7 @@ on:
       extensions:
         description: 'Extensions to install during setup'
         required: false
+        type: string
         default: ''
 
       run-lint:

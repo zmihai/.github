@@ -16,6 +16,7 @@ on:
       extensions:
         description: 'PHP extensions to install'
         required: false
+        type: string
         default: ''
       run-lint:
         description: 'Run linting'
