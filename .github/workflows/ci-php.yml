@@ -16,7 +16,7 @@ on:
       extensions:
         description: 'PHP extensions to install'
         required: false
-        default: 'json, mbstring, xml, iconv'
+        default: ''
       run-lint:
         description: 'Run linting'
         required: false
