@@ -9,7 +9,7 @@ on:
         type: string
 
       language-version:
-        description: 'Language version to use (20, 3.11, 8.3, etc)'
+        description: 'Language version to use (20, 3.11, 8.4, etc)'
         required: true
         type: string
 

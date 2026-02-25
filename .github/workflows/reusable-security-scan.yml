@@ -22,7 +22,7 @@ on:
         default: 'javascript'
 
       language-version:
-        description: 'Language version to use (20, 3.11, 8.3, etc)'
+        description: 'Language version to use (20, 3.11, 8.4, etc)'
         required: false
         type: string
 
@@ -149,7 +149,7 @@ jobs:
       - name: Setup PHP Environment
         uses: ./actions/setup-php-env
         with:
-          php-version: ${{ inputs.language-version || '8.3' }}
+          php-version: ${{ inputs.language-version || '8.4' }}
           working-directory: ${{ inputs.working-directory }}
           install-dependencies: 'false'
 

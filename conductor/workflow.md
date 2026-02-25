@@ -126,7 +126,7 @@ All tasks follow a strict lifecycle:
 8.  **Get and Record Phase Checkpoint SHA:**
     -   **Step 8.1: Get Commit Hash:** Obtain the hash of the *just-created checkpoint commit* (`git log -1 --format="%H"`).
     -   **Step 8.2: Update Plan:** Read `plan.md`, find the heading for the completed phase, and append the first 7 characters of the commit hash in the format `[checkpoint: <sha>]`.
-    -   **Step 8.3: Write Plan:** Write the updated content back to `plan.md`.
+    -   **Step 8.4: Write Plan:** Write the updated content back to `plan.md`.
 
 9. **Commit Plan Update:**
     - **Action:** Stage the modified `plan.md` file.

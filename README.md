@@ -24,7 +24,7 @@ A comprehensive CI workflow that handles linting, testing, and building for mult
 
 **Inputs:**
 - `language` (string, default: 'javascript'): Language to use ('javascript', 'python', or 'php')
-- `language-version` (string): Version of the language to use (examples: '20' for JS, '3.11' for Python, '8.3' for PHP)
+- `language-version` (string): Version of the language to use (examples: '20' for JS, '3.11' for Python, '8.4' for PHP)
 - `working-directory` (string, default: '.'): Working directory for commands
 - `run-lint` (boolean, default: true): Run linting
 - `run-test` (boolean, default: true): Run tests (JS and PHP only)
@@ -45,7 +45,7 @@ jobs:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.1
     with:
       language: 'php'
-      language-version: '8.3'
+      language-version: '8.4'
       run-lint: true
 ```
 
@@ -165,7 +165,7 @@ steps:
 Sets up PHP environment with composer caching and automatic dependency installation.
 
 **Inputs:**
-- `php-version` (default: '8.3'): PHP version
+- `php-version` (default: '8.4'): PHP version
 - `install-dependencies` (default: 'true'): Auto-install dependencies
 - `working-directory` (default: '.'): Working directory
 - `extensions` (default: 'json, mbstring, xml, iconv'): PHP extensions to install
@@ -317,7 +317,7 @@ jobs:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.1
     with:
       language: 'php'
-      language-version: '8.3'
+      language-version: '8.4'
   
   security:
     uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.1
