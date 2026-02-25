@@ -171,7 +171,7 @@ Sets up PHP environment with composer caching and automatic dependency installat
 - `php-version` (default: '8.4'): PHP version
 - `install-dependencies` (default: 'true'): Auto-install dependencies
 - `working-directory` (default: '.'): Working directory
-- `extensions` (default: 'json, mbstring, xml, iconv'): PHP extensions to install
+- `extensions` (default: ''): PHP extensions to install. Defaults to 'json, mbstring, xml, iconv' if not specified.
 
 **Example Usage:**
 ```yaml
