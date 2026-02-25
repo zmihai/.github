@@ -9,7 +9,7 @@ on:
         type: string
 
       language-version:
-        description: 'Language version to use (20, 3.11, 8.3, etc)'
+        description: 'Language version to use (20, 3.11, 8.4, etc)'
         required: true
         type: string
 
@@ -18,6 +18,12 @@ on:
         required: false
         type: string
         default: '.'
+
+      extensions:
+        description: 'Extensions to install during setup'
+        required: false
+        type: string
+        default: ''
 
       run-lint:
         description: 'Run linting'
@@ -127,6 +133,7 @@ jobs:
     with:
       php-version: ${{ inputs.language-version }}
       working-directory: ${{ inputs.working-directory }}
+      extensions: ${{ inputs.extensions }}
       run-lint: ${{ inputs.run-lint }}
       run-test: ${{ inputs.run-test }}
       ref: ${{ needs.resolve-ref.outputs.ref }}

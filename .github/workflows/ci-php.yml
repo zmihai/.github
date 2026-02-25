@@ -7,12 +7,17 @@ on:
         description: 'PHP version to use'
         required: false
         type: string
-        default: '8.3'
+        default: '8.4'
       working-directory:
         description: 'Working directory for commands'
         required: false
         type: string
         default: '.'
+      extensions:
+        description: 'PHP extensions to install'
+        required: false
+        type: string
+        default: ''
       run-lint:
         description: 'Run linting'
         required: false
@@ -50,6 +55,7 @@ jobs:
         with:
           php-version: ${{ inputs.php-version }}
           working-directory: ${{ inputs.working-directory }}
+          extensions: ${{ inputs.extensions }}
           install-dependencies: 'true'
 
       - name: Run Lint

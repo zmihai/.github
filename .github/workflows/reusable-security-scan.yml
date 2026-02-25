@@ -8,21 +8,30 @@ on:
         required: false
         type: boolean
         default: true
+
       scan-code:
         description: 'Run CodeQL analysis'
         required: false
         type: boolean
         default: false
+
       language:
         description: 'Language for CodeQL (javascript, python, php, etc.)'
         required: false
         type: string
         default: 'javascript'
+
+      language-version:
+        description: 'Language version to use (20, 3.11, 8.4, etc)'
+        required: false
+        type: string
+
       working-directory:
         description: 'Working directory for commands'
         required: false
         type: string
         default: '.'
+
       ref:
         description: 'The branch, tag or SHA to checkout'
         required: false
@@ -92,7 +101,7 @@ jobs:
       - name: Setup Node Environment
         uses: zmihai/.github/actions/setup-node-env@v0.4.0
         with:
-          node-version: 'lts/*'
+          node-version: ${{ inputs.language-version || 'lts/*' }}
           working-directory: ${{ inputs.working-directory }}
           install-dependencies: 'false'
 
@@ -116,7 +125,7 @@ jobs:
       - name: Setup Python Environment
         uses: zmihai/.github/actions/setup-python-env@v0.4.0
         with:
-          python-version: '3.11'
+          python-version: ${{ inputs.language-version || '3.11' }}
           working-directory: ${{ inputs.working-directory }}
           install-dependencies: 'false'
 
@@ -140,7 +149,7 @@ jobs:
       - name: Setup PHP Environment
         uses: ./actions/setup-php-env
         with:
-          php-version: '8.3'
+          php-version: ${{ inputs.language-version || '8.4' }}
           working-directory: ${{ inputs.working-directory }}
           install-dependencies: 'false'
 

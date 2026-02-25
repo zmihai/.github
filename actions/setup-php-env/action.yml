@@ -6,7 +6,7 @@ inputs:
   php-version:
     description: 'PHP version to use'
     required: false
-    default: '8.3'
+    default: '8.4'
   install-dependencies:
     description: 'Automatically install dependencies'
     required: false
@@ -18,7 +18,7 @@ inputs:
   extensions:
     description: 'PHP extensions to install'
     required: false
-    default: 'json, mbstring, xml, iconv'
+    default: ''
 
 runs:
   using: 'composite'
@@ -27,7 +27,7 @@ runs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ inputs.php-version }}
-        extensions: ${{ inputs.extensions }}
+        extensions: ${{ inputs.extensions || 'json, mbstring, xml, iconv' }}
         tools: composer:v2
         coverage: none
 

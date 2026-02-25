@@ -11,10 +11,11 @@ on:
 
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.4.0
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.3
     with:
       scan-dependencies: true
       scan-code: false
-      # For Python projects, change language to 'python'
-      # For PHP projects, change language to 'php'
+      # For Python projects, change language to 'python' and language-version to e.g. '3.11'
+      # For PHP projects, change language to 'php' and language-version to e.g. '8.4'
       language: 'javascript'
+      language-version: '20'
