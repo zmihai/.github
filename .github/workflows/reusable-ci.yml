@@ -19,6 +19,11 @@ on:
         type: string
         default: '.'
 
+      extensions:
+        description: 'Extensions to install during setup'
+        required: false
+        default: ''
+
       run-lint:
         description: 'Run linting'
         required: false
@@ -127,6 +132,7 @@ jobs:
     with:
       php-version: ${{ inputs.language-version }}
       working-directory: ${{ inputs.working-directory }}
+      extensions: ${{ inputs.extensions }}
       run-lint: ${{ inputs.run-lint }}
       run-test: ${{ inputs.run-test }}
       ref: ${{ needs.resolve-ref.outputs.ref }}

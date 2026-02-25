@@ -13,6 +13,10 @@ on:
         required: false
         type: string
         default: '.'
+      extensions:
+        description: 'PHP extensions to install'
+        required: false
+        default: 'json, mbstring, xml, iconv'
       run-lint:
         description: 'Run linting'
         required: false
@@ -50,6 +54,7 @@ jobs:
         with:
           php-version: ${{ inputs.php-version }}
           working-directory: ${{ inputs.working-directory }}
+          extensions: ${{ inputs.extensions }}
           install-dependencies: 'true'
 
       - name: Run Lint
