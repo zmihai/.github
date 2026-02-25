@@ -8,7 +8,7 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.4.0
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.6.3
     with:
       language: 'javascript'
       language-version: '20'
