@@ -36,7 +36,7 @@ defaults:
 jobs:
   merge:
     runs-on: 'ubuntu-latest'
-    timeout-minutes: 7
+    timeout-minutes: 15
     permissions:
       contents: 'write'
       id-token: 'write'
@@ -56,12 +56,12 @@ jobs:
           permission-pull-requests: 'write'
 
       - name: 'Checkout repository'
-        uses: 'actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8' # ratchet:actions/checkout@v5
+        uses: 'actions/checkout@v6'
         with:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: 'Run Gemini pull request merge'
-        uses: 'google-github-actions/run-gemini-cli@dd858daef9d698348bc3609698bb4c943ea4d617' # ratchet:exclude
+        uses: 'google-github-actions/run-gemini-cli@9dbec29a20fab3f35017a40ad0eb798a257d4d51' # ratchet:exclude
         id: 'gemini_pr_merge'
         env:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
@@ -104,13 +104,14 @@ jobs:
                     "--rm",
                     "-e",
                     "GITHUB_PERSONAL_ACCESS_TOKEN",
-                    "ghcr.io/github/github-mcp-server:v0.24.1"
+                    "ghcr.io/github/github-mcp-server:v0.32.0"
                   ],
                   "includeTools": [
-                    "add_pull_request_review_comment_to_pending_review",
+                    "create_pending_pull_request_review",
+                    "add_comment_to_pending_review",
+                    "submit_pending_pull_request_review",
                     "merge_pull_request",
-                    "pull_request_read",
-                    "pull_request_review_write"
+                    "pull_request_read"
                   ],
                   "env": {
                     "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
@@ -121,12 +122,10 @@ jobs:
                 "core": [
                   "run_shell_command(cat)",
                   "run_shell_command(echo)",
-                  "run_shell_command(env)",
                   "run_shell_command(git log)",
                   "run_shell_command(git status)",
                   "run_shell_command(grep)",
                   "run_shell_command(head)",
-                  "run_shell_command(printenv)",
                   "run_shell_command(tail)"
                 ]
               }

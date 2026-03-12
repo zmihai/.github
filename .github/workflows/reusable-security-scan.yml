@@ -57,7 +57,7 @@ jobs:
       ref: ${{ steps.resolve.outputs.result }}
     steps:
       - id: resolve
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           INPUT_REF: ${{ inputs.ref }}
         with:
@@ -94,12 +94,12 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Node Environment
-        uses: zmihai/.github/actions/setup-node-env@v0.6.4
+        uses: zmihai/.github/actions/setup-node-env@v0.6.5
         with:
           node-version: ${{ inputs.language-version || 'lts/*' }}
           working-directory: ${{ inputs.working-directory }}
@@ -118,12 +118,12 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Python Environment
-        uses: zmihai/.github/actions/setup-python-env@v0.6.4
+        uses: zmihai/.github/actions/setup-python-env@v0.6.5
         with:
           python-version: ${{ inputs.language-version || '3.11' }}
           working-directory: ${{ inputs.working-directory }}
@@ -142,12 +142,12 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup PHP Environment
-        uses: zmihai/.github/actions/setup-php-env@v0.6.4
+        uses: zmihai/.github/actions/setup-php-env@v0.6.5
         with:
           php-version: ${{ inputs.language-version || '8.4' }}
           working-directory: ${{ inputs.working-directory }}
@@ -180,7 +180,7 @@ jobs:
       actions: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
