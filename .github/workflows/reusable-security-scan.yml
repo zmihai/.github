@@ -57,7 +57,7 @@ jobs:
       ref: ${{ steps.resolve.outputs.result }}
     steps:
       - id: resolve
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           INPUT_REF: ${{ inputs.ref }}
         with:
