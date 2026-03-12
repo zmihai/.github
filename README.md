@@ -154,7 +154,7 @@ Sets up Node.js environment with caching and automatic dependency installation.
 **Example Usage:**
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
   - uses: zmihai/.github/actions/setup-node-env@v0.6.4
     with:
       node-version: '20'
@@ -176,7 +176,7 @@ Sets up PHP environment with composer caching and automatic dependency installat
 **Example Usage:**
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
   - uses: zmihai/.github/actions/setup-php-env@v0.6.4
     with:
       php-version: '8.2'
@@ -198,7 +198,7 @@ Sets up Python environment with pip caching and automatic dependency installatio
 **Example Usage:**
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
   - uses: zmihai/.github/actions/setup-python-env@v0.6.4
     with:
       python-version: '3.11'
@@ -323,7 +323,7 @@ jobs:
     with:
       language: 'php'
       language-version: '8.5'
-  
+
   security:
     uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.4
     with:
@@ -350,7 +350,7 @@ jobs:
     with:
       language: 'python'
       language-version: '3.13'
-  
+
   security:
     uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.4
     with:
@@ -396,7 +396,7 @@ When adding new workflows or actions:
 
 ## 📄 License
 
-This repository is provided as-is. Keep it mind it was build for personal/internal use, so support may or may not be provided. 
+This repository is provided as-is. Keep it mind it was build for personal/internal use, so support may or may not be provided.
 
 ---
 

@@ -31,7 +31,7 @@ Add this to any workflow job:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
   - uses: zmihai/.github/actions/setup-node-env@v0.6.4
     with:
       node-version: '20'
