@@ -122,12 +122,10 @@ jobs:
                 "core": [
                   "run_shell_command(cat)",
                   "run_shell_command(echo)",
-                  "run_shell_command(env)",
                   "run_shell_command(git log)",
                   "run_shell_command(git status)",
                   "run_shell_command(grep)",
                   "run_shell_command(head)",
-                  "run_shell_command(printenv)",
                   "run_shell_command(tail)"
                 ]
               }
