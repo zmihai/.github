@@ -51,7 +51,7 @@ jobs:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup PHP Environment
-        uses: zmihai/.github/actions/setup-php-env@v0.6.4
+        uses: zmihai/.github/actions/setup-php-env@v0.6.5
         with:
           php-version: ${{ inputs.php-version }}
           working-directory: ${{ inputs.working-directory }}
