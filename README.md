@@ -396,7 +396,7 @@ When adding new workflows or actions:
 
 ## 📄 License
 
-This repository is provided as-is. Keep it mind it was build for personal/internal use, so support may or may not be provided.
+This repository is provided as-is. Keep in mind it was built for personal/internal use, so support may or may not be provided.
 
 ---
 
