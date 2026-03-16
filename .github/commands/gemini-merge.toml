@@ -80,19 +80,19 @@ Based on the results from your code review and the provided **Projects** data an
 
 #### If Merging (Merge Criteria Met):
 
-1.  **Create Pending Review:** Call `mcp__github__create_pending_pull_request_review`. Ignore errors like "can only have one pending review per pull request" and proceed to the next step.
+1.  **Create Pending Review:** Call `mcp__github__pull_request_review_write` with method `create` to open a pending review. Ignore errors like "can only have one pending review per pull request" and proceed to the next step.
 2.  **Add Comments (if any):** If you have `🟡 Medium` or `🟢 Low` comments, add them using `mcp__github__add_comment_to_pending_review` for each comment.
 3.  **Approve and Summarize:** Submit the review with an "APPROVE" event. The summary should state that all project checks passed and the review was successful, and can include a brief summary of any minor comments.
-    *   `mcp__github__submit_pending_pull_request_review(event="APPROVE", ...)`
+    *   `mcp__github__pull_request_review_write(method="submit", event="APPROVE", ...)`
 4.  **Merge:** Merge the pull request.
     *   `mcp__github__merge_pull_request(merge_method="squash", ...)`
 
 #### If Requesting Changes (Merge Criteria NOT Met):
 
-1.  **Create Pending Review:** Call `mcp__github__create_pending_pull_request_review`. Ignore errors like "can only have one pending review per pull request" and proceed to the next step.
+1.  **Create Pending Review:** Call `mcp__github__pull_request_review_write` with method `create` to open a pending review. Ignore errors like "can only have one pending review per pull request" and proceed to the next step.
 2.  **Add All Comments:** Add all formulated review comments (`🔴`, `🟠`, `🟡`, `🟢`) to the pending review using `mcp__github__add_comment_to_pending_review` for each comment.
 3.  **Request Changes and Summarize:** Submit the review with a "REQUEST_CHANGES" event. The summary **MUST** clearly state why the merge is blocked (e.g., "CI failed for project X", "Security scan failed for project Y", "Critical issue found", "Existing change requests").
-    *   `mcp__github__submit_pending_pull_request_review(event="REQUEST_CHANGES", ...)`
+    *   `mcp__github__pull_request_review_write(method="submit", event="REQUEST_CHANGES", ...)`
 
 -----
 
