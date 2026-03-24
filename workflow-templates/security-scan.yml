@@ -2,16 +2,16 @@ name: Security Scan
 
 on:
   push:
-    branches: [ $default-branch ]
+    branches: [$default-branch]
   pull_request:
-    branches: [ $default-branch ]
+    branches: [$default-branch]
   schedule:
     # Run every day at 2 AM UTC
     - cron: '0 2 * * *'
 
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.6
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@7a5418fc2bd4181a7c08057b0a1570a225ce12d8 # ratchet:zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.6.6
     with:
       scan-dependencies: true
       scan-code: false

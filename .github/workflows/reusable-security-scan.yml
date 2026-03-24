@@ -57,7 +57,7 @@ jobs:
       ref: ${{ steps.resolve.outputs.result }}
     steps:
       - id: resolve
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # ratchet:actions/github-script@v8
         env:
           INPUT_REF: ${{ inputs.ref }}
         with:
@@ -94,12 +94,12 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Node Environment
-        uses: zmihai/.github/actions/setup-node-env@v0.6.6
+        uses: zmihai/.github/actions/setup-node-env@7a5418fc2bd4181a7c08057b0a1570a225ce12d8 # ratchet:zmihai/.github/actions/setup-node-env@v0.6.6
         with:
           node-version: ${{ inputs.language-version || 'lts/*' }}
           working-directory: ${{ inputs.working-directory }}
@@ -118,12 +118,12 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Python Environment
-        uses: zmihai/.github/actions/setup-python-env@v0.6.6
+        uses: zmihai/.github/actions/setup-python-env@7a5418fc2bd4181a7c08057b0a1570a225ce12d8 # ratchet:zmihai/.github/actions/setup-python-env@v0.6.6
         with:
           python-version: ${{ inputs.language-version || '3.11' }}
           working-directory: ${{ inputs.working-directory }}
@@ -142,12 +142,12 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup PHP Environment
-        uses: zmihai/.github/actions/setup-php-env@v0.6.6
+        uses: zmihai/.github/actions/setup-php-env@7a5418fc2bd4181a7c08057b0a1570a225ce12d8 # ratchet:zmihai/.github/actions/setup-php-env@v0.6.6
         with:
           php-version: ${{ inputs.language-version || '8.4' }}
           working-directory: ${{ inputs.working-directory }}
@@ -180,17 +180,17 @@ jobs:
       actions: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@38697555549f1db7851b81482ff19f1fa5c4fedc # ratchet:github/codeql-action/init@v4
         with:
           languages: ${{ inputs.language }}
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v4
+        uses: github/codeql-action/autobuild@38697555549f1db7851b81482ff19f1fa5c4fedc # ratchet:github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@38697555549f1db7851b81482ff19f1fa5c4fedc # ratchet:github/codeql-action/analyze@v4
