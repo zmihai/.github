@@ -46,12 +46,12 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup PHP Environment
-        uses: zmihai/.github/actions/setup-php-env@v0.6.6
+        uses: zmihai/.github/actions/setup-php-env@7a5418fc2bd4181a7c08057b0a1570a225ce12d8 # ratchet:zmihai/.github/actions/setup-php-env@v0.6.6
         with:
           php-version: ${{ inputs.php-version }}
           working-directory: ${{ inputs.working-directory }}
