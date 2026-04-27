@@ -81,6 +81,7 @@ jobs:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: 'Run Gemini pull request review'
+        if: ${{ inputs.is_fork != 'true' }}
         uses: 'google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489' # ratchet:google-github-actions/run-gemini-cli@v0.1.22
         id: 'gemini_pr_review'
         env:
