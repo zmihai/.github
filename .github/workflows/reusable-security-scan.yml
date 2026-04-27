@@ -99,7 +99,7 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Node Environment
-        uses: zmihai/.github/actions/setup-node-env@7a5418fc2bd4181a7c08057b0a1570a225ce12d8 # ratchet:zmihai/.github/actions/setup-node-env@v0.6.6
+        uses: zmihai/.github/actions/setup-node-env@v0.6.7
         with:
           node-version: ${{ inputs.language-version || 'lts/*' }}
           working-directory: ${{ inputs.working-directory }}
@@ -123,7 +123,7 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Python Environment
-        uses: zmihai/.github/actions/setup-python-env@7a5418fc2bd4181a7c08057b0a1570a225ce12d8 # ratchet:zmihai/.github/actions/setup-python-env@v0.6.6
+        uses: zmihai/.github/actions/setup-python-env@v0.6.7
         with:
           python-version: ${{ inputs.language-version || '3.11' }}
           working-directory: ${{ inputs.working-directory }}
@@ -147,7 +147,7 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup PHP Environment
-        uses: zmihai/.github/actions/setup-php-env@7a5418fc2bd4181a7c08057b0a1570a225ce12d8 # ratchet:zmihai/.github/actions/setup-php-env@v0.6.6
+        uses: zmihai/.github/actions/setup-php-env@v0.6.7
         with:
           php-version: ${{ inputs.language-version || '8.4' }}
           working-directory: ${{ inputs.working-directory }}

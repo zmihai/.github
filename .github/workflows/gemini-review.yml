@@ -15,6 +15,11 @@ on:
         type: string
         description: 'The issue/pull request number'
         required: true
+      is_fork:
+        type: string
+        description: 'Whether the pull request is from a fork'
+        required: false
+        default: 'false'
       projects:
         description: 'JSON list of projects'
         required: false
@@ -76,7 +81,8 @@ jobs:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: 'Run Gemini pull request review'
-        uses: 'google-github-actions/run-gemini-cli@9dbec29a20fab3f35017a40ad0eb798a257d4d51' # ratchet:exclude
+        if: ${{ inputs.is_fork != 'true' }}
+        uses: 'google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489' # ratchet:google-github-actions/run-gemini-cli@v0.1.22
         id: 'gemini_pr_review'
         env:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
@@ -86,6 +92,7 @@ jobs:
           PULL_REQUEST_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
           REPOSITORY: '${{ github.repository }}'
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
+          GEMINI_CLI_TRUST_WORKSPACE: '${{ inputs.is_fork != ''true'' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository) }}'
         with:
           gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
           gcp_project_id: '${{ vars.GOOGLE_CLOUD_PROJECT }}'
