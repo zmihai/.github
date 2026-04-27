@@ -129,31 +129,34 @@ jobs:
               core.setOutput('command', 'fallthrough');
             }
 
-            // 2. Resolve Ref
+            // 2. Resolve Ref and Fork Status
             let resolvedRef = inputRef || context.payload.pull_request?.head?.sha || context.sha;
+            let isFork = 'true'; // Safe default: assume fork
 
-            if (!inputRef && (context.eventName === 'issue_comment' || context.eventName === 'pull_request_review_comment' || context.eventName === 'pull_request_review')) {
-              const issueNumber = context.payload.issue?.number || context.payload.pull_request?.number;
-              if (issueNumber) {
-                try {
-                  const { data: pr } = await github.rest.pulls.get({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    pull_number: issueNumber,
-                  });
-                  resolvedRef = pr.head.sha;
-                  core.setOutput('is_fork', pr.head.repo.fork ? 'true' : 'false');
-                  console.log(`Resolved PR head SHA: ${resolvedRef}`);
-                } catch (e) {
-                  console.log(`Could not resolve PR head SHA for issue ${issueNumber}. Falling back to default ref.`);
-                  core.setOutput('is_fork', 'true'); // Assume fork on failure for safety
-                }
-              }
-            } else if (context.payload.pull_request) {
-               core.setOutput('is_fork', context.payload.pull_request.head.repo.fork ? 'true' : 'false');
+            const issueNumber = context.payload.issue?.number || context.payload.pull_request?.number;
+
+            if (context.payload.pull_request) {
+               isFork = context.payload.pull_request.head.repo.fork ? 'true' : 'false';
+            } else if (issueNumber) {
+               try {
+                 const { data: pr } = await github.rest.pulls.get({
+                   owner: context.repo.owner,
+                   repo: context.repo.repo,
+                   pull_number: issueNumber,
+                 });
+                 if (!inputRef) {
+                   resolvedRef = pr.head.sha;
+                   console.log(`Resolved PR head SHA: ${resolvedRef}`);
+                 }
+                 isFork = pr.head.repo.fork ? 'true' : 'false';
+               } catch (e) {
+                 console.log(`Could not fetch PR data for issue ${issueNumber}. Assuming fork for safety.`);
+               }
             } else {
-               core.setOutput('is_fork', 'false'); // Not a PR
+               isFork = 'false'; // Not a PR
             }
+
+            core.setOutput('is_fork', isFork);
             core.setOutput('resolved_ref', resolvedRef);
 
       - name: 'Acknowledge request'
