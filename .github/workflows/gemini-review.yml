@@ -15,6 +15,11 @@ on:
         type: string
         description: 'The issue/pull request number'
         required: true
+      is_fork:
+        type: string
+        description: 'Whether the pull request is from a fork'
+        required: false
+        default: 'false'
       projects:
         description: 'JSON list of projects'
         required: false
@@ -86,7 +91,7 @@ jobs:
           PULL_REQUEST_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
           REPOSITORY: '${{ github.repository }}'
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
-          GEMINI_CLI_TRUST_WORKSPACE: true
+          GEMINI_CLI_TRUST_WORKSPACE: '${{ inputs.is_fork != ''true'' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository) }}'
         with:
           gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
           gcp_project_id: '${{ vars.GOOGLE_CLOUD_PROJECT }}'

@@ -75,6 +75,7 @@ jobs:
       issue_number: '${{ github.event.pull_request.number || github.event.issue.number }}'
       projects: '${{ inputs.projects }}'
       resolved_ref: '${{ steps.extract_command.outputs.resolved_ref }}'
+      is_fork: '${{ steps.extract_command.outputs.is_fork }}'
     steps:
       - name: 'Mint identity token'
         id: 'mint_identity_token'
@@ -141,11 +142,17 @@ jobs:
                     pull_number: issueNumber,
                   });
                   resolvedRef = pr.head.sha;
+                  core.setOutput('is_fork', pr.head.repo.fork ? 'true' : 'false');
                   console.log(`Resolved PR head SHA: ${resolvedRef}`);
                 } catch (e) {
                   console.log(`Could not resolve PR head SHA for issue ${issueNumber}. Falling back to default ref.`);
+                  core.setOutput('is_fork', 'true'); // Assume fork on failure for safety
                 }
               }
+            } else if (context.payload.pull_request) {
+               core.setOutput('is_fork', context.payload.pull_request.head.repo.fork ? 'true' : 'false');
+            } else {
+               core.setOutput('is_fork', 'false'); // Not a PR
             }
             core.setOutput('resolved_ref', resolvedRef);
 
@@ -176,6 +183,7 @@ jobs:
       additional_context: '${{ needs.dispatch.outputs.additional_context }}'
       command: '${{ needs.dispatch.outputs.command }}'
       issue_number: '${{ needs.dispatch.outputs.issue_number }}'
+      is_fork: '${{ needs.dispatch.outputs.is_fork }}'
       projects: '${{ needs.dispatch.outputs.projects }}'
       ref: ${{ needs.dispatch.outputs.resolved_ref }}
     secrets: 'inherit'
@@ -196,6 +204,7 @@ jobs:
       pull-requests: 'write'
     with:
       pull_request_number: '${{ needs.dispatch.outputs.issue_number }}'
+      is_fork: '${{ needs.dispatch.outputs.is_fork }}'
       review_summary: '${{ needs.review.outputs.review_summary }}'
       projects: '${{ needs.dispatch.outputs.projects }}'
       ref: ${{ needs.dispatch.outputs.resolved_ref }}
