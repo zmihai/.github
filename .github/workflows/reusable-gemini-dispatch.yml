@@ -148,8 +148,8 @@ jobs:
                  }
                  isFork = pr.head.repo.fork ? 'true' : 'false';
                } catch (e) {
-                 console.log(`Could not fetch PR data for issue ${issueNumber}. Assuming not a fork (or missing permissions).`);
-                 isFork = 'false'; // Follow feedback: set to false if fetch fails with 404
+                 console.log(`Could not fetch PR data for issue ${issueNumber}. Failing closed by assuming it is a fork.`);
+                 isFork = 'true'; // Fail closed: set to true if fetch fails to prevent secret exposure
                }
             }
 
