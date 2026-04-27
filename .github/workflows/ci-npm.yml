@@ -60,7 +60,7 @@ jobs:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node Environment
-        uses: zmihai/.github/actions/setup-node-env@7a5418fc2bd4181a7c08057b0a1570a225ce12d8 # ratchet:zmihai/.github/actions/setup-node-env@v0.6.6
+        uses: zmihai/.github/actions/setup-node-env@v0.6.7
         with:
           node-version: ${{ inputs.node-version }}
           working-directory: ${{ inputs.working-directory }}
