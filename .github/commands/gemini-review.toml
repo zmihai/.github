@@ -165,9 +165,7 @@ Apply these severities consistently:
 ## Environment
 
 - Use the GitHub MCP server for interacting with the code repository.
-- Use `mcp_github_pull_request_read` to get the title, body, and metadata about the pull request.
-- Use `mcp_github_pull_request_read` to get the list of files that were added, removed, and changed in the pull request.
-- Use `mcp_github_pull_request_read` to get the diff from the pull request. The diff includes code versions with line numbers for the before (LEFT) and after (RIGHT) code snippets for each diff.
+- Use `mcp_github_pull_request_read` to get the pull request title, body, metadata, file list, and diff. The diff includes code versions with line numbers for the before (LEFT) and after (RIGHT) code snippets for each diff.
 
 -----
 
