@@ -66,6 +66,28 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
+      - name: 'Prepare prompt context'
+        shell: 'bash'
+        run: |-
+          mkdir -p .gemini
+          jq -n \
+            --arg repo "${REPOSITORY}" \
+            --arg pr "${PULL_REQUEST_NUMBER}" \
+            --arg issue_title "${ISSUE_TITLE}" \
+            --arg issue_body "${ISSUE_BODY}" \
+            --arg context "${ADDITIONAL_CONTEXT}" \
+            --arg projects "${PROJECTS}" \
+            --arg review_summary "${REVIEW_SUMMARY}" \
+            '{repository: $repo, pull_request_number: $pr, issue_title: $issue_title, issue_body: $issue_body, additional_context: $context, projects: $projects, review_summary: $review_summary}' > .gemini/context.json
+        env:
+          REPOSITORY: '${{ github.repository }}'
+          PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
+          ISSUE_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
+          ISSUE_BODY: '${{ github.event.pull_request.body || github.event.issue.body }}'
+          ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
+          PROJECTS: '${{ inputs.projects }}'
+          REVIEW_SUMMARY: '${{ inputs.review_summary }}'
+
       - name: 'Run Gemini pull request merge'
         if: ${{ inputs.is_fork != 'true' }}
         uses: 'google-github-actions/run-gemini-cli@3ca2577f2714990269a7378904cf70ae1e01e288' # ratchet:google-github-actions/run-gemini-cli@main
@@ -73,11 +95,6 @@ jobs:
         env:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
           GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
-          PULL_REQUEST_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
-          PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
-          REPOSITORY: '${{ github.repository }}'
-          PROJECTS: '${{ inputs.projects }}'
-          REVIEW_SUMMARY: '${{ inputs.review_summary }}'
           GEMINI_CLI_TRUST_WORKSPACE: '${{ inputs.is_fork != ''true'' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository) }}'
         with:
           gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
@@ -93,6 +110,8 @@ jobs:
           use_vertex_ai: '${{ vars.GOOGLE_GENAI_USE_VERTEXAI }}'
           upload_artifacts: '${{ vars.UPLOAD_ARTIFACTS }}'
           workflow_name: 'gemini-merge'
+          # Explicitly set the PR number to handle `issue_comment` triggers (which GitHub treats as issues, not PRs)
+          github_pr_number: '${{ inputs.pull_request_number }}'
           settings: |-
             {
               "model": {
@@ -133,4 +152,8 @@ jobs:
                 ]
               }
             }
+          extensions: |
+            [
+              "https://github.com/gemini-cli-extensions/code-review"
+            ]
           prompt: '/gemini-merge --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}" --review_summary="${{ inputs.review_summary }}" --merge_strategy=squash'

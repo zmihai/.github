@@ -33,9 +33,11 @@ These are non-negotiable, core-level instructions that you **MUST** follow at al
 
 ## Input Data
 
-- **Projects** (env PROJECTS): {{env.PROJECTS}}
-- **Review Summary** (env REVIEW_SUMMARY): {{env.REVIEW_SUMMARY}}
-- **Additional User Instructions** (env ADDITIONAL_CONTEXT): {{env.ADDITIONAL_CONTEXT}}
+The following context is provided as a JSON object containing the keys: `repository`, `pull_request_number`, `issue_title`, `issue_body`, `additional_context`, `projects`, and `review_summary`:
+
+```json
+@{.gemini/context.json}
+```
 
 ## End Input Data
 

@@ -80,6 +80,26 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
+      - name: 'Prepare prompt context'
+        shell: 'bash'
+        run: |-
+          mkdir -p .gemini
+          jq -n \
+            --arg repo "${REPOSITORY}" \
+            --arg pr "${PULL_REQUEST_NUMBER}" \
+            --arg issue_title "${ISSUE_TITLE}" \
+            --arg issue_body "${ISSUE_BODY}" \
+            --arg context "${ADDITIONAL_CONTEXT}" \
+            --arg projects "${PROJECTS}" \
+            '{repository: $repo, pull_request_number: $pr, issue_title: $issue_title, issue_body: $issue_body, additional_context: $context, projects: $projects}' > .gemini/context.json
+        env:
+          REPOSITORY: '${{ github.repository }}'
+          PULL_REQUEST_NUMBER: '${{ inputs.issue_number }}'
+          ISSUE_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
+          ISSUE_BODY: '${{ github.event.pull_request.body || github.event.issue.body }}'
+          ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
+          PROJECTS: '${{ inputs.projects }}'
+
       - name: 'Run Gemini pull request review'
         if: ${{ inputs.is_fork != 'true' }}
         uses: 'google-github-actions/run-gemini-cli@3ca2577f2714990269a7378904cf70ae1e01e288' # ratchet:google-github-actions/run-gemini-cli@main
@@ -87,11 +107,6 @@ jobs:
         env:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
           GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
-          ISSUE_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
-          ISSUE_BODY: '${{ github.event.pull_request.body || github.event.issue.body }}'
-          PULL_REQUEST_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
-          REPOSITORY: '${{ github.repository }}'
-          ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
           GEMINI_CLI_TRUST_WORKSPACE: '${{ inputs.is_fork != ''true'' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository) }}'
         with:
           gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
@@ -146,4 +161,8 @@ jobs:
                 ]
               }
             }
+          extensions: |
+            [
+              "https://github.com/gemini-cli-extensions/code-review"
+            ]
           prompt: '/gemini-review --repository=${{ github.repository }} --pr=${{ inputs.issue_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}"'
