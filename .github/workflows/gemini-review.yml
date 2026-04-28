@@ -155,6 +155,7 @@ jobs:
               },
               "tools": {
                 "core": [
+                  "run_shell_command(echo)",
                   "grep_search",
                   "list_directory",
                   "read_file"
