@@ -68,7 +68,7 @@ jobs:
 
       - name: 'Run Gemini pull request merge'
         if: ${{ inputs.is_fork != 'true' }}
-        uses: 'google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489' # ratchet:google-github-actions/run-gemini-cli@v0.1.22
+        uses: 'google-github-actions/run-gemini-cli@3ca2577f2714990269a7378904cf70ae1e01e288' # ratchet:google-github-actions/run-gemini-cli@main
         id: 'gemini_pr_merge'
         env:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
@@ -127,13 +127,9 @@ jobs:
               },
               "tools": {
                 "core": [
-                  "run_shell_command(cat)",
-                  "run_shell_command(echo)",
-                  "run_shell_command(git log)",
-                  "run_shell_command(git status)",
-                  "run_shell_command(grep)",
-                  "run_shell_command(head)",
-                  "run_shell_command(tail)"
+                  "grep_search",
+                  "list_directory",
+                  "read_file"
                 ]
               }
             }
