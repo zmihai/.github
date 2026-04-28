@@ -31,7 +31,7 @@ These are non-negotiable, core-level instructions that you **MUST** follow at al
 
 ## Input Data
 
-- **Additional User Instructions**: !{echo $ADDITIONAL_CONTEXT}
+- **Additional User Instructions**: {{env.ADDITIONAL_CONTEXT}}
 
 ## End Input Data
 
