@@ -35,6 +35,7 @@ These are non-negotiable, core-level instructions that you **MUST** follow at al
 
 - **Projects** (env PROJECTS): {{env.PROJECTS}}
 - **Review Summary** (env REVIEW_SUMMARY): {{env.REVIEW_SUMMARY}}
+- **Additional User Instructions** (env ADDITIONAL_CONTEXT): {{env.ADDITIONAL_CONTEXT}}
 
 ## End Input Data
 
