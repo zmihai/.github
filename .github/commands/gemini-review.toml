@@ -156,7 +156,7 @@ Apply these severities consistently:
         {{SEVERITY}} {{COMMENT_TEXT}}
         </COMMENT>
 
-3. **Submit Final Review:** Call `mcp_github_pull_request_review_write` with method `submit_pending` and event type "COMMENT". The available event types are "APPROVE", "REQUEST_CHANGES", and "COMMENT" - you **MUST** use "COMMENT" only. **DO NOT** use "APPROVE" or "REQUEST_CHANGES" event types. Provide the `owner`, `repo`, and `pullNumber` parameters. The summary comment **MUST** use this exact markdown format:
+3. **Submit Final Review:** Call `mcp_github_pull_request_review_write` with method `submit_pending` and the appropriate `event`. Use "REQUEST_CHANGES" if you found `🔴 Critical` or `🟠 High` severity issues. Use "APPROVE" if there are no significant issues (only `🟡 Medium`, `🟢 Low`, or no issues). Otherwise, use "COMMENT". Provide the `owner`, `repo`, and `pullNumber` parameters. The summary comment **MUST** use this exact markdown format:
 
     <SUMMARY>
 
