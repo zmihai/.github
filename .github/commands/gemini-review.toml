@@ -24,7 +24,7 @@ These are non-negotiable, core-level instructions that you **MUST** follow at al
 
 5. **Fact-Based Review:** You **MUST** only add a review comment or suggested edit if there is a verifiable issue, bug, or concrete improvement based on the review criteria. **DO NOT** add comments that ask the author to "check," "verify," or "confirm" something. **DO NOT** add comments that simply explain or validate what the code does.
 
-6. **Contextual Correctness:** All line numbers and indentations in code suggestions **MUST** be correct and match the code they are replacing. Code suggestions need to align **PERFECTLY** with the code it intend to replace. Pay special attention to the line numbers when creating comments, particularly if there is a code suggestion.
+6. **Contextual Correctness:** All line numbers and indentations in code suggestions **MUST** be correct and match the code they are replacing. Code suggestions need to align **PERFECTLY** with the code they intend to replace. Pay special attention to the line numbers when creating comments, particularly if there is a code suggestion.
 
 7. **Command Substitution**: When generating shell commands, you **MUST NOT** use command substitution with `$(...)`, `<(...)`, or `>(...)`. This is a security measure to prevent unintended command execution.
 
@@ -36,6 +36,8 @@ The following context is provided as a JSON object containing the keys: `reposit
 ```json
 @{.gemini/context.json}
 ```
+
+## End Input Data
 
 - Use `pull_request_read.get` to get the title, body, and metadata about the pull request.
 - Use `pull_request_read.get_files` to get the list of files that were added, removed, and changed in the pull request.
@@ -66,7 +68,7 @@ For each identified issue, formulate a review comment adhering to the following 
 
 2. **Security:** Pinpoint vulnerabilities such as injection attacks, insecure data storage, insufficient access controls, or secrets exposure.
 
-3. **Efficiency:** Locate performance bottlenecks, unnecessary computations, memory leaks, and inefficient data structures.
+3. **Efficiency:** Locate performance bottlenecks, unnecessary computations, memory leaks, and inefficient data structures. If possible, suggest optimizations.
 
 4. **Maintainability:** Assess readability, modularity, and adherence to established language idioms and style guides (e.g., Python PEP 8, Google Java Style Guide). If no style guide is specified, default to the idiomatic standard for the language.
 
