@@ -7,24 +7,29 @@ on:
         type: string
         description: 'Any additional context from the request'
         required: false
+
       command:
         type: string
         description: 'The command used to call this workflow'
         required: true
+
       issue_number:
         type: string
         description: 'The issue/pull request number'
         required: true
+
       is_fork:
         type: string
         description: 'Whether the pull request is from a fork'
         required: false
         default: 'false'
+
       projects:
         description: 'JSON list of projects'
         required: false
         type: string
         default: '[]'
+
       ref:
         description: 'The branch, tag or SHA to checkout'
         required: false
@@ -34,9 +39,11 @@ on:
       command:
         description: 'The command used to call this workflow'
         value: ${{ jobs.review.outputs.command }}
+
       issue_number:
         description: 'The issue/pull request number'
         value: ${{ jobs.review.outputs.issue_number }}
+
       review_summary:
         description: 'The summary of the review step'
         value: ${{ jobs.review.outputs.review_summary }}
