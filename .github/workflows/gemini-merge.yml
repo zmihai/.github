@@ -76,7 +76,7 @@ jobs:
             --arg issue_title "${ISSUE_TITLE}" \
             --arg issue_body "${ISSUE_BODY}" \
             --arg context "${ADDITIONAL_CONTEXT}" \
-            --arg projects "${PROJECTS}" \
+            --argjson projects "${PROJECTS:-[]}" \
             --arg review_summary "${REVIEW_SUMMARY}" \
             '{repository: $repo, pull_request_number: $pr, issue_title: $issue_title, issue_body: $issue_body, additional_context: $context, projects: $projects, review_summary: $review_summary}' > .gemini/context.json
         env:

@@ -90,7 +90,7 @@ jobs:
             --arg issue_title "${ISSUE_TITLE}" \
             --arg issue_body "${ISSUE_BODY}" \
             --arg context "${ADDITIONAL_CONTEXT}" \
-            --arg projects "${PROJECTS}" \
+            --argjson projects "${PROJECTS:-[]}" \
             '{repository: $repo, pull_request_number: $pr, issue_title: $issue_title, issue_body: $issue_body, additional_context: $context, projects: $projects}' > .gemini/context.json
         env:
           REPOSITORY: '${{ github.repository }}'
