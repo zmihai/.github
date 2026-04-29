@@ -109,7 +109,7 @@ jobs:
           use_gemini_code_assist: '${{ vars.GOOGLE_GENAI_USE_GCA }}'
           use_vertex_ai: '${{ vars.GOOGLE_GENAI_USE_VERTEXAI }}'
           upload_artifacts: '${{ vars.UPLOAD_ARTIFACTS }}'
-          workflow_name: 'gemini-review'
+          workflow_name: 'gemini-merge'
           # Explicitly set the PR number to handle `issue_comment` triggers (which GitHub treats as issues, not PRs)
           github_pr_number: '${{ inputs.pull_request_number }}'
           settings: |-
