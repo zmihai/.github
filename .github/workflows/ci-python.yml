@@ -41,7 +41,7 @@ jobs:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Python Environment
-        uses: zmihai/.github/actions/setup-python-env@v0.6.8
+        uses: zmihai/.github/actions/setup-python-env@v0.7.0
         with:
           python-version: ${{ inputs.python-version }}
           working-directory: ${{ inputs.working-directory }}
