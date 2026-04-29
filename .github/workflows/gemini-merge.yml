@@ -20,6 +20,12 @@ on:
         type: string
         default: ''
 
+      additional_context:
+        type: string
+        description: 'Any additional context from the request'
+        required: false
+        default: ''
+
       projects:
         description: 'JSON list of projects'
         required: true
