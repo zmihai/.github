@@ -28,7 +28,7 @@ A comprehensive CI workflow that handles linting, testing, and building for mult
 - `working-directory` (string, default: '.'): Working directory for commands
 - `extensions` (string, default: ''): Extra extensions or packages to install during environment setup. **Note:** Currently only supported for PHP (passed as extensions to `shivammathur/setup-php`). Designed for future expansion (e.g., Python packages or Node global tools).
 - `run-lint` (boolean, default: true): Run linting
-- `run-test` (boolean, default: true): Run tests (JS and PHP only)
+- `run-test` (boolean, default: true): Run tests
 - `run-build` (boolean, default: true): Run build (JS only)
 - `build-before-test` (boolean, default: false): Run build before tests (JS only)
 - `ref` (string, optional): The branch, tag or SHA to checkout. Automatically resolves the PR head SHA if available. Defaults to `github.sha` otherwise.
