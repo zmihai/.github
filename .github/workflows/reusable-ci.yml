@@ -123,6 +123,7 @@ jobs:
       python-version: ${{ inputs.language-version }}
       working-directory: ${{ inputs.working-directory }}
       run-lint: ${{ inputs.run-lint }}
+      run-test: ${{ inputs.run-test }}
       ref: ${{ needs.resolve-ref.outputs.ref }}
     secrets: inherit
 
