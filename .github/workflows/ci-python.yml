@@ -87,6 +87,6 @@ jobs:
           raise SystemExit(0 if "dev" in extras else 1)
           PY
           then
-            pip install -e ".[dev]"
+            pip install ".[dev]"
           fi
           pytest
