@@ -148,8 +148,8 @@ Apply these severities consistently:
 
     When `subjectType="LINE"` you **MUST** also provide:
     - `line` — the line number being commented on.
-    - `side` — `"RIGHT"` for the after (added) side of the diff, `"LEFT"` for the before (removed) side.
-    - For multi-line comments, additionally provide `startLine` and `startSide`.
+    - `side` — `"RIGHT"` for the after (added) side of the diff, `"LEFT"` for the before (removed) side. These values are case-sensitive; do not use lowercase.
+    - For multi-line comments, additionally provide `startLine` and `startSide` (same `"LEFT"`/`"RIGHT"` casing rule).
 
     2a. When there is a code suggestion (preferred), structure the comment payload using this exact template:
 

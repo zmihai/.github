@@ -84,7 +84,12 @@ Based on the results from your code review and the provided **Projects** data an
 #### If Merging (Merge Criteria Met):
 
 1.  **Create Pending Review:** Call `mcp_github_pull_request_review_write` with method `create` (and without the `event` parameter) to open a pending review. Extract the `owner` and `repo` parameters from the `repository` input string (which is formatted as `owner/repo`). Use `pullNumber` for the pull request number. Ignore errors like "can only have one pending review per pull request" and proceed to the next step.
-2.  **Add Comments (if any):** If you have `🟡 Medium` or `🟢 Low` comments, add them using `mcp_github_add_comment_to_pending_review` for each comment. Required parameters: `owner`, `repo`, `pullNumber`, `path`, `body`, and `subjectType` (use `"LINE"` for inline comments — then also provide `line` and `side`; use `"FILE"` for file-level comments).
+2.  **Add Comments (if any):** If you have `🟡 Medium` or `🟢 Low` comments, add them using `mcp_github_add_comment_to_pending_review` for each comment. Required parameters: `owner`, `repo`, `pullNumber`, `path`, `body`, and `subjectType` (`"LINE"` for inline comments anchored to a specific line, or `"FILE"` for file-level comments).
+
+    When `subjectType="LINE"` you **MUST** also provide:
+    - `line` — the line number being commented on.
+    - `side` — `"RIGHT"` for the after (added) side of the diff, `"LEFT"` for the before (removed) side. These values are case-sensitive; do not use lowercase.
+    - For multi-line comments, additionally provide `startLine` and `startSide` (same `"LEFT"`/`"RIGHT"` casing rule).
 3.  **Approve and Summarize:** Submit the review with an "APPROVE" event. The summary should state that all project checks passed and the review was successful, and can include a brief summary of any minor comments.
     *   `mcp_github_pull_request_review_write(owner=..., repo=..., pullNumber=..., method="submit_pending", event="APPROVE", body="...")`
 4.  **Merge:** Merge the pull request.
@@ -93,7 +98,12 @@ Based on the results from your code review and the provided **Projects** data an
 #### If Requesting Changes (Merge Criteria NOT Met):
 
 1.  **Create Pending Review:** Call `mcp_github_pull_request_review_write` with method `create` (and without the `event` parameter) to open a pending review. Extract the `owner` and `repo` parameters from the `repository` input string (which is formatted as `owner/repo`). Use `pullNumber` for the pull request number. Ignore errors like "can only have one pending review per pull request" and proceed to the next step.
-2.  **Add All Comments:** Add all formulated review comments (`🔴`, `🟠`, `🟡`, `🟢`) to the pending review using `mcp_github_add_comment_to_pending_review` for each comment. Required parameters: `owner`, `repo`, `pullNumber`, `path`, `body`, and `subjectType` (use `"LINE"` for inline comments — then also provide `line` and `side`; use `"FILE"` for file-level comments).
+2.  **Add All Comments:** Add all formulated review comments (`🔴`, `🟠`, `🟡`, `🟢`) to the pending review using `mcp_github_add_comment_to_pending_review` for each comment. Required parameters: `owner`, `repo`, `pullNumber`, `path`, `body`, and `subjectType` (`"LINE"` for inline comments anchored to a specific line, or `"FILE"` for file-level comments).
+
+    When `subjectType="LINE"` you **MUST** also provide:
+    - `line` — the line number being commented on.
+    - `side` — `"RIGHT"` for the after (added) side of the diff, `"LEFT"` for the before (removed) side. These values are case-sensitive; do not use lowercase.
+    - For multi-line comments, additionally provide `startLine` and `startSide` (same `"LEFT"`/`"RIGHT"` casing rule).
 3.  **Request Changes and Summarize:** Submit the review with a "REQUEST_CHANGES" event. The summary **MUST** clearly state why the merge is blocked (e.g., "CI failed for project X", "Security scan failed for project Y", "Critical issue found", "Existing change requests").
     *   `mcp_github_pull_request_review_write(owner=..., repo=..., pullNumber=..., method="submit_pending", event="REQUEST_CHANGES", body="...")`
 
