@@ -18,6 +18,11 @@ on:
         required: false
         type: boolean
         default: true
+      run-test:
+        description: 'Run tests with pytest'
+        required: false
+        type: boolean
+        default: true
       ref:
         description: 'The branch, tag or SHA to checkout'
         required: false
@@ -55,3 +60,18 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run tests with pytest
+        if: ${{ inputs.run-test }}
+        run: |
+          pip install pytest
+          # Best-effort install of project-defined test deps:
+          # 1. requirements-dev.txt (plain pip-style projects)
+          if [ -f requirements-dev.txt ]; then
+            pip install -r requirements-dev.txt
+          fi
+          # 2. pyproject.toml [project.optional-dependencies].dev extras
+          if [ -f pyproject.toml ] && grep -q '\[project\.optional-dependencies\]' pyproject.toml; then
+            pip install -e ".[dev]" || true
+          fi
+          pytest
