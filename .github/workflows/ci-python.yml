@@ -73,14 +73,17 @@ jobs:
           # 2. pyproject.toml [project.optional-dependencies].dev extras
           # Parse the file to confirm a `dev` extra is actually defined, so a
           # missing extra surfaces as a real install error instead of being
-          # silently swallowed. Requires tomllib (Python 3.11+); if it's
-          # missing we conservatively skip the install rather than crash.
+          # silently swallowed. Uses tomllib on Python 3.11+; falls back to
+          # installing `tomli` on demand for older interpreters so older
+          # consumers of this reusable workflow still get correct detection.
           if [ -f pyproject.toml ] && python - <<'PY'
+          import subprocess
           import sys
           try:
-              import tomllib
+              import tomllib  # Python 3.11+
           except ModuleNotFoundError:
-              raise SystemExit(1)
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "tomli"])
+              import tomli as tomllib
           with open("pyproject.toml", "rb") as f:
               data = tomllib.load(f)
           extras = data.get("project", {}).get("optional-dependencies", {})
