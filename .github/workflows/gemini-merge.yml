@@ -72,6 +72,31 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
+      - name: 'Resolve PR head ref'
+        id: 'resolve_head_ref'
+        uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
+        env:
+          INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
+        with:
+          result-encoding: string
+          script: |
+            // Prefer the head ref from the pull_request event payload when available.
+            if (context.payload.pull_request) {
+              return context.payload.pull_request.head.ref;
+            }
+            // Fallback for issue_comment / pull_request_review_comment / etc. events,
+            // where context.payload.pull_request is absent. We look the PR up via API.
+            const prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
+            if (!prNumber) {
+              throw new Error('pull_request_number input is required to resolve head_ref outside of pull_request events');
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            return pr.head.ref;
+
       - name: 'Prepare prompt context'
         shell: 'bash'
         run: |-
@@ -94,7 +119,7 @@ jobs:
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
           PROJECTS: '${{ inputs.projects }}'
           REVIEW_SUMMARY: '${{ inputs.review_summary }}'
-          HEAD_REF: '${{ github.event.pull_request.head.ref }}'
+          HEAD_REF: '${{ steps.resolve_head_ref.outputs.result }}'
 
       - name: 'Run Gemini pull request merge'
         if: ${{ inputs.is_fork != 'true' }}
