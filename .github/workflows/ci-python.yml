@@ -18,6 +18,11 @@ on:
         required: false
         type: boolean
         default: true
+      run-test:
+        description: 'Run tests with pytest'
+        required: false
+        type: boolean
+        default: true
       ref:
         description: 'The branch, tag or SHA to checkout'
         required: false
@@ -41,7 +46,7 @@ jobs:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Python Environment
-        uses: zmihai/.github/actions/setup-python-env@v0.7.0
+        uses: zmihai/.github/actions/setup-python-env@v0.8.0
         with:
           python-version: ${{ inputs.python-version }}
           working-directory: ${{ inputs.working-directory }}
@@ -55,3 +60,36 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run tests with pytest
+        if: ${{ inputs.run-test }}
+        run: |
+          pip install pytest
+          # Best-effort install of project-defined test deps:
+          # 1. requirements-dev.txt (plain pip-style projects)
+          if [ -f requirements-dev.txt ]; then
+            pip install -r requirements-dev.txt
+          fi
+          # 2. pyproject.toml [project.optional-dependencies].dev extras
+          # Parse the file to confirm a `dev` extra is actually defined, so a
+          # missing extra surfaces as a real install error instead of being
+          # silently swallowed. Uses tomllib on Python 3.11+; falls back to
+          # installing `tomli` on demand for older interpreters so older
+          # consumers of this reusable workflow still get correct detection.
+          if [ -f pyproject.toml ] && python - <<'PY'
+          import subprocess
+          import sys
+          try:
+              import tomllib  # Python 3.11+
+          except ModuleNotFoundError:
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "tomli"])
+              import tomli as tomllib
+          with open("pyproject.toml", "rb") as f:
+              data = tomllib.load(f)
+          extras = data.get("project", {}).get("optional-dependencies", {})
+          raise SystemExit(0 if "dev" in extras else 1)
+          PY
+          then
+            pip install ".[dev]"
+          fi
+          pytest
