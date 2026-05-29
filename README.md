@@ -112,7 +112,7 @@ Performs an AI-powered review of a Pull Request, providing feedback and suggesti
 
 **Path:** `.github/workflows/gemini-merge.yml`
 
-Uses Gemini to analyze CI/Security results and merge the PR if everything passes. It expects a JSON list of projects, each including the `ci-outcome` and `scan-outcome`.
+Uses Gemini to analyze CI/Security results and merge the PR when the changes are sound and every failure related to the PR has passed or been remediated; unrelated, pre-existing failures do not block the merge. It can also apply and push a fix for a related failure before merging. It expects a JSON list of projects, each including the `ci-outcome` and `scan-outcome`.
 
 **Inputs:**
 - `pull_request_number` (string, required): The PR number.
