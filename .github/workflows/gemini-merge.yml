@@ -248,10 +248,23 @@ jobs:
             }
             const { owner, repo } = context.repo;
 
-            // Outcomes present BEFORE the model ran do not count as produced by THIS run.
+            // Outcomes present BEFORE the model ran do not count as produced by THIS run. Fail CLOSED if
+            // the pre-run snapshot is missing or malformed: without a trustworthy snapshot we cannot tell
+            // a new decisive review from a pre-existing one, and silently assuming "none" would let a
+            // pre-existing review mask a no-op run (a false green) — the opposite of this gate's purpose.
             const wasMerged = process.env.PRE_WAS_MERGED === 'true';
-            let priorIds = [];
-            try { priorIds = JSON.parse(process.env.PRE_DECISIVE_REVIEW_IDS || '[]'); } catch (e) {}
+            const rawPriorIds = process.env.PRE_DECISIVE_REVIEW_IDS;
+            let priorIds;
+            try {
+              priorIds = JSON.parse(rawPriorIds);
+            } catch (e) {
+              core.setFailed(`Could not parse the pre-run review snapshot (PRE_DECISIVE_REVIEW_IDS=${JSON.stringify(rawPriorIds)}): ${e.message}. Failing closed so a missing snapshot cannot mask a no-op run.`);
+              return;
+            }
+            if (!Array.isArray(priorIds)) {
+              core.setFailed(`Pre-run review snapshot was not an array (got ${typeof priorIds}). Failing closed.`);
+              return;
+            }
             const priorDecisive = new Set(priorIds);
 
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
