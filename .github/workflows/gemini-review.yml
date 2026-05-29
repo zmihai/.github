@@ -59,7 +59,9 @@ defaults:
 jobs:
   review:
     runs-on: 'ubuntu-latest'
-    timeout-minutes: 15
+    # Two sequential Gemini passes now run in this job (code review + security analysis), so allow more
+    # wall-clock than the single-pass default.
+    timeout-minutes: 25
     permissions:
       contents: 'read'
       id-token: 'write'
