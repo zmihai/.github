@@ -209,7 +209,7 @@ jobs:
       # masked by an unrelated decisive review. A run that ends with only pending/comment activity is
       # treated as a failure so it surfaces red and triggers the dispatch fallthrough notification.
       - name: 'Verify durable merge outcome'
-        if: ${{ !cancelled() && inputs.is_fork != 'true' }}
+        if: ${{ success() && inputs.is_fork != 'true' }}
         uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
         env:
           INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'

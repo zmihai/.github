@@ -64,8 +64,9 @@ Follow this four-step process sequentially.
 Based on the results from your code review and the provided **Projects** data and **Review Summary**, decide on the course of action.
 
 1.  **Classify each failure first.** Before applying the Merge Criteria, classify **every** failing `ci-outcome`/`scan-outcome` in the **Projects** list as either **related** or **unrelated** to this pull request. Use `mcp_github_pull_request_read` (`get_files`/`get_diff`) to see exactly what this pull request changes.
-    *   **Related:** the failure is in a project, package, or file that this pull request modifies, or is otherwise a direct consequence of this pull request's changes.
-    *   **Unrelated & pre-existing:** the failure is in a project/area this pull request does **not** touch. Because the pull request does not modify it, the pull request did not introduce it and it would fail on the base branch regardless.
+    *   **Related:** the failure is plausibly caused by this pull request — it is in a project, package, or file this pull request modifies, **or** in a project that consumes something this pull request changes (for example, a downstream project that imports a dependency this pull request bumps may break even though its own files are untouched).
+    *   **Unrelated & pre-existing:** the failure is clearly **not** caused by this pull request — it is in an independent area that neither this pull request's files nor its changed dependencies can affect. You do **not** have base-branch CI evidence, so do not infer independence merely from the fact that a file is untouched.
+    *   **When in doubt, classify the failure as *related*.** Treat a failure as unrelated only when you are confident this pull request could not have caused it; otherwise it is related, and must be remediated or it blocks the merge.
 
 2.  **Merge Criteria:** The pull request is ready to be merged if **ALL** of the following conditions are met:
     *   **Every *related* failure has been remediated** per **Step 2.5** (fixed, verified locally with your own tools, and pushed to the source branch). A related failure you cannot remediate **blocks** the merge.
@@ -96,13 +97,15 @@ Do **NOT** attempt remediation when the blocker is a high-severity code-review i
 
 **Important:** The `ci-outcome`/`scan-outcome` values in the **Projects** data were measured on the commit **before** any change you make. After a successful, locally-verified fix they are stale, and the affected project is considered resolved for the **Merge Criteria**.
 
-Follow these steps **in order**. If any step fails, a required command is unavailable, or you are not fully confident the fix is correct and complete, you **MUST ABORT** remediation and proceed to the "If Requesting Changes" path under **Step 3: Execute Action on GitHub**. You **MUST NOT** fabricate, assume, or guess the result of any command — only ever rely on output you actually observed from `run_shell_command`.
+Follow these steps **in order**, and **never** fabricate, assume, or guess the result of any command — rely only on output you actually observed from `run_shell_command`. If any step fails, a required command is unavailable, or you are not fully confident the fix is correct and complete, **abandon this remediation attempt** and handle it according to the failure's classification (this is the "ABORT" behavior referenced in the steps below):
+*   **Related failure:** you **MUST** abort the merge and proceed to the "If Requesting Changes" path under **Step 3: Execute Action on GitHub** — an unremediated related failure blocks the merge.
+*   **Unrelated, pre-existing failure:** do **NOT** request changes. Leave that failure unresolved, itemize it in your summary, and continue evaluating the remaining Merge Criteria — a failed best-effort fix of an unrelated failure must never block the merge or trigger a Request Changes.
 
 1.  **Diagnose:** Use `read_file`, `grep_search`, and `list_directory` to understand the root cause of the failure (e.g. a vulnerable transitive dependency, a lint violation, a failing test). Only continue if the fix is well-understood and low-risk.
 
 2.  **Apply a minimal fix:** Using `run_shell_command`, make the smallest change that addresses the reported failure (e.g. add a dependency override, bump a version, correct the offending code). Do not bundle unrelated changes.
 
-3.  **Verify locally — MANDATORY:** From the affected project's `working-directory`, run its relevant checks with `run_shell_command` and confirm they pass with your own eyes. For a JavaScript project this typically means `npm install`, then `npm audit` (for a security failure) and/or `npm run lint`, `npm run build`, and `npm test` (for a CI failure), as applicable to the failure you are fixing. You **MUST** observe passing results before continuing. If any check still fails, ABORT.
+3.  **Verify locally — MANDATORY:** From the affected project's `working-directory`, run its relevant checks with `run_shell_command` and confirm they pass with your own eyes. For a JavaScript project this typically means `npm install`, then `npm audit` (for a security failure) and/or `npm run lint`, `npm run build`, and `npm test` (for a CI failure), as applicable to the failure you are fixing. You **MUST** observe passing results before continuing. If any check still fails, ABORT (handling related vs unrelated per the rule above).
 
 4.  **Commit and push to the source branch:** Commit the fix and push it to the pull request's source branch. Its name is the `head_ref` value in the **Input Data**. You **MUST** use an explicit refspec with the literal branch name substituted in — per the Command Substitution constraint, do **NOT** use `$(...)`:
     *   `git config user.name "gemini-cli[bot]"`
@@ -111,7 +114,7 @@ Follow these steps **in order**. If any step fails, a required command is unavai
     *   `git commit -m "fix: <concise description of the remediation>"`
     *   `git push origin HEAD:refs/heads/<head_ref>` — replace `<head_ref>` with the literal branch name from the **Input Data** (e.g. `git push origin HEAD:refs/heads/dependabot/npm_and_yarn/example-1.2.3`).
 
-    If the push is rejected (for example, a non-fast-forward error) and you cannot safely resolve it, ABORT and request changes.
+    If the push is rejected (for example, a non-fast-forward error) and you cannot safely resolve it, ABORT (handling related vs unrelated per the rule above).
 
 5.  **Proceed to merge:** Once the fix is pushed and you have locally verified it passes, treat each project you remediated as satisfying its `ci-outcome`/`scan-outcome` requirement, and continue to "If Merging" below. Your approval summary **MUST** include a brief, accurate description of the remediation you performed and the verification commands whose passing output you actually observed.
 
