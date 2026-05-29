@@ -220,15 +220,10 @@ jobs:
                 ]
               }
             }
-          # EXPERIMENT (2026-05-29): the code-review extension bundles its own GitHub MCP server that
-          # collides with the one configured in `settings.mcpServers` above — the merge job stderr shows
-          # duplicate "Tool ... already registered. Overwriting" lines, and the `merge_pull_request` tool
-          # ends up not exposed to the model (0 in telemetry), forcing a shell-merge fallback. The merge
-          # job performs its review inline and uses the github MCP from `settings`, so it should not need
-          # this extension. Dropping it here to test whether `merge_pull_request` becomes available to the
-          # model. To revert, restore: [ "https://github.com/gemini-cli-extensions/code-review" ].
           extensions: |
-            []
+            [
+              "https://github.com/gemini-cli-extensions/code-review"
+            ]
           prompt: '/gemini-merge --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}" --review_summary="${{ inputs.review_summary }}" --merge_strategy=squash'
 
       # The Gemini CLI step reports "success" whenever the process exits 0, which happens even when the
