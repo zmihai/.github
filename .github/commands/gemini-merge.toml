@@ -140,7 +140,7 @@ Follow these steps **in order**, and **never** fabricate, assume, or guess the r
 4.  **Merge — and confirm it actually happened.** You **MUST** complete the merge via the mechanism ladder in Constraint #4; approving without merging is an incomplete task:
     *   **1st:** `mcp_github_merge_pull_request(owner=..., repo=..., pullNumber=..., merge_method="squash")`.
     *   **2nd (fallback):** if that tool is unavailable or one attempt does not succeed, immediately run `run_shell_command` with `gh pr merge <pullNumber> --squash --repo <owner>/<repo>` (token comes from the `GITHUB_TOKEN` env var — never put a token on the command line, never use `curl`). Do **not** spend turns searching for any other merge mechanism.
-    *   **Confirm:** verify the merge succeeded from the tool result / `gh` exit status (e.g. the PR is now merged). Only describe the PR as merged once you have confirmed it. If neither mechanism succeeds, say so explicitly in your summary rather than claiming success.
+    *   **Confirm the PR is actually merged.** A zero exit status from `gh pr merge` is **not** proof — depending on repository settings it can enable auto-merge or queue the PR rather than merge it immediately. Confirm the **durable merged state** by re-reading the pull request (`mcp_github_pull_request_read`) and checking it is actually merged. Only describe the PR as merged once you have confirmed that state; if it is not merged (or neither mechanism succeeded), say so explicitly in your summary rather than claiming success.
 
 #### If Requesting Changes (Merge Criteria NOT Met):
 
