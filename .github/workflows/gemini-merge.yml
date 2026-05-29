@@ -121,6 +121,14 @@ jobs:
           REVIEW_SUMMARY: '${{ inputs.review_summary }}'
           HEAD_REF: '${{ steps.resolve_head_ref.outputs.result }}'
 
+      # Capture the wall-clock time just before the model runs, so the verification gate below can tell
+      # outcomes produced by THIS merge job apart from pre-existing reviews/merges or the review produced
+      # earlier in the same dispatch by the review job.
+      - name: 'Record merge job start time'
+        id: 'merge_start'
+        if: ${{ inputs.is_fork != 'true' }}
+        run: 'echo "epoch=$(date -u +%s)" >> "${GITHUB_OUTPUT}"'
+
       - name: 'Run Gemini pull request merge'
         if: ${{ inputs.is_fork != 'true' }}
         uses: 'google-github-actions/run-gemini-cli@3ca2577f2714990269a7378904cf70ae1e01e288' # ratchet:google-github-actions/run-gemini-cli@main
@@ -194,15 +202,18 @@ jobs:
 
       # The Gemini CLI step reports "success" whenever the process exits 0, which happens even when the
       # model only narrates actions (e.g. "I merged the PR") without invoking the corresponding tools.
-      # This gate asserts that the merge job left a DURABLE, model-agnostic outcome on the PR: either the
-      # PR was merged, or a decisive review (APPROVED / CHANGES_REQUESTED) was submitted. A run that ends
-      # with only pending/comment activity is treated as a failure so it surfaces red and triggers the
-      # dispatch fallthrough notification instead of a misleading green check.
+      # This gate asserts that THIS merge job left a DURABLE outcome on the PR: either the PR was merged,
+      # or a decisive review (APPROVED / CHANGES_REQUESTED) was submitted — and only counts outcomes that
+      # occurred AFTER the merge job started. That excludes pre-existing human reviews/merges and the
+      # review submitted earlier in the same dispatch by the review job, so a no-op merge run cannot be
+      # masked by an unrelated decisive review. A run that ends with only pending/comment activity is
+      # treated as a failure so it surfaces red and triggers the dispatch fallthrough notification.
       - name: 'Verify durable merge outcome'
         if: ${{ !cancelled() && inputs.is_fork != 'true' }}
         uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
         env:
           INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
+          MERGE_START_EPOCH: '${{ steps.merge_start.outputs.epoch }}'
         with:
           github-token: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
           script: |
@@ -213,25 +224,34 @@ jobs:
             }
             const { owner, repo } = context.repo;
 
+            // Only outcomes at/after the merge job started count as produced by THIS run. If the start
+            // time is somehow missing, fall back to 0 (count any outcome) rather than crash.
+            const startEpoch = parseInt(process.env.MERGE_START_EPOCH, 10);
+            const startMs = Number.isFinite(startEpoch) ? startEpoch * 1000 : 0;
+            const inThisRun = (ts) => ts && new Date(ts).getTime() >= startMs;
+
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-            if (pr.merged) {
-              core.info(`PR #${prNumber} is merged (merged_at=${pr.merged_at}). ✓`);
+            if (pr.merged && inThisRun(pr.merged_at)) {
+              core.info(`PR #${prNumber} was merged by this run (merged_at=${pr.merged_at}). ✓`);
               return;
             }
 
             const reviews = await github.paginate(github.rest.pulls.listReviews, {
               owner, repo, pull_number: prNumber, per_page: 100,
             });
-            const decisive = reviews.filter(r => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED');
+            const decisive = reviews.filter(r =>
+              (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED') && inThisRun(r.submitted_at)
+            );
             if (decisive.length > 0) {
               const latest = decisive[decisive.length - 1];
-              core.info(`PR #${prNumber} not merged, but a decisive review exists (state=${latest.state}, by=${latest.user?.login}). ✓`);
+              core.info(`PR #${prNumber} not merged, but this run submitted a decisive review (state=${latest.state}, by=${latest.user?.login}, at=${latest.submitted_at}). ✓`);
               return;
             }
 
             core.setFailed(
-              `Merge job left no durable outcome for PR #${prNumber}: it is neither merged nor does it have an ` +
-              `APPROVED/CHANGES_REQUESTED review (only pending or comment-level activity was found). The model ` +
-              `likely reported success without invoking the merge/review tools. Re-run with GEMINI_DEBUG=true and ` +
-              `UPLOAD_ARTIFACTS=true and inspect .gemini/telemetry.log to see which tool calls actually fired.`
+              `Merge job left no durable outcome for PR #${prNumber}: since the job started it was neither ` +
+              `merged nor given an APPROVED/CHANGES_REQUESTED review (only pending or comment-level activity ` +
+              `was found). The model likely reported success without invoking the merge/review tools. Re-run ` +
+              `with GEMINI_DEBUG=true and UPLOAD_ARTIFACTS=true and inspect .gemini/telemetry.log to see which ` +
+              `tool calls actually fired.`
             );
