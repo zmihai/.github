@@ -234,7 +234,7 @@ jobs:
             [
               "https://github.com/gemini-cli-extensions/code-review"
             ]
-          prompt: '/gemini-merge --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}" --review_summary="${{ inputs.review_summary }}" --merge_strategy=squash'
+          prompt: '/gemini-merge --merge_strategy=squash --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}" --review_summary="${{ inputs.review_summary }}"'
 
       # The Gemini CLI step reports "success" whenever the process exits 0, which happens even when the
       # model only narrates actions (e.g. "I merged the PR") without invoking the corresponding tools.
