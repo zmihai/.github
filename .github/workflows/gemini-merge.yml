@@ -191,3 +191,47 @@ jobs:
               "https://github.com/gemini-cli-extensions/code-review"
             ]
           prompt: '/gemini-merge --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}" --review_summary="${{ inputs.review_summary }}" --merge_strategy=squash'
+
+      # The Gemini CLI step reports "success" whenever the process exits 0, which happens even when the
+      # model only narrates actions (e.g. "I merged the PR") without invoking the corresponding tools.
+      # This gate asserts that the merge job left a DURABLE, model-agnostic outcome on the PR: either the
+      # PR was merged, or a decisive review (APPROVED / CHANGES_REQUESTED) was submitted. A run that ends
+      # with only pending/comment activity is treated as a failure so it surfaces red and triggers the
+      # dispatch fallthrough notification instead of a misleading green check.
+      - name: 'Verify durable merge outcome'
+        if: ${{ !cancelled() && inputs.is_fork != 'true' }}
+        uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
+        env:
+          INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
+        with:
+          github-token: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          script: |
+            const prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
+            if (!prNumber) {
+              core.setFailed('pull_request_number input is required to verify the merge outcome');
+              return;
+            }
+            const { owner, repo } = context.repo;
+
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            if (pr.merged) {
+              core.info(`PR #${prNumber} is merged (merged_at=${pr.merged_at}). ✓`);
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: prNumber, per_page: 100,
+            });
+            const decisive = reviews.filter(r => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED');
+            if (decisive.length > 0) {
+              const latest = decisive[decisive.length - 1];
+              core.info(`PR #${prNumber} not merged, but a decisive review exists (state=${latest.state}, by=${latest.user?.login}). ✓`);
+              return;
+            }
+
+            core.setFailed(
+              `Merge job left no durable outcome for PR #${prNumber}: it is neither merged nor does it have an ` +
+              `APPROVED/CHANGES_REQUESTED review (only pending or comment-level activity was found). The model ` +
+              `likely reported success without invoking the merge/review tools. Re-run with GEMINI_DEBUG=true and ` +
+              `UPLOAD_ARTIFACTS=true and inspect .gemini/telemetry.log to see which tool calls actually fired.`
+            );

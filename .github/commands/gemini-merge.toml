@@ -63,25 +63,63 @@ Follow this four-step process sequentially.
 
 Based on the results from your code review and the provided **Projects** data and **Review Summary**, decide on the course of action.
 
-1.  **Merge Criteria:** The pull request is ready to be merged if **ALL** of the following conditions are met:
-    *   For **EVERY** project in the **Projects** list:
-        *   The automated CI suite passed (`ci-outcome` is 'success').
-        *   The security scan passed (`scan-outcome` is 'success').
+1.  **Classify each failure first.** Before applying the Merge Criteria, classify **every** failing `ci-outcome`/`scan-outcome` in the **Projects** list as either **related** or **unrelated** to this pull request. Use `mcp_github_pull_request_read` (`get_files`/`get_diff`) to see exactly what this pull request changes.
+    *   **Related:** the failure is in a project, package, or file that this pull request modifies, or is otherwise a direct consequence of this pull request's changes.
+    *   **Unrelated & pre-existing:** the failure is in a project/area this pull request does **not** touch. Because the pull request does not modify it, the pull request did not introduce it and it would fail on the base branch regardless.
+
+2.  **Merge Criteria:** The pull request is ready to be merged if **ALL** of the following conditions are met:
+    *   **Every *related* failure has been remediated** per **Step 2.5** (fixed, verified locally with your own tools, and pushed to the source branch). A related failure you cannot remediate **blocks** the merge.
+    *   **Unrelated, pre-existing failures do NOT block the merge** — including security-scan failures. A valid patch **MUST NOT** be held up solely because of an unrelated failure in a different package or project (e.g. do not block a Nest security fix because of a pre-existing, unrelated ESLint failure). Leave the codebase cleaner than you found it: you **SHOULD** still remediate unrelated failures per **Step 2.5** whenever the fix is low-risk, but you are not required to, and being unable to fix one does not block the merge.
     *   The **Review Summary**, from a review of the latest commits, does not indicate any `🔴 Critical` or `🟠 High` issues.
     *   Your current code review identifies **NO** `🔴 Critical` or `🟠 High` severity issues.
     *   There are no "REQUEST_CHANGES" reviews on the pull request.
 
-2.  **Action if Merge Criteria are Met:**
+    Any unrelated failure you leave unresolved **MUST** be clearly itemized in your final approval summary so the author retains visibility.
+
+3.  **Action if Merge Criteria are Met:**
     *   If there are `🟡 Medium` or `🟢 Low` severity issues, you should still approve the pull request, but leave the comments for the author to address in the future.
     *   Submit an approving review and then merge the pull request by using the "Squash and merge" option.
 
-3.  **Action if Merge Criteria are NOT Met:**
-    *   If any project has a `ci-outcome` of 'failure' or a `scan-outcome` of 'failure', if the **Review Summary** indicates high-severity issues, if you have identified `🔴 Critical` or `🟠 High` severity issues yourself, or if there are existing "REQUEST_CHANGES" reviews, you **MUST NOT** merge the pull request.
+4.  **Action if Merge Criteria are NOT Met:**
+    *   If the merge is blocked only by a **related** `ci-outcome`/`scan-outcome` failure (and there are **no** `🔴 Critical`/`🟠 High` issues and **no** existing "REQUEST_CHANGES" reviews), first attempt to fix it yourself per **Step 2.5** before deciding to request changes.
+    *   If you cannot remediate a **related** failure, or the **Review Summary** indicates high-severity issues, or you have identified `🔴 Critical` or `🟠 High` severity issues yourself, or there are existing "REQUEST_CHANGES" reviews, you **MUST NOT** merge the pull request.
+    *   Remember that **unrelated, pre-existing failures never block the merge** — do not request changes solely because of one.
     *   Submit all your review comments and request changes.
+
+### Step 2.5: Remediation Attempt (for fixable CI or Security failures)
+
+Use this procedure to fix a `ci-outcome` or `scan-outcome` of 'failure' and then proceed toward merge. It applies in two situations:
+*   **Related failures (required):** you **MUST** remediate these to merge, provided the fix is well-understood and low-risk and there are **no** `🔴 Critical`/`🟠 High` review issues and **no** existing "REQUEST_CHANGES" reviews. If you cannot, abort and request changes.
+*   **Unrelated, pre-existing failures (best-effort):** you **SHOULD** remediate these when the fix is low-risk ("leave it cleaner than you found it"), but they do **not** block the merge, so being unable to fix one is fine — just itemize it in your summary.
+
+Do **NOT** attempt remediation when the blocker is a high-severity code-review issue; those must be returned to the author via "Request Changes".
+
+**Important:** The `ci-outcome`/`scan-outcome` values in the **Projects** data were measured on the commit **before** any change you make. After a successful, locally-verified fix they are stale, and the affected project is considered resolved for the **Merge Criteria**.
+
+Follow these steps **in order**. If any step fails, a required command is unavailable, or you are not fully confident the fix is correct and complete, you **MUST ABORT** remediation and proceed to "Request Changes" (Step 3). You **MUST NOT** fabricate, assume, or guess the result of any command — only ever rely on output you actually observed from `run_shell_command`.
+
+1.  **Diagnose:** Use `read_file`, `grep_search`, and `list_directory` to understand the root cause of the failure (e.g. a vulnerable transitive dependency, a lint violation, a failing test). Only continue if the fix is well-understood and low-risk.
+
+2.  **Apply a minimal fix:** Using `run_shell_command`, make the smallest change that addresses the reported failure (e.g. add a dependency override, bump a version, correct the offending code). Do not bundle unrelated changes.
+
+3.  **Verify locally — MANDATORY:** From the affected project's `working-directory`, run its relevant checks with `run_shell_command` and confirm they pass with your own eyes. For a JavaScript project this typically means `npm install`, then `npm audit` (for a security failure) and/or `npm run lint`, `npm run build`, and `npm test` (for a CI failure), as applicable to the failure you are fixing. You **MUST** observe passing results before continuing. If any check still fails, ABORT.
+
+4.  **Commit and push to the source branch:** Commit the fix and push it to the pull request's source branch. Its name is the `head_ref` value in the **Input Data**. You **MUST** use an explicit refspec with the literal branch name substituted in — per the Command Substitution constraint, do **NOT** use `$(...)`:
+    *   `git config user.name "gemini-cli[bot]"`
+    *   `git config user.email "gemini-cli[bot]@users.noreply.github.com"`
+    *   `git add -A`
+    *   `git commit -m "fix: <concise description of the remediation>"`
+    *   `git push origin HEAD:refs/heads/<head_ref>` — replace `<head_ref>` with the literal branch name from the **Input Data** (e.g. `git push origin HEAD:refs/heads/dependabot/npm_and_yarn/example-1.2.3`).
+
+    If the push is rejected (for example, a non-fast-forward error) and you cannot safely resolve it, ABORT and request changes.
+
+5.  **Proceed to merge:** Once the fix is pushed and you have locally verified it passes, treat each project you remediated as satisfying its `ci-outcome`/`scan-outcome` requirement, and continue to "If Merging" below. Your approval summary **MUST** include a brief, accurate description of the remediation you performed and the verification commands whose passing output you actually observed.
+
+-----
 
 ### Step 3: Execute Action on GitHub
 
-#### If Merging (Merge Criteria Met):
+#### If Merging (Merge Criteria Met, possibly after Step 2.5 remediation):
 
 1.  **Create Pending Review:** Call `mcp_github_pull_request_review_write` with method `create` (and without the `event` parameter) to open a pending review. Extract the `owner` and `repo` parameters from the `repository` input string (which is formatted as `owner/repo`). Use `pullNumber` for the pull request number. Ignore errors like "can only have one pending review per pull request" and proceed to the next step.
 2.  **Add Comments (if any):** If you have `🟡 Medium` or `🟢 Low` comments, add them using `mcp_github_add_comment_to_pending_review` for each comment. Required parameters: `owner`, `repo`, `pullNumber`, `path`, `body`, and `subjectType` (`"LINE"` for inline comments anchored to a specific line, or `"FILE"` for file-level comments).
