@@ -121,15 +121,36 @@ jobs:
           REVIEW_SUMMARY: '${{ inputs.review_summary }}'
           HEAD_REF: '${{ steps.resolve_head_ref.outputs.result }}'
 
-      # Capture the wall-clock time just before the model runs, so the verification gate below can tell
-      # outcomes produced by THIS merge job apart from pre-existing reviews/merges or the review produced
-      # earlier in the same dispatch by the review job. Recorded in milliseconds: GitHub review/merge
-      # timestamps are whole-second granularity, so a sub-second start time sits strictly above any
-      # same-second outcome that preceded this step, avoiding a second-boundary false positive.
-      - name: 'Record merge job start time'
-        id: 'merge_start'
+      # Snapshot the PR's decisive-review IDs and merged state just before the model runs, so the gate
+      # below can detect outcomes produced by THIS merge job by identity rather than by timestamp.
+      # Comparing IDs (not times) is immune to whole-second timestamp granularity and to clock skew
+      # between the runner and the GitHub API, and it correctly excludes pre-existing reviews/merges and
+      # the review submitted earlier in the same dispatch by the review job (which completes first).
+      - name: 'Snapshot PR review state'
+        id: 'pre_state'
         if: ${{ inputs.is_fork != 'true' }}
-        run: 'echo "epoch_ms=$(date -u +%s%3N)" >> "${GITHUB_OUTPUT}"'
+        uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
+        env:
+          INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
+        with:
+          github-token: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          script: |
+            const prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
+            if (!prNumber) {
+              core.setFailed('pull_request_number input is required to snapshot PR state');
+              return;
+            }
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: prNumber, per_page: 100,
+            });
+            const decisiveIds = reviews
+              .filter(r => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED')
+              .map(r => r.id);
+            core.setOutput('was_merged', String(pr.merged === true));
+            core.setOutput('decisive_review_ids', JSON.stringify(decisiveIds));
+            core.info(`Pre-run snapshot: merged=${pr.merged}, decisive reviews=${decisiveIds.length}`);
 
       - name: 'Run Gemini pull request merge'
         if: ${{ inputs.is_fork != 'true' }}
@@ -204,18 +225,19 @@ jobs:
 
       # The Gemini CLI step reports "success" whenever the process exits 0, which happens even when the
       # model only narrates actions (e.g. "I merged the PR") without invoking the corresponding tools.
-      # This gate asserts that THIS merge job left a DURABLE outcome on the PR: either the PR was merged,
-      # or a decisive review (APPROVED / CHANGES_REQUESTED) was submitted — and only counts outcomes that
-      # occurred AFTER the merge job started. That excludes pre-existing human reviews/merges and the
-      # review submitted earlier in the same dispatch by the review job, so a no-op merge run cannot be
-      # masked by an unrelated decisive review. A run that ends with only pending/comment activity is
+      # This gate asserts that THIS merge job left a DURABLE outcome on the PR: either the PR became
+      # merged (and was not already merged before the run), or a NEW decisive review (APPROVED /
+      # CHANGES_REQUESTED) appeared that was not present in the pre-run snapshot. Comparing against the
+      # snapshot by review id excludes pre-existing reviews/merges and the review submitted earlier in
+      # the same dispatch by the review job. A run that ends with only pending/comment activity is
       # treated as a failure so it surfaces red and triggers the dispatch fallthrough notification.
       - name: 'Verify durable merge outcome'
         if: ${{ success() && inputs.is_fork != 'true' }}
         uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
         env:
           INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
-          MERGE_START_EPOCH_MS: '${{ steps.merge_start.outputs.epoch_ms }}'
+          PRE_WAS_MERGED: '${{ steps.pre_state.outputs.was_merged }}'
+          PRE_DECISIVE_REVIEW_IDS: '${{ steps.pre_state.outputs.decisive_review_ids }}'
         with:
           github-token: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
           script: |
@@ -226,15 +248,14 @@ jobs:
             }
             const { owner, repo } = context.repo;
 
-            // Only outcomes at/after the merge job started count as produced by THIS run. The start time
-            // is supplied in epoch milliseconds. If it is somehow missing, fall back to 0 (count any
-            // outcome) rather than crash.
-            const parsedStartMs = parseInt(process.env.MERGE_START_EPOCH_MS, 10);
-            const startMs = Number.isFinite(parsedStartMs) ? parsedStartMs : 0;
-            const inThisRun = (ts) => ts && new Date(ts).getTime() >= startMs;
+            // Outcomes present BEFORE the model ran do not count as produced by THIS run.
+            const wasMerged = process.env.PRE_WAS_MERGED === 'true';
+            let priorIds = [];
+            try { priorIds = JSON.parse(process.env.PRE_DECISIVE_REVIEW_IDS || '[]'); } catch (e) {}
+            const priorDecisive = new Set(priorIds);
 
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-            if (pr.merged && inThisRun(pr.merged_at)) {
+            if (pr.merged && !wasMerged) {
               core.info(`PR #${prNumber} was merged by this run (merged_at=${pr.merged_at}). ✓`);
               return;
             }
@@ -242,19 +263,19 @@ jobs:
             const reviews = await github.paginate(github.rest.pulls.listReviews, {
               owner, repo, pull_number: prNumber, per_page: 100,
             });
-            const decisive = reviews.filter(r =>
-              (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED') && inThisRun(r.submitted_at)
+            const newDecisive = reviews.filter(r =>
+              (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED') && !priorDecisive.has(r.id)
             );
-            if (decisive.length > 0) {
-              const latest = decisive[decisive.length - 1];
-              core.info(`PR #${prNumber} not merged, but this run submitted a decisive review (state=${latest.state}, by=${latest.user?.login}, at=${latest.submitted_at}). ✓`);
+            if (newDecisive.length > 0) {
+              const latest = newDecisive[newDecisive.length - 1];
+              core.info(`PR #${prNumber} not merged, but this run submitted a new decisive review (state=${latest.state}, by=${latest.user?.login}). ✓`);
               return;
             }
 
             core.setFailed(
-              `Merge job left no durable outcome for PR #${prNumber}: since the job started it was neither ` +
-              `merged nor given an APPROVED/CHANGES_REQUESTED review (only pending or comment-level activity ` +
-              `was found). The model likely reported success without invoking the merge/review tools. Re-run ` +
-              `with GEMINI_DEBUG=true and UPLOAD_ARTIFACTS=true and inspect .gemini/telemetry.log to see which ` +
+              `Merge job left no durable outcome for PR #${prNumber}: this run neither merged it nor added a ` +
+              `new APPROVED/CHANGES_REQUESTED review (only pending or comment-level activity was found). The ` +
+              `model likely reported success without invoking the merge/review tools. Re-run with ` +
+              `GEMINI_DEBUG=true and UPLOAD_ARTIFACTS=true and inspect .gemini/telemetry.log to see which ` +
               `tool calls actually fired.`
             );

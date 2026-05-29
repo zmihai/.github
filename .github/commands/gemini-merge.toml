@@ -1,4 +1,4 @@
-description = "Reviews and merges a pull request with Gemini CLI if all checks pass. This command assumes that tests have already been run."
+description = "Reviews and merges a pull request with Gemini CLI when the changes are sound and every CI/security failure related to the pull request has passed or been remediated; unrelated, pre-existing failures do not block the merge. This command assumes that tests have already been run."
 prompt = """
 ## Role
 
