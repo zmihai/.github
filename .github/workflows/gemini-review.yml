@@ -59,7 +59,9 @@ defaults:
 jobs:
   review:
     runs-on: 'ubuntu-latest'
-    timeout-minutes: 15
+    # Two sequential Gemini passes now run in this job (code review + security analysis), so allow more
+    # wall-clock than the single-pass default.
+    timeout-minutes: 25
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -68,7 +70,7 @@ jobs:
     outputs:
       command: '${{ inputs.command }}'
       issue_number: '${{ inputs.issue_number }}'
-      review_summary: '${{ steps.gemini_pr_review.outputs.summary }}'
+      review_summary: '${{ steps.combine_summary.outputs.summary }}'
     steps:
       - name: 'Mint identity token'
         id: 'mint_identity_token'
@@ -176,3 +178,105 @@ jobs:
               "https://github.com/gemini-cli-extensions/code-review"
             ]
           prompt: '/gemini-review --repository=${{ github.repository }} --pr=${{ inputs.issue_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}"'
+
+      # Extra, security-focused pass using the gemini-cli security extension. Run as a SEPARATE gemini
+      # invocation with its own extension + MCP config so it does not collide with the code-review
+      # extension/MCP wiring of the step above (loading both in one invocation causes tool-registration
+      # collisions). This mirrors the github MCP version (v0.18.0) and tool names the security extension
+      # was authored against. Findings are posted to the PR and folded into review_summary below.
+      - name: 'Run Gemini security analysis'
+        if: ${{ inputs.is_fork != 'true' }}
+        uses: 'google-github-actions/run-gemini-cli@3ca2577f2714990269a7378904cf70ae1e01e288' # ratchet:google-github-actions/run-gemini-cli@main
+        id: 'gemini_security'
+        env:
+          GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          GEMINI_CLI_TRUST_WORKSPACE: '${{ inputs.is_fork != ''true'' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository) }}'
+          REPOSITORY: '${{ github.repository }}'
+          PULL_REQUEST_NUMBER: '${{ inputs.issue_number }}'
+          ISSUE_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
+          ISSUE_BODY: '${{ github.event.pull_request.body || github.event.issue.body }}'
+          ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
+        with:
+          gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
+          gcp_project_id: '${{ vars.GOOGLE_CLOUD_PROJECT }}'
+          gcp_service_account: '${{ vars.SERVICE_ACCOUNT_EMAIL }}'
+          gcp_workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
+          gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
+          gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'
+          gemini_debug: '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
+          gemini_model: '${{ vars.GEMINI_MODEL }}'
+          google_api_key: '${{ secrets.GOOGLE_API_KEY }}'
+          use_gemini_code_assist: '${{ vars.GOOGLE_GENAI_USE_GCA }}'
+          use_vertex_ai: '${{ vars.GOOGLE_GENAI_USE_VERTEXAI }}'
+          # Disabled to avoid colliding with the review step's "gemini-output" artifact in this same job.
+          upload_artifacts: 'false'
+          workflow_name: 'gemini-security'
+          github_pr_number: '${{ inputs.issue_number }}'
+          settings: |-
+            {
+              "model": {
+                "maxSessionTurns": 100
+              },
+              "telemetry": {
+                "enabled": true,
+                "target": "local",
+                "outfile": ".gemini/telemetry-security.log"
+              },
+              "mcpServers": {
+                "github": {
+                  "command": "docker",
+                  "args": [
+                    "run",
+                    "-i",
+                    "--rm",
+                    "-e",
+                    "GITHUB_PERSONAL_ACCESS_TOKEN",
+                    "ghcr.io/github/github-mcp-server:v0.18.0"
+                  ],
+                  "includeTools": [
+                    "add_comment_to_pending_review",
+                    "create_pending_pull_request_review",
+                    "pull_request_read",
+                    "submit_pending_pull_request_review"
+                  ],
+                  "env": {
+                    "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+                  }
+                }
+              },
+              "tools": {
+                "core": [
+                  "run_shell_command",
+                  "grep_search",
+                  "list_directory",
+                  "read_file"
+                ]
+              }
+            }
+          extensions: |
+            [
+              "https://github.com/gemini-cli-extensions/security.git"
+            ]
+          prompt: '/security:analyze-github-pr'
+
+      # Fold the code-review summary and the security-analysis summary into one review_summary, so the merge
+      # job's existing "Critical/High in the Review Summary blocks the merge" gate applies to security
+      # findings too. Runs even if a prior gemini step errored, capturing whatever summaries exist.
+      - name: 'Combine review and security summaries'
+        id: 'combine_summary'
+        if: ${{ !cancelled() && inputs.is_fork != 'true' }}
+        shell: 'bash'
+        env:
+          REVIEW_SUMMARY: '${{ steps.gemini_pr_review.outputs.summary }}'
+          SECURITY_SUMMARY: '${{ steps.gemini_security.outputs.summary }}'
+        run: |-
+          {
+            echo "summary<<GEMINI_SUMMARY_EOF"
+            echo "## Code Review"
+            echo "${REVIEW_SUMMARY:-(no code review summary produced)}"
+            echo ""
+            echo "## Security Analysis"
+            echo "${SECURITY_SUMMARY:-(no security analysis summary produced)}"
+            echo "GEMINI_SUMMARY_EOF"
+          } >> "${GITHUB_OUTPUT}"
