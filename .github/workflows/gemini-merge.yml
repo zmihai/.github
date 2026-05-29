@@ -148,9 +148,12 @@ jobs:
             const decisiveIds = reviews
               .filter(r => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED')
               .map(r => r.id);
-            core.setOutput('was_merged', String(pr.merged === true));
+            // Use merged_at (non-null when merged) as the merged indicator — reliably present on the
+            // single-PR GET response.
+            const isMerged = pr.merged_at != null;
+            core.setOutput('was_merged', String(isMerged));
             core.setOutput('decisive_review_ids', JSON.stringify(decisiveIds));
-            core.info(`Pre-run snapshot: merged=${pr.merged}, decisive reviews=${decisiveIds.length}`);
+            core.info(`Pre-run snapshot: merged=${isMerged}, decisive reviews=${decisiveIds.length}`);
 
       - name: 'Run Gemini pull request merge'
         if: ${{ inputs.is_fork != 'true' }}
@@ -268,7 +271,8 @@ jobs:
             const priorDecisive = new Set(priorIds);
 
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-            if (pr.merged && !wasMerged) {
+            const isMerged = pr.merged_at != null;
+            if (isMerged && !wasMerged) {
               core.info(`PR #${prNumber} was merged by this run (merged_at=${pr.merged_at}). ✓`);
               return;
             }
