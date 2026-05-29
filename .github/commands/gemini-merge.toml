@@ -96,7 +96,7 @@ Do **NOT** attempt remediation when the blocker is a high-severity code-review i
 
 **Important:** The `ci-outcome`/`scan-outcome` values in the **Projects** data were measured on the commit **before** any change you make. After a successful, locally-verified fix they are stale, and the affected project is considered resolved for the **Merge Criteria**.
 
-Follow these steps **in order**. If any step fails, a required command is unavailable, or you are not fully confident the fix is correct and complete, you **MUST ABORT** remediation and proceed to "Request Changes" (Step 3). You **MUST NOT** fabricate, assume, or guess the result of any command — only ever rely on output you actually observed from `run_shell_command`.
+Follow these steps **in order**. If any step fails, a required command is unavailable, or you are not fully confident the fix is correct and complete, you **MUST ABORT** remediation and proceed to the "If Requesting Changes" path under **Step 3: Execute Action on GitHub**. You **MUST NOT** fabricate, assume, or guess the result of any command — only ever rely on output you actually observed from `run_shell_command`.
 
 1.  **Diagnose:** Use `read_file`, `grep_search`, and `list_directory` to understand the root cause of the failure (e.g. a vulnerable transitive dependency, a lint violation, a failing test). Only continue if the fix is well-understood and low-risk.
 
