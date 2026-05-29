@@ -80,22 +80,32 @@ jobs:
         with:
           result-encoding: string
           script: |
+            let headRef;
             // Prefer the head ref from the pull_request event payload when available.
             if (context.payload.pull_request) {
-              return context.payload.pull_request.head.ref;
+              headRef = context.payload.pull_request.head.ref;
+            } else {
+              // Fallback for issue_comment / pull_request_review_comment / etc. events,
+              // where context.payload.pull_request is absent. We look the PR up via API.
+              const prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
+              if (!prNumber) {
+                throw new Error('pull_request_number input is required to resolve head_ref outside of pull_request events');
+              }
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+              headRef = pr.head.ref;
             }
-            // Fallback for issue_comment / pull_request_review_comment / etc. events,
-            // where context.payload.pull_request is absent. We look the PR up via API.
-            const prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
-            if (!prNumber) {
-              throw new Error('pull_request_number input is required to resolve head_ref outside of pull_request events');
+            // Safety: head_ref is later substituted into a shell command by the merge agent
+            // (`git push origin HEAD:refs/heads/<head_ref>`). Branch names are external input and git
+            // permits shell metacharacters (e.g. `$`, backtick, `;`, `&`) in them, so reject anything
+            // outside a conservative safe set before it can reach a shell that holds write credentials.
+            if (!/^[A-Za-z0-9._\/-]+$/.test(headRef)) {
+              throw new Error(`Refusing to proceed: PR head ref '${headRef}' contains characters outside [A-Za-z0-9._/-] and may be unsafe to use in a shell command.`);
             }
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber,
-            });
-            return pr.head.ref;
+            return headRef;
 
       - name: 'Prepare prompt context'
         shell: 'bash'
