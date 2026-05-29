@@ -123,11 +123,13 @@ jobs:
 
       # Capture the wall-clock time just before the model runs, so the verification gate below can tell
       # outcomes produced by THIS merge job apart from pre-existing reviews/merges or the review produced
-      # earlier in the same dispatch by the review job.
+      # earlier in the same dispatch by the review job. Recorded in milliseconds: GitHub review/merge
+      # timestamps are whole-second granularity, so a sub-second start time sits strictly above any
+      # same-second outcome that preceded this step, avoiding a second-boundary false positive.
       - name: 'Record merge job start time'
         id: 'merge_start'
         if: ${{ inputs.is_fork != 'true' }}
-        run: 'echo "epoch=$(date -u +%s)" >> "${GITHUB_OUTPUT}"'
+        run: 'echo "epoch_ms=$(date -u +%s%3N)" >> "${GITHUB_OUTPUT}"'
 
       - name: 'Run Gemini pull request merge'
         if: ${{ inputs.is_fork != 'true' }}
@@ -213,7 +215,7 @@ jobs:
         uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
         env:
           INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
-          MERGE_START_EPOCH: '${{ steps.merge_start.outputs.epoch }}'
+          MERGE_START_EPOCH_MS: '${{ steps.merge_start.outputs.epoch_ms }}'
         with:
           github-token: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
           script: |
@@ -224,10 +226,11 @@ jobs:
             }
             const { owner, repo } = context.repo;
 
-            // Only outcomes at/after the merge job started count as produced by THIS run. If the start
-            // time is somehow missing, fall back to 0 (count any outcome) rather than crash.
-            const startEpoch = parseInt(process.env.MERGE_START_EPOCH, 10);
-            const startMs = Number.isFinite(startEpoch) ? startEpoch * 1000 : 0;
+            // Only outcomes at/after the merge job started count as produced by THIS run. The start time
+            // is supplied in epoch milliseconds. If it is somehow missing, fall back to 0 (count any
+            // outcome) rather than crash.
+            const parsedStartMs = parseInt(process.env.MERGE_START_EPOCH_MS, 10);
+            const startMs = Number.isFinite(parsedStartMs) ? parsedStartMs : 0;
             const inThisRun = (ts) => ts && new Date(ts).getTime() >= startMs;
 
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
