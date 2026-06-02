@@ -4,12 +4,12 @@ on:
   workflow_call:
     inputs:
       language:
-        description: 'Language to use (javascript, python, php)'
+        description: 'Language to use (javascript, python, php, java)'
         required: true
         type: string
 
       language-version:
-        description: 'Language version to use (20, 3.11, 8.4, etc)'
+        description: 'Language version to use (20, 3.11, 8.4, 21, etc)'
         required: true
         type: string
 
@@ -57,7 +57,7 @@ on:
     outputs:
       outcome:
         description: 'The CI outcome'
-        value: ${{ (jobs.ci-npm.result != 'skipped' && jobs.ci-npm.result) || (jobs.ci-python.result != 'skipped' && jobs.ci-python.result) || (jobs.ci-php.result != 'skipped' && jobs.ci-php.result) || 'failure' }}
+        value: ${{ (jobs.ci-npm.result != 'skipped' && jobs.ci-npm.result) || (jobs.ci-python.result != 'skipped' && jobs.ci-python.result) || (jobs.ci-php.result != 'skipped' && jobs.ci-php.result) || (jobs.ci-java.result != 'skipped' && jobs.ci-java.result) || 'failure' }}
 
 defaults:
   run:
@@ -140,12 +140,26 @@ jobs:
       ref: ${{ needs.resolve-ref.outputs.ref }}
     secrets: inherit
 
+  ci-java:
+    needs: resolve-ref
+    if: ${{ inputs.language == 'java' }}
+    uses: './.github/workflows/ci-java.yml'
+    with:
+      java-version: ${{ inputs.language-version }}
+      working-directory: ${{ inputs.working-directory }}
+      extensions: ${{ inputs.extensions }}
+      run-lint: ${{ inputs.run-lint }}
+      run-test: ${{ inputs.run-test }}
+      run-build: ${{ inputs.run-build }}
+      ref: ${{ needs.resolve-ref.outputs.ref }}
+    secrets: inherit
+
   ci-unsupported:
-    if: ${{ inputs.language != 'javascript' && inputs.language != 'python' && inputs.language != 'php' }}
+    if: ${{ inputs.language != 'javascript' && inputs.language != 'python' && inputs.language != 'php' && inputs.language != 'java' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Fail for unsupported CI language
         run: |
-          echo "CI workflow is not supported for language '${{ inputs.language }}'. Supported languages: javascript, python, php."
+          echo "CI workflow is not supported for language '${{ inputs.language }}'. Supported languages: javascript, python, php, java."
           exit 1

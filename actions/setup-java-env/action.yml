@@ -1,0 +1,93 @@
+name: 'Setup Java Environment'
+description: 'Setup Java (Temurin) with Maven/Gradle auto-detection, build-tool caching and dependency resolution'
+author: 'zmihai'
+
+inputs:
+  java-version:
+    description: 'Java version to use'
+    required: false
+    default: '21'
+  distribution:
+    description: 'JDK distribution (temurin, zulu, corretto, etc.)'
+    required: false
+    default: 'temurin'
+  install-dependencies:
+    description: 'Automatically resolve/download dependencies'
+    required: false
+    default: 'true'
+  working-directory:
+    description: 'Working directory'
+    required: false
+    default: '.'
+  system-packages:
+    description: 'Comma- or space-separated apt packages to install before building (e.g. "protobuf-compiler" for protoc)'
+    required: false
+    default: ''
+
+outputs:
+  build-tool:
+    description: 'Detected build tool (maven, gradle, or none)'
+    value: ${{ steps.detect.outputs.tool }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Detect build tool
+      id: detect
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ -f pom.xml ]; then
+          echo "tool=maven" >> "$GITHUB_OUTPUT"
+          echo "Detected Maven project (pom.xml)."
+        elif [ -f build.gradle ] || [ -f build.gradle.kts ] || [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then
+          echo "tool=gradle" >> "$GITHUB_OUTPUT"
+          echo "Detected Gradle project."
+        else
+          echo "tool=none" >> "$GITHUB_OUTPUT"
+          echo "No pom.xml or build.gradle(.kts) found in '${{ inputs.working-directory }}'."
+        fi
+
+    - name: Install system packages
+      if: ${{ inputs.system-packages != '' }}
+      shell: bash
+      run: |
+        # Normalize commas to spaces so callers can use either separator.
+        PACKAGES="$(echo '${{ inputs.system-packages }}' | tr ',' ' ')"
+        echo "Installing system packages: $PACKAGES"
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends $PACKAGES
+
+    - name: Setup Java
+      uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # ratchet:actions/setup-java@v5
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: ${{ inputs.distribution }}
+        cache: ${{ steps.detect.outputs.tool != 'none' && steps.detect.outputs.tool || '' }}
+
+    - name: Make Gradle wrapper executable
+      if: ${{ steps.detect.outputs.tool == 'gradle' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
+
+    - name: Resolve dependencies
+      if: ${{ inputs.install-dependencies == 'true' && steps.detect.outputs.tool != 'none' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        # Best-effort warmup so dependencies are cached. Real resolution errors
+        # surface during the build/test step, so a hiccup here is non-fatal.
+        if [ "${{ steps.detect.outputs.tool }}" = "maven" ]; then
+          mvn -B -ntp dependency:go-offline \
+            || echo "::warning::Maven dependency:go-offline reported issues; continuing (dependencies will resolve during build)."
+        elif [ "${{ steps.detect.outputs.tool }}" = "gradle" ]; then
+          GRADLE="gradle"; [ -f ./gradlew ] && GRADLE="./gradlew"
+          $GRADLE --no-daemon dependencies \
+            || echo "::warning::Gradle dependency resolution reported issues; continuing (dependencies will resolve during build)."
+        fi
+
+branding:
+  icon: 'coffee'
+  color: 'orange'

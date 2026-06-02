@@ -1,0 +1,137 @@
+name: CI Workflow (java)
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: 'Java version to use'
+        required: false
+        type: string
+        default: '21'
+      distribution:
+        description: 'JDK distribution to use (temurin, zulu, corretto, etc.)'
+        required: false
+        type: string
+        default: 'temurin'
+      working-directory:
+        description: 'Working directory for commands'
+        required: false
+        type: string
+        default: '.'
+      extensions:
+        description: 'Comma- or space-separated apt packages to install before building (e.g. "protobuf-compiler" for protoc)'
+        required: false
+        type: string
+        default: ''
+      run-lint:
+        description: 'Run linting (always compiles; runs SpotBugs/Checkstyle if configured)'
+        required: false
+        type: boolean
+        default: true
+      run-test:
+        description: 'Run tests'
+        required: false
+        type: boolean
+        default: true
+      run-build:
+        description: 'Run build (package)'
+        required: false
+        type: boolean
+        default: true
+      ref:
+        description: 'The branch, tag or SHA to checkout'
+        required: false
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Java Environment
+        id: setup
+        uses: zmihai/.github/actions/setup-java-env@v0.10.0
+        with:
+          java-version: ${{ inputs.java-version }}
+          distribution: ${{ inputs.distribution }}
+          working-directory: ${{ inputs.working-directory }}
+          system-packages: ${{ inputs.extensions }}
+          install-dependencies: 'true'
+
+      - name: Run Lint
+        if: ${{ inputs.run-lint }}
+        run: |
+          TOOL="${{ steps.setup.outputs.build-tool }}"
+          if [ "$TOOL" = "maven" ]; then
+            echo "Compiling main and test sources..."
+            mvn -B -ntp clean compile test-compile
+            if grep -q "spotbugs-maven-plugin" pom.xml; then
+              echo "SpotBugs plugin detected; running spotbugs:check..."
+              mvn -B -ntp spotbugs:check
+            else
+              echo "No SpotBugs plugin configured. Skipping SpotBugs."
+            fi
+            if grep -q "maven-checkstyle-plugin" pom.xml; then
+              echo "Checkstyle plugin detected; running checkstyle:check..."
+              mvn -B -ntp checkstyle:check
+            else
+              echo "No Checkstyle plugin configured. Skipping Checkstyle."
+            fi
+          elif [ "$TOOL" = "gradle" ]; then
+            GRADLE="gradle"; [ -f ./gradlew ] && GRADLE="./gradlew"
+            echo "Compiling main and test sources..."
+            $GRADLE --no-daemon compileJava compileTestJava
+            TASKS="$($GRADLE --no-daemon -q tasks --all 2>/dev/null || true)"
+            if echo "$TASKS" | grep -qw spotbugsMain; then
+              echo "SpotBugs task detected; running spotbugsMain..."
+              $GRADLE --no-daemon spotbugsMain
+            else
+              echo "No SpotBugs task configured. Skipping SpotBugs."
+            fi
+            if echo "$TASKS" | grep -qw checkstyleMain; then
+              echo "Checkstyle task detected; running checkstyleMain..."
+              $GRADLE --no-daemon checkstyleMain
+            else
+              echo "No Checkstyle task configured. Skipping Checkstyle."
+            fi
+          else
+            echo "No Maven or Gradle project detected. Skipping lint."
+          fi
+
+      - name: Run Tests
+        if: ${{ inputs.run-test }}
+        run: |
+          TOOL="${{ steps.setup.outputs.build-tool }}"
+          if [ "$TOOL" = "maven" ]; then
+            mvn -B -ntp test
+          elif [ "$TOOL" = "gradle" ]; then
+            GRADLE="gradle"; [ -f ./gradlew ] && GRADLE="./gradlew"
+            $GRADLE --no-daemon test
+          else
+            echo "No Maven or Gradle project detected. Skipping tests."
+          fi
+
+      - name: Run Build
+        if: ${{ inputs.run-build }}
+        run: |
+          TOOL="${{ steps.setup.outputs.build-tool }}"
+          if [ "$TOOL" = "maven" ]; then
+            mvn -B -ntp -DskipTests package
+          elif [ "$TOOL" = "gradle" ]; then
+            GRADLE="gradle"; [ -f ./gradlew ] && GRADLE="./gradlew"
+            $GRADLE --no-daemon build -x test
+          else
+            echo "No Maven or Gradle project detected. Skipping build."
+          fi
