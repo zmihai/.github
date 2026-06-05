@@ -107,7 +107,8 @@ jobs:
               echo "No Checkstyle task configured. Skipping Checkstyle."
             fi
           else
-            echo "No Maven or Gradle project detected. Skipping lint."
+            echo "::error::Unsupported Java build tool '${TOOL}'. Expected maven or gradle."
+            exit 1
           fi
 
       - name: Run Tests
@@ -120,7 +121,8 @@ jobs:
             GRADLE="gradle"; [ -f ./gradlew ] && GRADLE="./gradlew"
             $GRADLE --no-daemon test
           else
-            echo "No Maven or Gradle project detected. Skipping tests."
+            echo "::error::Unsupported Java build tool '${TOOL}'. Expected maven or gradle."
+            exit 1
           fi
 
       - name: Run Build
@@ -133,5 +135,6 @@ jobs:
             GRADLE="gradle"; [ -f ./gradlew ] && GRADLE="./gradlew"
             $GRADLE --no-daemon build -x test
           else
-            echo "No Maven or Gradle project detected. Skipping build."
+            echo "::error::Unsupported Java build tool '${TOOL}'. Expected maven or gradle."
+            exit 1
           fi

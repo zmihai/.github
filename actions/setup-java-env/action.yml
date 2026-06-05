@@ -26,7 +26,7 @@ inputs:
 
 outputs:
   build-tool:
-    description: 'Detected build tool (maven, gradle, or none)'
+    description: 'Detected build tool (maven or gradle)'
     value: ${{ steps.detect.outputs.tool }}
 
 runs:
@@ -44,8 +44,8 @@ runs:
           echo "tool=gradle" >> "$GITHUB_OUTPUT"
           echo "Detected Gradle project."
         else
-          echo "tool=none" >> "$GITHUB_OUTPUT"
-          echo "No pom.xml or build.gradle(.kts) found in '${{ inputs.working-directory }}'."
+          echo "::error::No supported Java build tool found in '${{ inputs.working-directory }}'. Expected pom.xml, build.gradle(.kts), or settings.gradle(.kts)."
+          exit 1
         fi
 
     - name: Install system packages
@@ -63,7 +63,7 @@ runs:
       with:
         java-version: ${{ inputs.java-version }}
         distribution: ${{ inputs.distribution }}
-        cache: ${{ steps.detect.outputs.tool != 'none' && steps.detect.outputs.tool || '' }}
+        cache: ${{ steps.detect.outputs.tool }}
 
     - name: Make Gradle wrapper executable
       if: ${{ steps.detect.outputs.tool == 'gradle' }}
@@ -73,7 +73,7 @@ runs:
         if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
 
     - name: Resolve dependencies
-      if: ${{ inputs.install-dependencies == 'true' && steps.detect.outputs.tool != 'none' }}
+      if: ${{ inputs.install-dependencies == 'true' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |

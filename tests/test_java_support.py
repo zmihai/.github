@@ -14,6 +14,15 @@ def test_setup_java_env_schema():
     assert 'system-packages' in action['inputs']
     assert 'build-tool' in action['outputs']
 
+def test_setup_java_env_fails_without_supported_build_tool():
+    with open('actions/setup-java-env/action.yml', 'r') as f:
+        action = yaml.safe_load(f)
+    detect = next(s for s in action['runs']['steps']
+                  if s.get('id') == 'detect')
+    assert 'No supported Java build tool found' in detect['run']
+    assert 'exit 1' in detect['run']
+    assert 'tool=none' not in detect['run']
+
 def test_ci_java_passes_extensions_as_system_packages():
     with open('.github/workflows/ci-java.yml', 'r') as f:
         workflow = yaml.safe_load(f)

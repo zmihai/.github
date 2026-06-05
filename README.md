@@ -219,7 +219,7 @@ steps:
 
 **Path:** `actions/setup-java-env/action.yml`
 
-Sets up a JDK (Temurin by default) and auto-detects the build tool (Maven via `pom.xml`, Gradle via `build.gradle(.kts)`/`settings.gradle(.kts)`). Enables build-tool caching and best-effort dependency resolution.
+Sets up a JDK (Temurin by default) and auto-detects the build tool (Maven via `pom.xml`, Gradle via `build.gradle(.kts)`/`settings.gradle(.kts)`). The action fails if no supported build tool is found. Enables build-tool caching and best-effort dependency resolution.
 
 **Inputs:**
 - `java-version` (default: '21'): Java version
@@ -229,7 +229,7 @@ Sets up a JDK (Temurin by default) and auto-detects the build tool (Maven via `p
 - `system-packages` (default: ''): Comma- or space-separated apt packages to install before building (e.g. `protobuf-compiler` to provide `protoc`). When called via the reusable CI workflow this maps to the `extensions` input.
 
 **Outputs:**
-- `build-tool`: Detected build tool (`maven`, `gradle`, or `none`)
+- `build-tool`: Detected build tool (`maven` or `gradle`)
 
 **Example Usage:**
 ```yaml
