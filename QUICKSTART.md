@@ -48,8 +48,8 @@ When creating a new workflow in any repository:
 ## What's Available?
 
 ### 🔄 Reusable Workflows
-- **CI** - Complete Node.js, Python & PHP CI pipeline (v0.6.0+)
-- **Security Scan** - Dependency and code security scanning (JS, Python & PHP) (v0.6.0+)
+- **CI** - Complete Node.js, Python, PHP & Java CI pipeline (v0.6.0+)
+- **Security Scan** - Dependency and code security scanning (JS, Python, PHP & Java) (v0.6.0+)
 
 ### 🤖 Gemini AI Workflows
 - **Gemini Review** - AI-powered PR review
@@ -59,6 +59,7 @@ When creating a new workflow in any repository:
 - **Setup Node Environment** - Node.js with caching
 - **Setup Python Environment** - Python with caching
 - **Setup PHP Environment** - PHP with composer caching
+- **Setup Java Environment** - Java with Maven/Gradle detection and caching
 
 ## Learn More
 

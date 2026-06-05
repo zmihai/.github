@@ -56,7 +56,7 @@ jobs:
 
 Performs security scanning including dependency audits and CodeQL analysis. Supports JavaScript, Python, PHP, and Java. Use this workflow to generate the `scan-outcome` for the Gemini Review/Merge workflows.
 
-Dependency scanning uses the native auditor per language: `npm audit` (JS), `pip-audit` (Python), `composer audit` (PHP), and a [Trivy](https://github.com/aquasecurity/trivy) filesystem scan (Java — fails on `MEDIUM`/`HIGH`/`CRITICAL` vulnerabilities). CodeQL (`scan-code: true`) covers Java code analysis natively.
+Dependency scanning uses the native auditor per language: `npm audit` (JS), `pip-audit` (Python), `composer audit` (PHP), and a [Trivy](https://github.com/aquasecurity/trivy) filesystem scan (Java — fails on `MEDIUM`/`HIGH`/`CRITICAL` vulnerabilities). The security scan workflow is independent from the CI workflow and does not build Java projects or generate dependency lockfiles before scanning. For Java, Trivy can scan Maven `pom.xml` files, built JAR/WAR/PAR/EAR artifacts, and committed Gradle/SBT lockfiles; a Gradle project with only `build.gradle`/`build.gradle.kts` may not have its dependencies fully assessed by this reusable workflow. CodeQL (`scan-code: true`) covers Java code analysis natively.
 
 **Inputs:**
 - `scan-dependencies` (boolean, default: true): Scan dependencies for vulnerabilities
@@ -428,6 +428,8 @@ jobs:
 ```
 
 > **protoc note:** apt installs `protoc` to `/usr/bin/protoc`. If your `pom.xml` hardcodes a different path, either align the build to use `protoc` from `PATH` or add a step to symlink it.
+
+> **Java dependency scan note:** the reusable security workflow runs independently from the reusable CI workflow, so it does not reuse Java build outputs. Maven projects are scanned from `pom.xml`; Gradle projects should commit dependency lockfiles or use a custom security workflow that builds artifacts before running Trivy.
 
 ---
 
