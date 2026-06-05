@@ -29,7 +29,7 @@ A comprehensive CI workflow that handles linting, testing, and building for mult
 - `extensions` (string, default: ''): Extra extensions or packages to install during environment setup. For **PHP** these are passed as extensions to `shivammathur/setup-php`. For **Java** these are installed as apt system packages before the build (e.g. `protobuf-compiler` to provide `protoc`). Not yet used by JS/Python.
 - `run-lint` (boolean, default: true): Run linting. For Java this always compiles main + test sources, and additionally runs SpotBugs/Checkstyle when those plugins are configured.
 - `run-test` (boolean, default: true): Run tests
-- `run-build` (boolean, default: true): Run build (JS and Java)
+- `run-build` (boolean, default: true): Run build (JS and Java). For Java this runs Maven `package` with tests skipped, or Gradle `assemble` so lint/check tasks remain controlled by `run-lint`.
 - `build-before-test` (boolean, default: false): Run build before tests (JS only)
 - `ref` (string, optional): The branch, tag or SHA to checkout. Automatically resolves the PR head SHA if available. Defaults to `github.sha` otherwise.
 

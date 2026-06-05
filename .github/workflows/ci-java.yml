@@ -34,7 +34,7 @@ on:
         type: boolean
         default: true
       run-build:
-        description: 'Run build (package)'
+        description: 'Run build (Maven package / Gradle assemble)'
         required: false
         type: boolean
         default: true
@@ -133,7 +133,7 @@ jobs:
             mvn -B -ntp -DskipTests package
           elif [ "$TOOL" = "gradle" ]; then
             GRADLE="gradle"; [ -f ./gradlew ] && GRADLE="./gradlew"
-            $GRADLE --no-daemon build -x test
+            $GRADLE --no-daemon assemble
           else
             echo "::error::Unsupported Java build tool '${TOOL}'. Expected maven or gradle."
             exit 1

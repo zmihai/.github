@@ -45,6 +45,15 @@ def test_ci_java_passes_extensions_as_system_packages():
                  if s.get('id') == 'setup')
     assert setup['with']['system-packages'] == '${{ inputs.extensions }}'
 
+def test_ci_java_gradle_build_uses_assemble_not_check_lifecycle():
+    with open('.github/workflows/ci-java.yml', 'r') as f:
+        workflow = yaml.safe_load(f)
+    build = next(s for s in workflow['jobs']['ci']['steps']
+                 if s.get('name') == 'Run Build')
+    script = build['run']
+    assert '$GRADLE --no-daemon assemble' in script
+    assert '$GRADLE --no-daemon build -x test' not in script
+
 def test_reusable_java_ci_exists():
     assert os.path.exists('.github/workflows/ci-java.yml')
 
