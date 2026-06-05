@@ -43,7 +43,7 @@ A comprehensive CI workflow that handles linting, testing, and building for mult
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.9.3
     with:
       language: 'php'
       language-version: '8.4'
@@ -71,7 +71,7 @@ Performs security scanning including dependency audits and CodeQL analysis. Supp
 ```yaml
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.9.3
     with:
       scan-dependencies: true
       scan-code: true
@@ -84,6 +84,15 @@ jobs:
 ## 🤖 Gemini AI Workflows
 
 These workflows integrate Google Gemini for automated PR reviews and merging.
+
+### Gemini Model Selection
+
+The Gemini workflows select models from task-specific variables first, then fall back to the shared `GEMINI_MODEL` variable. If neither is set, the workflow uses `gemini-flash-latest`.
+
+- `GEMINI_REVIEW_MODEL`: Pull request review model.
+- `GEMINI_SECURITY_REVIEW_MODEL`: Security-focused review model.
+- `GEMINI_MERGE_MODEL`: Merge workflow model.
+- `GEMINI_MODEL`: Shared fallback model for all Gemini tasks.
 
 ### Gemini Dispatch
 
@@ -155,7 +164,7 @@ Sets up Node.js environment with caching and automatic dependency installation.
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-node-env@v0.9.2
+  - uses: zmihai/.github/actions/setup-node-env@v0.9.3
     with:
       node-version: '20'
       cache: 'npm'
@@ -177,7 +186,7 @@ Sets up PHP environment with composer caching and automatic dependency installat
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-php-env@v0.9.2
+  - uses: zmihai/.github/actions/setup-php-env@v0.9.3
     with:
       php-version: '8.2'
       extensions: 'gd, intl, zip'
@@ -199,7 +208,7 @@ Sets up Python environment with pip caching and automatic dependency installatio
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-python-env@v0.9.2
+  - uses: zmihai/.github/actions/setup-python-env@v0.9.3
     with:
       python-version: '3.11'
 ```
@@ -232,7 +241,7 @@ on:
 jobs:
   ci_project_a:
     name: CI - Project A
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.9.3
     with:
       language: 'python'
       language-version: '3.11'
@@ -240,7 +249,7 @@ jobs:
 
   security_project_a:
     name: Security - Project A
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.9.3
     with:
       language: 'python'
       language-version: '3.11'
@@ -248,7 +257,7 @@ jobs:
 
   ci_project_b:
     name: CI - Project B
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.9.3
     with:
       language: 'javascript'
       language-version: '20'
@@ -256,7 +265,7 @@ jobs:
 
   security_project_b:
     name: Security - Project B
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.9.3
     with:
       language: 'javascript'
       language-version: '20'
@@ -299,7 +308,7 @@ jobs:
   gemini_merge:
     name: Gemini Merge
     needs: aggregate
-    uses: zmihai/.github/.github/workflows/gemini-merge.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/gemini-merge.yml@v0.9.3
     with:
       pull_request_number: ${{ github.event.pull_request.number }}
       projects: ${{ needs.aggregate.outputs.projects_json }}
@@ -319,13 +328,13 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.9.3
     with:
       language: 'php'
       language-version: '8.5'
 
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.9.3
     with:
       language: 'php'
       language-version: '8.5'
@@ -346,13 +355,13 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.9.3
     with:
       language: 'python'
       language-version: '3.13'
 
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.9.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.9.3
     with:
       language: 'python'
       language-version: '3.13'
@@ -367,15 +376,15 @@ jobs:
 ### Using Reusable Workflows
 
 1. In your repository, create a workflow file (e.g., `.github/workflows/ci.yml`)
-2. Reference reusable workflows using `uses: zmihai/.github/.github/workflows/<name>.yml@v0.9.2`
-3. Reference composite actions using `uses: zmihai/.github/actions/<name>@v0.9.2`
+2. Reference reusable workflows using `uses: zmihai/.github/.github/workflows/<name>.yml@v0.9.3`
+3. Reference composite actions using `uses: zmihai/.github/actions/<name>@v0.9.3`
 4. Pass required inputs and secrets
 
 ---
 
 ## 📚 Best Practices
 
-1. **Pin versions**: Use specific tags (like `@v0.9.2`) or commit SHAs in production.
+1. **Pin versions**: Use specific tags (like `@v0.9.3`) or commit SHAs in production.
 2. **Security**: Use GitHub Secrets for all sensitive information.
 3. **Testing**: Test workflow changes in a separate branch before merging to master
 4. **Documentation**: Keep this README updated when adding new workflows or actions
