@@ -85,6 +85,15 @@ jobs:
 
 These workflows integrate Google Gemini for automated PR reviews and merging.
 
+### Gemini Model Selection
+
+The Gemini workflows select models from task-specific variables first, then fall back to the shared `GEMINI_MODEL` variable. If neither is set, the workflow uses `gemini-flash-latest`.
+
+- `GEMINI_REVIEW_MODEL`: Pull request review model.
+- `GEMINI_SECURITY_REVIEW_MODEL`: Security-focused review model.
+- `GEMINI_MERGE_MODEL`: Merge workflow model.
+- `GEMINI_MODEL`: Shared fallback model for all Gemini tasks.
+
 ### Gemini Dispatch
 
 **Path:** `.github/workflows/reusable-gemini-dispatch.yml`
