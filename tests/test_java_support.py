@@ -23,6 +23,21 @@ def test_setup_java_env_fails_without_supported_build_tool():
     assert 'exit 1' in detect['run']
     assert 'tool=none' not in detect['run']
 
+def test_setup_java_env_safely_installs_system_packages():
+    with open('actions/setup-java-env/action.yml', 'r') as f:
+        action = yaml.safe_load(f)
+    install = next(s for s in action['runs']['steps']
+                   if s.get('name') == 'Install system packages')
+    script = install['run']
+    assert install['env']['SYSTEM_PACKAGES'] == '${{ inputs.system-packages }}'
+    assert "IFS=$' \\t,' read -r -a raw_packages" in script
+    assert "system-packages must be a single comma- or space-separated line" in script
+    assert 'packages+=("$package")' in script
+    assert '[[ "$package" == -*' in script
+    assert '^[a-z0-9][a-z0-9.+-]*$' in script
+    assert 'sudo apt-get install -y --no-install-recommends -- "${packages[@]}"' in script
+    assert '$PACKAGES' not in script
+
 def test_ci_java_passes_extensions_as_system_packages():
     with open('.github/workflows/ci-java.yml', 'r') as f:
         workflow = yaml.safe_load(f)

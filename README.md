@@ -226,7 +226,7 @@ Sets up a JDK (Temurin by default) and auto-detects the build tool (Maven via `p
 - `distribution` (default: 'temurin'): JDK distribution (temurin, zulu, corretto, etc.)
 - `install-dependencies` (default: 'true'): Auto-resolve/download dependencies (non-fatal warmup; real errors surface during the build)
 - `working-directory` (default: '.'): Working directory
-- `system-packages` (default: ''): Comma- or space-separated apt packages to install before building (e.g. `protobuf-compiler` to provide `protoc`). When called via the reusable CI workflow this maps to the `extensions` input.
+- `system-packages` (default: ''): Comma- or space-separated apt package names to install before building (e.g. `protobuf-compiler` to provide `protoc`). Package names are validated and option-like or shell-like values are rejected. When called via the reusable CI workflow this maps to the `extensions` input.
 
 **Outputs:**
 - `build-tool`: Detected build tool (`maven` or `gradle`)

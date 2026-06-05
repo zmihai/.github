@@ -51,12 +51,40 @@ runs:
     - name: Install system packages
       if: ${{ inputs.system-packages != '' }}
       shell: bash
+      env:
+        SYSTEM_PACKAGES: ${{ inputs.system-packages }}
       run: |
-        # Normalize commas to spaces so callers can use either separator.
-        PACKAGES="$(echo '${{ inputs.system-packages }}' | tr ',' ' ')"
-        echo "Installing system packages: $PACKAGES"
+        # Split on commas and whitespace, then validate each token before
+        # passing it to apt-get as data.
+        if [[ "$SYSTEM_PACKAGES" == *$'\n'* || "$SYSTEM_PACKAGES" == *$'\r'* ]]; then
+          echo "::error::system-packages must be a single comma- or space-separated line."
+          exit 1
+        fi
+
+        IFS=$' \t,' read -r -a raw_packages <<< "$SYSTEM_PACKAGES"
+        packages=()
+
+        for package in "${raw_packages[@]}"; do
+          if [[ -z "$package" ]]; then
+            continue
+          fi
+          if [[ "$package" == -* || ! "$package" =~ ^[a-z0-9][a-z0-9.+-]*$ ]]; then
+            echo "::error::Invalid system package name '$package'. Use apt package names containing only lowercase letters, numbers, dots, plus signs, and hyphens."
+            exit 1
+          fi
+          packages+=("$package")
+        done
+
+        if [ "${#packages[@]}" -eq 0 ]; then
+          echo "::error::system-packages was provided but no valid package names were found."
+          exit 1
+        fi
+
+        printf 'Installing system packages:'
+        printf ' %s' "${packages[@]}"
+        printf '\n'
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends $PACKAGES
+        sudo apt-get install -y --no-install-recommends -- "${packages[@]}"
 
     - name: Setup Java
       uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # ratchet:actions/setup-java@v5
