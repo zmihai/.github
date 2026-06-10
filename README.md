@@ -93,6 +93,10 @@ The Gemini workflows select models from task-specific variables first, then fall
 - `GEMINI_SECURITY_REVIEW_MODEL`: Security-focused review model.
 - `GEMINI_MERGE_MODEL`: Merge workflow model.
 - `GEMINI_MODEL`: Shared fallback model for all Gemini tasks.
+- `GEMINI_CLI_VERSION`: Optional Gemini CLI version override. If unset, the
+  Gemini workflows pin to `0.42.0` instead of floating `latest`, because newer
+  CLI releases tightened environment/MCP permissions and require prompt/action
+  updates before they can safely replace the pinned default.
 
 ### Gemini Dispatch
 
