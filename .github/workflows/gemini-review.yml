@@ -127,7 +127,7 @@ jobs:
           # includes the MCP tool FQNs (mcp_github_*), which is required for the GitHub MCP
           # tools to be exposed to the model (verified on 0.42.0 through 0.46.0 — tools.core
           # acts as a global allowlist that also filters MCP tools, not just built-ins).
-          gemini_cli_version: "${{ vars.GEMINI_CLI_VERSION || 'latest' }}"
+          gemini_cli_version: "${{ vars.GEMINI_CLI_VERSION || '0.46.0' }}"
           gemini_debug: '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
           gemini_model: "${{ vars.GEMINI_REVIEW_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}"
           google_api_key: '${{ secrets.GOOGLE_API_KEY }}'
@@ -212,7 +212,7 @@ jobs:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
           # See the review step above: tools.core must list the mcp_github_* FQNs for the
           # MCP tools to reach the model, on all CLI versions including latest.
-          gemini_cli_version: "${{ vars.GEMINI_CLI_VERSION || 'latest' }}"
+          gemini_cli_version: "${{ vars.GEMINI_CLI_VERSION || '0.46.0' }}"
           gemini_debug: '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
           gemini_model: "${{ vars.GEMINI_SECURITY_REVIEW_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}"
           google_api_key: '${{ secrets.GOOGLE_API_KEY }}'
