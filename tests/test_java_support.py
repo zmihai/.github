@@ -1,6 +1,5 @@
 import os
 import yaml
-import pytest
 
 def test_setup_java_env_exists():
     assert os.path.exists('actions/setup-java-env/action.yml')

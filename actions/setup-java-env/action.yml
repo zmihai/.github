@@ -36,15 +36,32 @@ runs:
       id: detect
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
+        # Emit a cache-dependency-path scoped to the working directory so
+        # setup-java keys the cache on the right build files in subdirectories
+        # (it otherwise only looks at the repo root). Left empty for '.', which
+        # preserves setup-java's default root-level behavior.
         if [ -f pom.xml ]; then
           echo "tool=maven" >> "$GITHUB_OUTPUT"
           echo "Detected Maven project (pom.xml)."
+          if [ "$WORKING_DIRECTORY" != "." ]; then
+            echo "cache-path=$WORKING_DIRECTORY/**/pom.xml" >> "$GITHUB_OUTPUT"
+          fi
         elif [ -f build.gradle ] || [ -f build.gradle.kts ] || [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then
           echo "tool=gradle" >> "$GITHUB_OUTPUT"
           echo "Detected Gradle project."
+          if [ "$WORKING_DIRECTORY" != "." ]; then
+            {
+              echo "cache-path<<__CACHE_PATH_EOF__"
+              echo "$WORKING_DIRECTORY/**/*.gradle*"
+              echo "$WORKING_DIRECTORY/**/gradle-wrapper.properties"
+              echo "__CACHE_PATH_EOF__"
+            } >> "$GITHUB_OUTPUT"
+          fi
         else
-          echo "::error::No supported Java build tool found in '${{ inputs.working-directory }}'. Expected pom.xml, build.gradle(.kts), or settings.gradle(.kts)."
+          echo "::error::No supported Java build tool found in '$WORKING_DIRECTORY'. Expected pom.xml, build.gradle(.kts), or settings.gradle(.kts)."
           exit 1
         fi
 
@@ -92,6 +109,7 @@ runs:
         java-version: ${{ inputs.java-version }}
         distribution: ${{ inputs.distribution }}
         cache: ${{ steps.detect.outputs.tool }}
+        cache-dependency-path: ${{ steps.detect.outputs.cache-path }}
 
     - name: Make Gradle wrapper executable
       if: ${{ steps.detect.outputs.tool == 'gradle' }}
