@@ -1,0 +1,145 @@
+name: 'Setup Java Environment'
+description: 'Setup Java (Temurin) with Maven/Gradle auto-detection, build-tool caching and dependency resolution'
+author: 'zmihai'
+
+inputs:
+  java-version:
+    description: 'Java version to use'
+    required: false
+    default: '21'
+  distribution:
+    description: 'JDK distribution (temurin, zulu, corretto, etc.)'
+    required: false
+    default: 'temurin'
+  install-dependencies:
+    description: 'Automatically resolve/download dependencies'
+    required: false
+    default: 'true'
+  working-directory:
+    description: 'Working directory'
+    required: false
+    default: '.'
+  system-packages:
+    description: 'Comma- or space-separated apt packages to install before building (e.g. "protobuf-compiler" for protoc)'
+    required: false
+    default: ''
+
+outputs:
+  build-tool:
+    description: 'Detected build tool (maven or gradle)'
+    value: ${{ steps.detect.outputs.tool }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Detect build tool
+      id: detect
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: |
+        # Always emit a cache-dependency-path so setup-java keys the cache on
+        # the right build files. We reproduce setup-java's own default globs, so
+        # for working-directory '.' (PREFIX empty) the behavior is identical to
+        # not setting the input, while a subdirectory scopes the globs to it
+        # (setup-java otherwise only looks at the repo root).
+        if [ "$WORKING_DIRECTORY" = "." ]; then
+          PREFIX=""
+        else
+          PREFIX="$WORKING_DIRECTORY/"
+        fi
+        if [ -f pom.xml ]; then
+          echo "tool=maven" >> "$GITHUB_OUTPUT"
+          echo "Detected Maven project (pom.xml)."
+          echo "cache-path=${PREFIX}**/pom.xml" >> "$GITHUB_OUTPUT"
+        elif [ -f build.gradle ] || [ -f build.gradle.kts ] || [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then
+          echo "tool=gradle" >> "$GITHUB_OUTPUT"
+          echo "Detected Gradle project."
+          {
+            echo "cache-path<<__CACHE_PATH_EOF__"
+            echo "${PREFIX}**/*.gradle*"
+            echo "${PREFIX}**/gradle-wrapper.properties"
+            echo "${PREFIX}buildSrc/**/Versions.kt"
+            echo "${PREFIX}buildSrc/**/Dependencies.kt"
+            echo "${PREFIX}gradle/*.versions.toml"
+            echo "${PREFIX}**/versions.properties"
+            echo "__CACHE_PATH_EOF__"
+          } >> "$GITHUB_OUTPUT"
+        else
+          echo "::error::No supported Java build tool found in '$WORKING_DIRECTORY'. Expected pom.xml, build.gradle(.kts), or settings.gradle(.kts)."
+          exit 1
+        fi
+
+    - name: Install system packages
+      if: ${{ inputs.system-packages != '' }}
+      shell: bash
+      env:
+        SYSTEM_PACKAGES: ${{ inputs.system-packages }}
+      run: |
+        # Split on commas and whitespace, then validate each token before
+        # passing it to apt-get as data.
+        if [[ "$SYSTEM_PACKAGES" == *$'\n'* || "$SYSTEM_PACKAGES" == *$'\r'* ]]; then
+          echo "::error::system-packages must be a single comma- or space-separated line."
+          exit 1
+        fi
+
+        IFS=$' \t,' read -r -a raw_packages <<< "$SYSTEM_PACKAGES"
+        packages=()
+
+        for package in "${raw_packages[@]}"; do
+          if [[ -z "$package" ]]; then
+            continue
+          fi
+          if [[ "$package" == -* || ! "$package" =~ ^[a-z0-9][a-z0-9.+-]*$ ]]; then
+            echo "::error::Invalid system package name '$package'. Use apt package names containing only lowercase letters, numbers, dots, plus signs, and hyphens."
+            exit 1
+          fi
+          packages+=("$package")
+        done
+
+        if [ "${#packages[@]}" -eq 0 ]; then
+          echo "::error::system-packages was provided but no valid package names were found."
+          exit 1
+        fi
+
+        printf 'Installing system packages:'
+        printf ' %s' "${packages[@]}"
+        printf '\n'
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends -- "${packages[@]}"
+
+    - name: Setup Java
+      uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # ratchet:actions/setup-java@v5
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: ${{ inputs.distribution }}
+        cache: ${{ steps.detect.outputs.tool }}
+        cache-dependency-path: ${{ steps.detect.outputs.cache-path }}
+
+    - name: Make Gradle wrapper executable
+      if: ${{ steps.detect.outputs.tool == 'gradle' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
+
+    - name: Resolve dependencies
+      if: ${{ inputs.install-dependencies == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        # Best-effort warmup so dependencies are cached. Real resolution errors
+        # surface during the build/test step, so a hiccup here is non-fatal.
+        if [ "${{ steps.detect.outputs.tool }}" = "maven" ]; then
+          mvn -B -ntp dependency:go-offline \
+            || echo "::warning::Maven dependency:go-offline reported issues; continuing (dependencies will resolve during build)."
+        elif [ "${{ steps.detect.outputs.tool }}" = "gradle" ]; then
+          GRADLE="gradle"; [ -f ./gradlew ] && GRADLE="./gradlew"
+          $GRADLE --no-daemon dependencies \
+            || echo "::warning::Gradle dependency resolution reported issues; continuing (dependencies will resolve during build)."
+        fi
+
+branding:
+  icon: 'coffee'
+  color: 'orange'

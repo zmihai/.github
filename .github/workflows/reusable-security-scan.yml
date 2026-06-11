@@ -16,7 +16,7 @@ on:
         default: false
 
       language:
-        description: 'Language for CodeQL (javascript, python, php, etc.)'
+        description: 'Language for CodeQL (javascript, python, php, java, etc.)'
         required: false
         type: string
         default: 'javascript'
@@ -40,7 +40,7 @@ on:
     outputs:
       outcome:
         description: 'The overall security scan outcome'
-        value: ${{ (jobs.dependency-scan-unsupported.result != 'skipped') && 'failure' || ((jobs.dependency-scan-javascript.result == 'success' || jobs.dependency-scan-javascript.result == 'skipped') && (jobs.dependency-scan-python.result == 'success' || jobs.dependency-scan-python.result == 'skipped') && (jobs.dependency-scan-php.result == 'success' || jobs.dependency-scan-php.result == 'skipped') && (jobs.codeql-scan.result == 'success' || jobs.codeql-scan.result == 'skipped') && 'success' || 'failure') }}
+        value: ${{ (jobs.dependency-scan-unsupported.result != 'skipped') && 'failure' || ((jobs.dependency-scan-javascript.result == 'success' || jobs.dependency-scan-javascript.result == 'skipped') && (jobs.dependency-scan-python.result == 'success' || jobs.dependency-scan-python.result == 'skipped') && (jobs.dependency-scan-php.result == 'success' || jobs.dependency-scan-php.result == 'skipped') && (jobs.dependency-scan-java.result == 'success' || jobs.dependency-scan-java.result == 'skipped') && (jobs.codeql-scan.result == 'success' || jobs.codeql-scan.result == 'skipped') && 'success' || 'failure') }}
 
 defaults:
   run:
@@ -99,7 +99,7 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Node Environment
-        uses: zmihai/.github/actions/setup-node-env@v0.9.4
+        uses: zmihai/.github/actions/setup-node-env@v0.10.0
         with:
           node-version: ${{ inputs.language-version || 'lts/*' }}
           working-directory: ${{ inputs.working-directory }}
@@ -123,7 +123,7 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Python Environment
-        uses: zmihai/.github/actions/setup-python-env@v0.9.4
+        uses: zmihai/.github/actions/setup-python-env@v0.10.0
         with:
           python-version: ${{ inputs.language-version || '3.11' }}
           working-directory: ${{ inputs.working-directory }}
@@ -147,7 +147,7 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup PHP Environment
-        uses: zmihai/.github/actions/setup-php-env@v0.9.4
+        uses: zmihai/.github/actions/setup-php-env@v0.10.0
         with:
           php-version: ${{ inputs.language-version || '8.4' }}
           working-directory: ${{ inputs.working-directory }}
@@ -156,14 +156,34 @@ jobs:
       - name: Run composer audit
         run: composer audit
 
+  dependency-scan-java:
+    needs: resolve-ref
+    if: ${{ inputs.scan-dependencies && inputs.language == 'java' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-ref.outputs.ref }}
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # ratchet:aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: ${{ inputs.working-directory }}
+          scanners: 'vuln'
+          severity: 'MEDIUM,HIGH,CRITICAL'
+          exit-code: '1'
+
   dependency-scan-unsupported:
-    if: ${{ inputs.scan-dependencies && inputs.language != 'javascript' && inputs.language != 'python' && inputs.language != 'php' }}
+    if: ${{ inputs.scan-dependencies && inputs.language != 'javascript' && inputs.language != 'python' && inputs.language != 'php' && inputs.language != 'java' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Fail for unsupported dependency scan language
         run: |
-          echo "Dependency scanning is not supported for language '${{ inputs.language }}'. Supported languages: javascript, python, php."
+          echo "Dependency scanning is not supported for language '${{ inputs.language }}'. Supported languages: javascript, python, php, java."
           exit 1
 
   codeql-scan:
