@@ -1,7 +1,7 @@
 {
   "name": "Security Scan Workflow",
   "description": "Automated security scanning for dependencies and code",
-  "iconName": "example-icon",
+  "iconName": "octicon shield-check",
   "categories": ["Security"],
   "filePatterns": [
     "package.json$",
