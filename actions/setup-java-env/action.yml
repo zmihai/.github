@@ -39,27 +39,33 @@ runs:
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
-        # Emit a cache-dependency-path scoped to the working directory so
-        # setup-java keys the cache on the right build files in subdirectories
-        # (it otherwise only looks at the repo root). Left empty for '.', which
-        # preserves setup-java's default root-level behavior.
+        # Always emit a cache-dependency-path so setup-java keys the cache on
+        # the right build files. We reproduce setup-java's own default globs, so
+        # for working-directory '.' (PREFIX empty) the behavior is identical to
+        # not setting the input, while a subdirectory scopes the globs to it
+        # (setup-java otherwise only looks at the repo root).
+        if [ "$WORKING_DIRECTORY" = "." ]; then
+          PREFIX=""
+        else
+          PREFIX="$WORKING_DIRECTORY/"
+        fi
         if [ -f pom.xml ]; then
           echo "tool=maven" >> "$GITHUB_OUTPUT"
           echo "Detected Maven project (pom.xml)."
-          if [ "$WORKING_DIRECTORY" != "." ]; then
-            echo "cache-path=$WORKING_DIRECTORY/**/pom.xml" >> "$GITHUB_OUTPUT"
-          fi
+          echo "cache-path=${PREFIX}**/pom.xml" >> "$GITHUB_OUTPUT"
         elif [ -f build.gradle ] || [ -f build.gradle.kts ] || [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then
           echo "tool=gradle" >> "$GITHUB_OUTPUT"
           echo "Detected Gradle project."
-          if [ "$WORKING_DIRECTORY" != "." ]; then
-            {
-              echo "cache-path<<__CACHE_PATH_EOF__"
-              echo "$WORKING_DIRECTORY/**/*.gradle*"
-              echo "$WORKING_DIRECTORY/**/gradle-wrapper.properties"
-              echo "__CACHE_PATH_EOF__"
-            } >> "$GITHUB_OUTPUT"
-          fi
+          {
+            echo "cache-path<<__CACHE_PATH_EOF__"
+            echo "${PREFIX}**/*.gradle*"
+            echo "${PREFIX}**/gradle-wrapper.properties"
+            echo "${PREFIX}buildSrc/**/Versions.kt"
+            echo "${PREFIX}buildSrc/**/Dependencies.kt"
+            echo "${PREFIX}gradle/*.versions.toml"
+            echo "${PREFIX}**/versions.properties"
+            echo "__CACHE_PATH_EOF__"
+          } >> "$GITHUB_OUTPUT"
         else
           echo "::error::No supported Java build tool found in '$WORKING_DIRECTORY'. Expected pom.xml, build.gradle(.kts), or settings.gradle(.kts)."
           exit 1
