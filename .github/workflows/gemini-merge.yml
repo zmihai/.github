@@ -179,7 +179,11 @@ jobs:
           gcp_service_account: '${{ vars.SERVICE_ACCOUNT_EMAIL }}'
           gcp_workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
-          gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'
+          # Compatible with current Gemini CLI: the tools.core allowlist below explicitly
+          # includes the MCP tool FQNs (mcp_github_*), which is required for the GitHub MCP
+          # tools to be exposed to the model (verified on 0.42.0 through 0.46.0 — tools.core
+          # acts as a global allowlist that also filters MCP tools, not just built-ins).
+          gemini_cli_version: "${{ vars.GEMINI_CLI_VERSION || '0.46.0' }}"
           gemini_debug: '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
           gemini_model: "${{ vars.GEMINI_MERGE_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}"
           google_api_key: '${{ secrets.GOOGLE_API_KEY }}'
@@ -226,7 +230,11 @@ jobs:
                   "run_shell_command",
                   "grep_search",
                   "list_directory",
-                  "read_file"
+                  "read_file",
+                  "mcp_github_pull_request_review_write",
+                  "mcp_github_add_comment_to_pending_review",
+                  "mcp_github_merge_pull_request",
+                  "mcp_github_pull_request_read"
                 ]
               }
             }
