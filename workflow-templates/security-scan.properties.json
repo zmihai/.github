@@ -3,5 +3,15 @@
   "description": "Automated security scanning for dependencies and code",
   "iconName": "example-icon",
   "categories": ["Security"],
-  "filePatterns": ["package.json$"]
+  "filePatterns": [
+    "package.json$",
+    "composer.json$",
+    "requirements.txt$",
+    "pyproject.toml$",
+    "pom.xml$",
+    "build.gradle$",
+    "build.gradle.kts$",
+    "settings.gradle$",
+    "settings.gradle.kts$"
+  ]
 }
