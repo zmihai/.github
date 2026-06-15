@@ -256,6 +256,18 @@ Available templates:
 - **CI Workflow** (`workflow-templates/ci.yml`) - Complete CI pipeline
 - **Security Scan** (`workflow-templates/security-scan.yml`) - Security scanning
 
+Templates are served from the repository's **default branch** (not a version tag), so changes to the `workflow-templates/` directory take effect without a new release.
+
+### Auto-suggestion (`filePatterns`)
+
+Each template has a `*.properties.json` whose `filePatterns` decide when GitHub suggests the template for a repository. The entries are **regexes** matched against the repo's file paths, with one marker file per supported ecosystem (`package.json`, `composer.json`, `requirements.txt`/`pyproject.toml`, `pom.xml`/`build.gradle(.kts)`/`settings.gradle(.kts)`).
+
+Two intentional conventions:
+- **Dots are escaped** (`package\.json$`) so they match a literal `.` rather than any character.
+- **Patterns are not anchored to the repo root** (no leading `^`). A marker file therefore matches anywhere in the tree, so a monorepo's `frontend/package.json` still triggers the suggestion. The trade-off — a rare stray match like `my-package.json` — is harmless because the pattern only *suggests* a template.
+
+Because templates can't auto-detect language, they hardcode `language: 'javascript'`; the inline comments list the supported languages so users adjust `language`/`language-version` for their project. The `tests/test_workflow_templates.py` suite keeps these patterns in sync with the supported languages.
+
 ---
 
 ## 💡 Usage Examples
