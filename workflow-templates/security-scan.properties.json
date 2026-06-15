@@ -4,14 +4,14 @@
   "iconName": "octicon shield-check",
   "categories": ["Security"],
   "filePatterns": [
-    "package.json$",
-    "composer.json$",
-    "requirements.txt$",
-    "pyproject.toml$",
-    "pom.xml$",
-    "build.gradle$",
-    "build.gradle.kts$",
-    "settings.gradle$",
-    "settings.gradle.kts$"
+    "package\\.json$",
+    "composer\\.json$",
+    "requirements\\.txt$",
+    "pyproject\\.toml$",
+    "pom\\.xml$",
+    "build\\.gradle$",
+    "build\\.gradle\\.kts$",
+    "settings\\.gradle$",
+    "settings\\.gradle\\.kts$"
   ]
 }
