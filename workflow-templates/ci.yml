@@ -10,6 +10,9 @@ jobs:
   ci:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.10.0
     with:
+      # Supported languages: javascript, python, php, java.
+      # Adjust language and language-version to match your project,
+      # e.g. python/'3.11', php/'8.4', java/'21'.
       language: 'javascript'
       language-version: '20'
       run-lint: true

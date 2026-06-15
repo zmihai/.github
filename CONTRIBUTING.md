@@ -27,8 +27,12 @@ Thank you for contributing to our common workflows and actions repository!
 
 1. Create the template file in `workflow-templates/`
 2. Create a corresponding `.properties.json` file
+   - `filePatterns` entries are **regexes** matched against repo file paths. Escape literal dots (`package\.json$`) and keep them **unanchored** (no leading `^`) so marker files in monorepo subdirectories still match.
+   - If the template supports new languages, add the ecosystem's marker file(s) to `filePatterns` and update `tests/test_workflow_templates.py` to keep the assertions in sync.
 3. Ensure it uses reusable workflows when possible
 4. Add clear comments and documentation
+
+> Templates are served from the default branch, so they don't need a version bump/tag to take effect.
 
 ## 🧪 Testing
 

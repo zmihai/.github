@@ -15,7 +15,10 @@ jobs:
     with:
       scan-dependencies: true
       scan-code: false
-      # For Python projects, change language to 'python' and language-version to e.g. '3.11'
-      # For PHP projects, change language to 'php' and language-version to e.g. '8.4'
+      # Dependency scanning supports: javascript, python, php, java.
+      # CodeQL (scan-code) also supports additional languages:
+      # https://docs.github.com/code-security/code-scanning/managing-your-code-scanning-configuration/supported-languages-and-frameworks
+      # Adjust language and language-version to match your project,
+      # e.g. python/'3.11', php/'8.4', java/'21'.
       language: 'javascript'
       language-version: '20'

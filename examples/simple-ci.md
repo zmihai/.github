@@ -45,6 +45,47 @@ jobs:
       run-lint: true
 ```
 
+## PHP
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  ci:
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.10.0
+    with:
+      language: 'php'
+      language-version: '8.4'
+      run-lint: true
+```
+
+## Java
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  ci:
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.10.0
+    with:
+      language: 'java'
+      language-version: '21'
+      # Install apt packages the build needs (e.g. protoc). Omit if not needed.
+      extensions: 'protobuf-compiler'
+```
+
 ## Customization
 
 ### Skip specific steps (JS)

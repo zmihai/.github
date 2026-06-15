@@ -1,7 +1,17 @@
 {
   "name": "Security Scan Workflow",
   "description": "Automated security scanning for dependencies and code",
-  "iconName": "example-icon",
+  "iconName": "octicon shield-check",
   "categories": ["Security"],
-  "filePatterns": ["package.json$"]
+  "filePatterns": [
+    "package\\.json$",
+    "composer\\.json$",
+    "requirements\\.txt$",
+    "pyproject\\.toml$",
+    "pom\\.xml$",
+    "build\\.gradle$",
+    "build\\.gradle\\.kts$",
+    "settings\\.gradle$",
+    "settings\\.gradle\\.kts$"
+  ]
 }
