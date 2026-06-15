@@ -3,9 +3,11 @@ from pathlib import Path
 
 TEMPLATE_DIR = Path(__file__).parent.parent / 'workflow-templates'
 
-# One root-level marker file per supported ecosystem; the workflow templates
-# should be auto-suggested for repos of any supported language. Patterns are
-# regexes, so the dots are escaped to match a literal '.' only.
+# One marker file per supported ecosystem; the workflow templates should be
+# auto-suggested for repos of any supported language. Patterns are regexes
+# (dots escaped to match a literal '.') and are intentionally not anchored to
+# the repo root, so a marker file matches anywhere in the tree — e.g. a
+# monorepo's frontend/package.json still triggers the suggestion.
 EXPECTED_PATTERNS = {
     r'package\.json$',        # javascript
     r'composer\.json$',       # php
