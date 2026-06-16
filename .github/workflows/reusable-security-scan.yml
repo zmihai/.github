@@ -130,7 +130,17 @@ jobs:
           install-dependencies: 'false'
 
       - name: Run pip audit
-        run: pip install pip-audit && pip-audit
+        run: |
+          pip install pip-audit
+          if [ -f requirements.txt ]; then
+            pip-audit -r requirements.txt
+          elif [ -f pyproject.toml ]; then
+            pip install .
+            pip-audit
+          else
+            echo "No requirements.txt or pyproject.toml found; nothing to audit." >&2
+            exit 1
+          fi
 
   dependency-scan-php:
     needs: resolve-ref
@@ -154,7 +164,7 @@ jobs:
           install-dependencies: 'false'
 
       - name: Run composer audit
-        run: composer audit
+        run: composer audit --locked
 
   dependency-scan-java:
     needs: resolve-ref
