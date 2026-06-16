@@ -48,12 +48,12 @@ When creating a new workflow in any repository:
 ## What's Available?
 
 ### 🔄 Reusable Workflows
-- **CI** - Complete Node.js, Python, PHP & Java CI pipeline (v0.6.0+)
-- **Security Scan** - Dependency and code security scanning (JS, Python, PHP & Java) (v0.6.0+)
+- **CI** - Complete Node.js, Python, PHP & Java CI pipeline
+- **Security Scan** - Dependency and code security scanning (JS, Python, PHP & Java)
 
 ### 🤖 Gemini AI Workflows
 - **Gemini Review** - AI-powered PR review
-- **Gemini Test & Merge** - Automated merging based on CI/Security outcomes (v0.6.0+)
+- **Gemini Test & Merge** - Automated merging based on CI/Security outcomes
 
 ### 🎬 Composite Actions
 - **Setup Node Environment** - Node.js with caching
