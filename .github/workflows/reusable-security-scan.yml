@@ -132,13 +132,19 @@ jobs:
       - name: Run pip audit
         run: |
           pip install pip-audit
-          if [ -f requirements.txt ]; then
-            pip-audit -r requirements.txt
-          elif [ -f pyproject.toml ]; then
-            pip install .
-            pip-audit
+          shopt -s nullglob
+          # Audit static dependency manifests only; never build/install the
+          # project, since this workflow runs against untrusted PR refs.
+          req_args=()
+          for f in requirements*.txt requirements/*.txt; do
+            req_args+=(-r "$f")
+          done
+          if [ ${#req_args[@]} -gt 0 ]; then
+            pip-audit "${req_args[@]}"
           else
-            echo "No requirements.txt or pyproject.toml found; nothing to audit." >&2
+            echo "No requirements file found (looked for requirements.txt, requirements*.txt, requirements/*.txt)." >&2
+            echo "Export your locked dependencies so the audit can run without building the project," >&2
+            echo "e.g. 'pip freeze > requirements.txt' or your tool's lock export (poetry/pdm/uv)." >&2
             exit 1
           fi
 
