@@ -99,7 +99,7 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Node Environment
-        uses: zmihai/.github/actions/setup-node-env@v0.10.0
+        uses: zmihai/.github/actions/setup-node-env@v0.10.1
         with:
           node-version: ${{ inputs.language-version || 'lts/*' }}
           working-directory: ${{ inputs.working-directory }}
@@ -123,14 +123,30 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Python Environment
-        uses: zmihai/.github/actions/setup-python-env@v0.10.0
+        uses: zmihai/.github/actions/setup-python-env@v0.10.1
         with:
           python-version: ${{ inputs.language-version || '3.11' }}
           working-directory: ${{ inputs.working-directory }}
           install-dependencies: 'false'
 
       - name: Run pip audit
-        run: pip install pip-audit && pip-audit
+        run: |
+          pip install pip-audit
+          shopt -s nullglob
+          # Audit static dependency manifests only; never build/install the
+          # project, since this workflow runs against untrusted PR refs.
+          req_args=()
+          for f in requirements*.txt requirements/*.txt; do
+            req_args+=(-r "$f")
+          done
+          if [ ${#req_args[@]} -gt 0 ]; then
+            pip-audit "${req_args[@]}"
+          else
+            echo "No requirements file found (looked for requirements.txt, requirements*.txt, requirements/*.txt)." >&2
+            echo "Export your locked dependencies so the audit can run without building the project," >&2
+            echo "e.g. 'pip freeze > requirements.txt' or your tool's lock export (poetry/pdm/uv)." >&2
+            exit 1
+          fi
 
   dependency-scan-php:
     needs: resolve-ref
@@ -147,14 +163,14 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup PHP Environment
-        uses: zmihai/.github/actions/setup-php-env@v0.10.0
+        uses: zmihai/.github/actions/setup-php-env@v0.10.1
         with:
           php-version: ${{ inputs.language-version || '8.4' }}
           working-directory: ${{ inputs.working-directory }}
           install-dependencies: 'false'
 
       - name: Run composer audit
-        run: composer audit
+        run: composer audit --locked
 
   dependency-scan-java:
     needs: resolve-ref
