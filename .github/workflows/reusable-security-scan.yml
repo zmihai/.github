@@ -131,8 +131,18 @@ jobs:
 
       - name: Run pip audit
         run: |
-          pip install pip-audit
+          pip install pip-audit uv
           shopt -s nullglob
+
+          # uv-managed projects ship a uv.lock instead of a requirements file.
+          # Export it so the audit covers the locked deps. --frozen is
+          # read-only: it never updates the lock, re-resolves, or builds the
+          # project, so the no-build guarantee for untrusted PR refs holds.
+          if [ -f uv.lock ]; then
+            uv export --frozen --no-emit-project --no-hashes \
+              --format requirements-txt -o requirements-uv-lock.txt
+          fi
+
           # Audit static dependency manifests only; never build/install the
           # project, since this workflow runs against untrusted PR refs.
           req_args=()
@@ -142,9 +152,9 @@ jobs:
           if [ ${#req_args[@]} -gt 0 ]; then
             pip-audit "${req_args[@]}"
           else
-            echo "No requirements file found (looked for requirements.txt, requirements*.txt, requirements/*.txt)." >&2
+            echo "No requirements file found (looked for requirements.txt, requirements*.txt, requirements/*.txt, uv.lock)." >&2
             echo "Export your locked dependencies so the audit can run without building the project," >&2
-            echo "e.g. 'pip freeze > requirements.txt' or your tool's lock export (poetry/pdm/uv)." >&2
+            echo "e.g. 'pip freeze > requirements.txt' or your tool's lock export (poetry/pdm)." >&2
             exit 1
           fi
 
