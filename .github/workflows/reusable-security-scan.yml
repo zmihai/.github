@@ -131,7 +131,7 @@ jobs:
 
       - name: Run pip audit
         run: |
-          pip install pip-audit uv
+          pip install pip-audit
           shopt -s nullglob
 
           # uv-managed projects ship a uv.lock instead of a requirements file.
@@ -139,6 +139,7 @@ jobs:
           # read-only: it never updates the lock, re-resolves, or builds the
           # project, so the no-build guarantee for untrusted PR refs holds.
           if [ -f uv.lock ]; then
+            pip install uv
             uv export --frozen --no-emit-project --no-hashes \
               --format requirements-txt -o requirements-uv-lock.txt
           fi
