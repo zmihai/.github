@@ -19,3 +19,13 @@ def test_security_scan_supports_python():
     with open('.github/workflows/reusable-security-scan.yml', 'r') as f:
         workflow = yaml.safe_load(f)
     assert 'dependency-scan-python' in workflow['jobs']
+
+    steps = workflow['jobs']['dependency-scan-python']['steps']
+    audit_step = next(s for s in steps if s.get('name') == 'Run pip audit')
+    script = audit_step['run']
+
+    assert 'if [ -f uv.lock ]; then' in script
+    assert 'pip install uv' in script
+    assert 'uv export --frozen --no-emit-project --no-hashes' in script
+    assert '-o requirements-uv-lock.txt' in script
+
