@@ -76,7 +76,7 @@ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secret
 
 1. Mint token, checkout the resolved ref.
 2. **Prepare prompt context** — writes `.gemini/context.json` via `jq`. Note `projects`
-   is injected with **`--argjson`** (not `--arg`) so it stays a JSON array (see GEMINI.md).
+   is injected with **`--argjson`** (not `--arg`) so it stays a JSON array (see [AGENTS.md](../AGENTS.md)).
 3. **Run Gemini pull request review** — `run-gemini-cli` with the
    `gemini-cli-extensions/code-review` extension and the GitHub MCP server
    **`ghcr.io/github/github-mcp-server:v0.27.0`**. Runs the `/gemini-review` prompt.
