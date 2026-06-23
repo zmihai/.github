@@ -33,6 +33,7 @@ runs:
         cache-dependency-path: |
           ${{ inputs.working-directory }}/requirements.txt
           ${{ inputs.working-directory }}/pyproject.toml
+          ${{ inputs.working-directory }}/uv.lock
 
     - name: Install dependencies
       if: ${{ inputs.install-dependencies == 'true' }}
