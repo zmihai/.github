@@ -56,7 +56,13 @@ jobs:
 
 Performs security scanning including dependency audits and CodeQL analysis. Supports JavaScript, Python, PHP, and Java. Use this workflow to generate the `scan-outcome` for the Gemini Review/Merge workflows.
 
-Dependency scanning uses the native auditor per language: `npm audit` (JS), `pip-audit` (Python), `composer audit` (PHP), and a [Trivy](https://github.com/aquasecurity/trivy) filesystem scan (Java — fails on `MEDIUM`/`HIGH`/`CRITICAL` vulnerabilities). For Python, `pip-audit` runs against committed `requirements*.txt`/`requirements/*.txt` files; uv-managed projects need only a `uv.lock` — it is exported to a requirements file automatically (`uv export --frozen`, read-only, no project build) before the audit. The security scan workflow is independent from the CI workflow and does not build Java projects or generate dependency lockfiles before scanning. For Java, Trivy can scan Maven `pom.xml` files, built JAR/WAR/PAR/EAR artifacts, and committed Gradle/SBT lockfiles; a Gradle project with only `build.gradle`/`build.gradle.kts` may not have its dependencies fully assessed by this reusable workflow. CodeQL (`scan-code: true`) covers Java code analysis natively.
+Dependency scanning uses the native auditor per language:
+- **JavaScript**: Uses `npm audit`.
+- **Python**: Uses `pip-audit` against committed `requirements*.txt` or `requirements/*.txt` files. For `uv`-managed projects, if a `uv.lock` is present, it is automatically exported to a temporary requirements file (`uv export --frozen`, read-only, no project build) before running the audit.
+- **PHP**: Uses `composer audit`.
+- **Java**: Uses a [Trivy](https://github.com/aquasecurity/trivy) filesystem scan (fails on `MEDIUM`/`HIGH`/`CRITICAL` vulnerabilities). Trivy can scan Maven `pom.xml` files, built JAR/WAR/PAR/EAR artifacts, and committed Gradle/SBT lockfiles; a Gradle project with only `build.gradle`/`build.gradle.kts` may not have its dependencies fully assessed by this reusable workflow.
+
+The security scan workflow is independent from the CI workflow and does not build Java projects or generate dependency lockfiles before scanning. CodeQL (`scan-code: true`) covers Java code analysis natively.
 
 **Inputs:**
 - `scan-dependencies` (boolean, default: true): Scan dependencies for vulnerabilities
