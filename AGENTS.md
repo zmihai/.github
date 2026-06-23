@@ -41,7 +41,7 @@ actions/
 workflow-templates/                # starter workflows (ci, security-scan) + *.properties.json
 tests/                             # pytest suite validating templates + language support
 docs/ARCHITECTURE.md               # deep-dive on every workflow/action (see below)
-GEMINI.md                          # conventions for the Gemini CLI prompts
+GEMINI.md                          # links to AGENTS.md (single source of truth)
 README.md / QUICKSTART.md / CONTRIBUTING.md / examples/
 ```
 
@@ -169,14 +169,32 @@ before relying on them.
   **rolled back** because it merged an unfixed Critical — do not re-enable a posture that
   auto-merges past a Critical without a confirm-fix-on-remote guard.
 
-**Prompt-authoring conventions** (see `GEMINI.md`):
+**Gemini prompt-authoring & sandbox conventions:**
 
-- Use the **`mcp_github_*`-prefixed** tool names in prompts (the GitHub MCP server prefixes
-  its tools); the bare names are wrong.
-- Inject JSON-array vars (e.g. `PROJECTS`) into `.gemini/context.json` with `jq --argjson`,
-  not `--arg` (which stringifies and breaks array-typed fields).
-- To allow unrestricted shell in YOLO mode, specify `"run_shell_command"` with **no**
-  argument — `"run_shell_command(echo)"` would restrict the agent to just that command.
+- **GitHub MCP Tool Naming:** Use the exact **`mcp_github_*`-prefixed** tool names in prompt templates (e.g., `mcp_github_pull_request_review_write`). Bare names are wrong.
+- **Parsing JSON Arrays with `jq`:** Inject JSON-array variables (like `PROJECTS`) into `.gemini/context.json` with `jq --argjson` instead of `--arg` (which stringifies it and breaks array-typed schemas).
+- **YOLO Mode Tool Policy:** To allow unrestricted shell execution in YOLO mode, specify `"run_shell_command"` with **no** arguments (specifying an argument like `"run_shell_command(echo)"` restricts execution only to that command).
+
+**Reusable security scan & dependency auditing rules:**
+
+- **No Build on Untrusted PRs:** Workflows or steps triggered on untrusted PR refs (such as dependency scans) must **never build the project, run installer scripts, or trigger build hooks** (e.g., running `pip install .` on a custom `setup.py`/`pyproject.toml` or compiling Java projects during audit jobs). This prevents untrusted PRs from executing arbitrary code on our runners.
+- **Static Lockfile/Manifest Auditing:** Perform dependency audits on static, pre-existing lockfiles or generate them using strictly read-only, non-resolving commands (such as `uv export --frozen --no-emit-project --no-hashes`).
+- **Conditional Tool Installation:** Install auxiliary scanning tools (such as `uv`) conditionally inside workflows (e.g., only if `uv.lock` is present in the working directory). Do not install them unconditionally to avoid unnecessary package-download runtime, dependency overhead, and supply-chain security surface area to repositories that do not use them.
+
+**Inline PR review & comment management via `gh` CLI:**
+
+- When requested to check inline PR review comments or reply to them, use the GitHub REST API via the `gh` CLI for direct and accurate interaction:
+  * **Fetch all inline comments:**
+    ```bash
+    gh api repos/{owner}/{repo}/pulls/{pull_number}/comments
+    ```
+  * **Reply to an inline comment thread:**
+    ```bash
+    gh api --method POST -H "Accept: application/vnd.github+json" \
+      /repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies \
+      -f body="Your reply text"
+    ```
+    *(Note: Use single quotes for inner strings in PowerShell to avoid escaping issues).*
 
 **Reviewing PRs against this repo** (see `.github/copilot-instructions.md`):
 
@@ -199,7 +217,7 @@ before relying on them.
 - `actions/setup-{node,python,php,java}-env/action.yml` — composite setup actions.
 - `workflow-templates/` — starter workflows + `*.properties.json` auto-suggestion patterns.
 - `tests/` — pytest suite validating templates and language support.
-- `GEMINI.md` — prompt-authoring conventions.
+- `GEMINI.md` — links to `AGENTS.md` as the single source of truth.
 - `.github/copilot-instructions.md` — review guidance for AI reviewers of this repo.
 - `README.md` / `QUICKSTART.md` — downstream consumption examples and full input/secret docs.
 - `docs/ARCHITECTURE.md` — the full deep-dive catalog.
