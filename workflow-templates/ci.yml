@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.1
     with:
       # Supported languages: javascript, python, php, java.
       # Adjust language and language-version to match your project,

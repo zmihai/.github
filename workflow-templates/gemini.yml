@@ -19,11 +19,14 @@ on:
   issue_comment:
     types: [created]
 
-# One run per PR/issue at a time; a newer push or command supersedes the run
-# in flight instead of queueing behind it.
+# One run per PR at a time. Only a new push cancels the run in flight (its
+# outcomes are stale); comment/review events queue instead. Cancellation
+# happens at queue time — BEFORE the guard can rule an event irrelevant — so
+# an unconditional cancel lets any bot review or comment kill the in-flight
+# build seconds after it starts.
 concurrency:
   group: gemini-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Minimum grants for the reusable Gemini workflows — the caller's token caps
 # what called reusable workflows can do, so all of these must be granted here:
@@ -41,7 +44,7 @@ permissions:
 
 jobs:
   guard:
-    uses: zmihai/.github/.github/workflows/reusable-gemini-guard.yml@v0.11.0
+    uses: zmihai/.github/.github/workflows/reusable-gemini-guard.yml@v0.11.1
 
   ci:
     needs: guard
@@ -50,7 +53,7 @@ jobs:
       needs.guard.outputs.proceed == 'true' &&
       needs.guard.outputs.is_pr == 'true' &&
       needs.guard.outputs.is_fork == 'false'
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.1
     with:
       # Supported languages: javascript, python, php, java.
       # Adjust language and language-version to match your project,
@@ -71,7 +74,7 @@ jobs:
       needs.guard.outputs.proceed == 'true' &&
       needs.guard.outputs.is_pr == 'true' &&
       needs.guard.outputs.is_fork == 'false'
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.0
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.1
     with:
       working-directory: '.'
       language: 'javascript'
@@ -134,7 +137,7 @@ jobs:
       needs.guard.outputs.proceed == 'true' &&
       needs.guard.outputs.is_pr == 'true' &&
       needs.projects-output.result == 'success'
-    uses: zmihai/.github/.github/workflows/reusable-gemini-dispatch.yml@v0.11.0
+    uses: zmihai/.github/.github/workflows/reusable-gemini-dispatch.yml@v0.11.1
     with:
       projects: ${{ needs.projects-output.outputs.projects_json }}
       ref: ${{ needs.guard.outputs.resolved_ref }}
