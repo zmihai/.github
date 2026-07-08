@@ -136,6 +136,10 @@ jobs:
             }
 
             // 2. Resolve Command
+            // review/merge only make sense against a PR: a command on a plain
+            // issue must stay on fallthrough, or downstream review/merge jobs
+            // would run against the default branch with the issue number
+            // passed off as a PR number.
             let additionalContext = '';
             let command = 'fallthrough';
             if (eventType.startsWith("pull_request.")) {
@@ -144,7 +148,7 @@ jobs:
               } else {
                 command = 'review';
               }
-            } else if (authorizedAuthor && request.startsWith("@gemini-cli /review")) {
+            } else if (isPr && authorizedAuthor && request.startsWith("@gemini-cli /review")) {
               if (request.startsWith("@gemini-cli /review-and-merge")) {
                 command = 'review-and-merge';
                 additionalContext = request.replace(/^@gemini-cli \/review-and-merge/, '').trim();
@@ -152,7 +156,7 @@ jobs:
                 command = 'review';
                 additionalContext = request.replace(/^@gemini-cli \/review/, '').trim();
               }
-            } else if (authorizedAuthor && request.startsWith("@gemini-cli /merge")) {
+            } else if (isPr && authorizedAuthor && request.startsWith("@gemini-cli /merge")) {
               command = 'merge';
             }
             core.setOutput('additional_context', additionalContext);

@@ -99,10 +99,17 @@ jobs:
     steps:
       - name: Set projects JSON
         id: set-json
+        shell: bash
+        env:
+          CI_OUTCOME: ${{ needs.ci.outputs.outcome }}
+          SCAN_OUTCOME: ${{ needs.security.outputs.outcome }}
         run: |
+          # If you change language/language-version in the ci and security
+          # jobs above, update "language" and "language-version" here too —
+          # this metadata is sent to Gemini and must match what was built.
           PROJECTS_JSON=$(jq -nc \
-            --arg ci "${{ needs.ci.outputs.outcome }}" \
-            --arg scan "${{ needs.security.outputs.outcome }}" \
+            --arg ci "$CI_OUTCOME" \
+            --arg scan "$SCAN_OUTCOME" \
             '[
               {
                 "working-directory": ".",
