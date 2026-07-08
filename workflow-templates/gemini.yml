@@ -16,8 +16,6 @@ on:
     types: [created]
   pull_request_review:
     types: [submitted]
-  issues:
-    types: [opened, reopened]
   issue_comment:
     types: [created]
 
@@ -86,11 +84,14 @@ jobs:
     secrets: inherit
 
   # Aggregate the outcomes into the `projects` JSON the dispatch expects.
-  # `always()` keeps this job alive when ci/security were skipped (issue
-  # events); their outcomes are then empty strings.
+  # `always()` keeps this job alive when ci/security FAIL — their failure
+  # outcomes must still reach the dispatch so Gemini can classify them.
   projects-output:
     needs: [guard, ci, security]
-    if: always() && needs.guard.outputs.proceed == 'true'
+    if: >-
+      always() &&
+      needs.guard.outputs.proceed == 'true' &&
+      needs.guard.outputs.is_pr == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -113,9 +114,16 @@ jobs:
             ]')
           echo "projects_json=$PROJECTS_JSON" >> "$GITHUB_OUTPUT"
 
+  # is_pr gate as defense-in-depth: an @gemini-cli comment on a plain (non-PR)
+  # issue passes the guard, but the review/merge pipeline is PR-only — without
+  # this it would inherit secrets just to fail against a non-PR number.
   dispatch:
     needs: [guard, projects-output]
-    if: always() && needs.guard.outputs.proceed == 'true' && needs.projects-output.result == 'success'
+    if: >-
+      always() &&
+      needs.guard.outputs.proceed == 'true' &&
+      needs.guard.outputs.is_pr == 'true' &&
+      needs.projects-output.result == 'success'
     uses: zmihai/.github/.github/workflows/reusable-gemini-dispatch.yml@v0.11.0
     with:
       projects: ${{ needs.projects-output.outputs.projects_json }}

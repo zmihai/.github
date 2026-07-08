@@ -112,7 +112,7 @@ The Gemini workflows select models from task-specific variables first, then fall
 
 The single source of truth for the Gemini trigger policy. Run it as the **first job** of your caller workflow — before any job that checks out code or receives secrets — and gate everything downstream on its outputs. `reusable-gemini-dispatch` calls it internally too, so your gate and the dispatch's gate can never drift apart.
 
-It validates the trigger (non-fork `pull_request` events; `issues` opened/reopened; comments/reviews starting with `@gemini-cli` from an `OWNER`/`MEMBER`/`COLLABORATOR` human user), resolves the PR head SHA (via the API for `issue_comment` events, whose payload carries no PR head — without this a caller-side build silently builds the default branch), and computes `is_fork` **failing closed**.
+It validates the trigger (non-fork `pull_request` events; `issues` opened/reopened; comments/reviews starting with `@gemini-cli` from an `OWNER`/`MEMBER`/`COLLABORATOR` human user — and `@gemini-cli` commands in *any* event, including issue bodies, are honored only from such authors), resolves the PR head SHA (via the API for `issue_comment` events, whose payload carries no PR head — without this a caller-side build silently builds the default branch), and computes `is_fork` **failing closed**.
 
 **Inputs:**
 - `ref` (string, optional): Overrides PR-head resolution.

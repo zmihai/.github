@@ -45,7 +45,10 @@ out code and receive secrets). A single `github-script` job:
 - Resolves a **command**: `pull_request` events → `review` (or `review-and-merge` when
   the actor is `dependabot[bot]`); `@gemini-cli /review` → `review`,
   `@gemini-cli /review-and-merge` → `review-and-merge`, `@gemini-cli /merge` → `merge`;
-  otherwise `fallthrough`.
+  otherwise `fallthrough`. `@gemini-cli` commands are honored **only from authorized
+  human authors for every event type** — including issue bodies, which pass the trigger
+  policy without an association check (the old dispatch gate only checked association on
+  the comment/review branch, so a command in a new issue's body ran unauthenticated).
 - Resolves the **ref** (`resolved_ref`): the `ref` input if given, else the PR head SHA —
   looked up via the API for `issue_comment` events, whose payload carries **no** PR head
   SHA (without this a caller-side build silently builds the default branch).

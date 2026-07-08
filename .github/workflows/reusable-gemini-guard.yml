@@ -101,6 +101,14 @@ jobs:
             core.setOutput('request', request);
             core.setOutput('is_pr', isPr ? 'true' : 'false');
 
+            // @gemini-cli commands are honored only from authorized human
+            // authors — for every event type. issues events pass the trigger
+            // policy without this (they must reach the dispatch's fallthrough),
+            // but a command in an issue body must not launch a run on the
+            // author's say-so alone.
+            const authorizedAuthor = payload.sender?.type === 'User' &&
+              ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association);
+
             // 1. Trigger policy.
             //    - PRs: only if not from a fork
             //    - issues: only on open/reopen
@@ -110,9 +118,7 @@ jobs:
             const proceed =
               (context.eventName === 'pull_request' && payload.pull_request?.head?.repo?.fork === false) ||
               (context.eventName === 'issues' && ['opened', 'reopened'].includes(payload.action)) ||
-              (payload.sender?.type === 'User' &&
-                request.startsWith('@gemini-cli') &&
-                ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association));
+              (authorizedAuthor && request.startsWith('@gemini-cli'));
 
             if (!proceed) {
               // Nothing downstream may run, so don't spend an API call on the
@@ -134,7 +140,7 @@ jobs:
               } else {
                 command = 'review';
               }
-            } else if (request.startsWith("@gemini-cli /review")) {
+            } else if (authorizedAuthor && request.startsWith("@gemini-cli /review")) {
               if (request.startsWith("@gemini-cli /review-and-merge")) {
                 command = 'review-and-merge';
                 additionalContext = request.replace(/^@gemini-cli \/review-and-merge/, '').trim();
@@ -142,7 +148,7 @@ jobs:
                 command = 'review';
                 additionalContext = request.replace(/^@gemini-cli \/review/, '').trim();
               }
-            } else if (request.startsWith("@gemini-cli /merge")) {
+            } else if (authorizedAuthor && request.startsWith("@gemini-cli /merge")) {
               command = 'merge';
             }
             core.setOutput('additional_context', additionalContext);
