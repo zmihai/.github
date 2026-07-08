@@ -19,11 +19,14 @@ on:
   issue_comment:
     types: [created]
 
-# One run per PR/issue at a time; a newer push or command supersedes the run
-# in flight instead of queueing behind it.
+# One run per PR at a time. Only a new push cancels the run in flight (its
+# outcomes are stale); comment/review events queue instead. Cancellation
+# happens at queue time — BEFORE the guard can rule an event irrelevant — so
+# an unconditional cancel lets any bot review or comment kill the in-flight
+# build seconds after it starts.
 concurrency:
   group: gemini-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Minimum grants for the reusable Gemini workflows — the caller's token caps
 # what called reusable workflows can do, so all of these must be granted here:

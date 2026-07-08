@@ -298,7 +298,10 @@ tag), so `workflow-templates/` edits take effect without a release.
 - `ci.yml` / `ci.properties.json`, `security-scan.yml` / `security-scan.properties.json`,
   and `gemini.yml` / `gemini.properties.json` (the canonical Gemini caller: guard-first
   gating, `pull_request: synchronize` in the trigger set, a per-PR `concurrency` group
-  with `cancel-in-progress`, and the minimum `permissions` grant for the dispatch).
+  whose `cancel-in-progress` fires **only for `pull_request` events** — concurrency
+  cancellation happens at queue time, before the guard can rule an event irrelevant, so
+  an unconditional cancel lets any bot review/comment kill the in-flight build — and the
+  minimum `permissions` grant for the dispatch).
 - Templates can't auto-detect language, so they hardcode `language: 'javascript'` and list
   the supported languages in comments.
 - `*.properties.json` `filePatterns` are **regexes** (dots escaped, **not** anchored to
