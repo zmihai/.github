@@ -1,0 +1,141 @@
+name: Gemini Review & Merge
+
+# Gemini AI review/merge automation:
+#   - reviews every PR when opened, reopened, or pushed to (non-fork)
+#   - answers @gemini-cli /review, /review-and-merge and /merge comments
+#     from OWNER/MEMBER/COLLABORATOR users
+# The guard job is the single gate: it validates the trigger and resolves the
+# PR head SHA before any job checks out code or receives secrets.
+
+on:
+  pull_request:
+    # synchronize keeps the CI gate and review current on every push;
+    # without it the outcomes Gemini sees are stale from the open event.
+    types: [opened, reopened, synchronize]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issue_comment:
+    types: [created]
+
+# One run per PR/issue at a time; a newer push or command supersedes the run
+# in flight instead of queueing behind it.
+concurrency:
+  group: gemini-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
+  cancel-in-progress: true
+
+# Minimum grants for the reusable Gemini workflows — the caller's token caps
+# what called reusable workflows can do, so all of these must be granted here:
+#   contents: write        — gemini-merge pushes remediation commits and merges
+#   pull-requests: write   — reviews, review comments, merging
+#   issues: write          — acknowledgement / failure comments
+#   id-token: write        — GCP Workload Identity Federation (Vertex AI), if used
+# Enabling CodeQL (scan-code: true below) additionally requires:
+#   security-events: write + actions: read
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  guard:
+    uses: zmihai/.github/.github/workflows/reusable-gemini-guard.yml@v0.11.0
+
+  ci:
+    needs: guard
+    # Build only genuine PR refs: never plain issues, never fork PRs.
+    if: >-
+      needs.guard.outputs.proceed == 'true' &&
+      needs.guard.outputs.is_pr == 'true' &&
+      needs.guard.outputs.is_fork == 'false'
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
+    with:
+      # Supported languages: javascript, python, php, java.
+      # Adjust language and language-version to match your project,
+      # e.g. python/'3.11', php/'8.4', java/'21'.
+      language: 'javascript'
+      language-version: '20'
+      run-lint: true
+      run-test: true
+      run-build: true
+      # Guard-resolved PR head SHA: on comment events the payload has no PR
+      # head, and building without this silently builds the default branch.
+      ref: ${{ needs.guard.outputs.resolved_ref }}
+    secrets: inherit
+
+  security:
+    needs: guard
+    if: >-
+      needs.guard.outputs.proceed == 'true' &&
+      needs.guard.outputs.is_pr == 'true' &&
+      needs.guard.outputs.is_fork == 'false'
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.0
+    with:
+      working-directory: '.'
+      language: 'javascript'
+      language-version: '20'
+      scan-dependencies: true
+      # Flipping scan-code to true requires adding security-events: write and
+      # actions: read to the workflow permissions block above.
+      scan-code: false
+      ref: ${{ needs.guard.outputs.resolved_ref }}
+    secrets: inherit
+
+  # Aggregate the outcomes into the `projects` JSON the dispatch expects.
+  # `always()` keeps this job alive when ci/security FAIL — their failure
+  # outcomes must still reach the dispatch so Gemini can classify them.
+  projects-output:
+    needs: [guard, ci, security]
+    if: >-
+      always() &&
+      needs.guard.outputs.proceed == 'true' &&
+      needs.guard.outputs.is_pr == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      projects_json: ${{ steps.set-json.outputs.projects_json }}
+    steps:
+      - name: Set projects JSON
+        id: set-json
+        shell: bash
+        env:
+          CI_OUTCOME: ${{ needs.ci.outputs.outcome }}
+          SCAN_OUTCOME: ${{ needs.security.outputs.outcome }}
+        run: |
+          # If you change language/language-version in the ci and security
+          # jobs above, update "language" and "language-version" here too —
+          # this metadata is sent to Gemini and must match what was built.
+          PROJECTS_JSON=$(jq -nc \
+            --arg ci "$CI_OUTCOME" \
+            --arg scan "$SCAN_OUTCOME" \
+            '[
+              {
+                "working-directory": ".",
+                "language": "javascript",
+                "language-version": "20",
+                "ci-outcome": $ci,
+                "scan-outcome": $scan
+              }
+            ]')
+          echo "projects_json=$PROJECTS_JSON" >> "$GITHUB_OUTPUT"
+
+  # is_pr gate as defense-in-depth: an @gemini-cli comment on a plain (non-PR)
+  # issue passes the guard, but the review/merge pipeline is PR-only — without
+  # this it would inherit secrets just to fail against a non-PR number.
+  # Deliberately NO is_fork gate here: on fork PRs the dispatch never checks
+  # out code (review/merge skip on command == 'unsupported-fork') and must run
+  # to post the "forks not supported" acknowledgement comment.
+  dispatch:
+    needs: [guard, projects-output]
+    if: >-
+      always() &&
+      needs.guard.outputs.proceed == 'true' &&
+      needs.guard.outputs.is_pr == 'true' &&
+      needs.projects-output.result == 'success'
+    uses: zmihai/.github/.github/workflows/reusable-gemini-dispatch.yml@v0.11.0
+    with:
+      projects: ${{ needs.projects-output.outputs.projects_json }}
+      ref: ${{ needs.guard.outputs.resolved_ref }}
+    secrets: inherit

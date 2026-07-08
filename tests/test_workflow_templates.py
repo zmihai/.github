@@ -29,3 +29,8 @@ def test_security_scan_template_suggested_for_all_supported_languages():
     with open(TEMPLATE_DIR / 'security-scan.properties.json', 'r') as f:
         properties = json.load(f)
     assert set(properties['filePatterns']) == EXPECTED_PATTERNS
+
+def test_gemini_template_suggested_for_all_supported_languages():
+    with open(TEMPLATE_DIR / 'gemini.properties.json', 'r') as f:
+        properties = json.load(f)
+    assert set(properties['filePatterns']) == EXPECTED_PATTERNS

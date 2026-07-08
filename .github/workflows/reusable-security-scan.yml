@@ -99,7 +99,7 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Node Environment
-        uses: zmihai/.github/actions/setup-node-env@v0.10.2
+        uses: zmihai/.github/actions/setup-node-env@v0.11.0
         with:
           node-version: ${{ inputs.language-version || 'lts/*' }}
           working-directory: ${{ inputs.working-directory }}
@@ -123,7 +123,7 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup Python Environment
-        uses: zmihai/.github/actions/setup-python-env@v0.10.2
+        uses: zmihai/.github/actions/setup-python-env@v0.11.0
         with:
           python-version: ${{ inputs.language-version || '3.11' }}
           working-directory: ${{ inputs.working-directory }}
@@ -174,7 +174,7 @@ jobs:
           ref: ${{ needs.resolve-ref.outputs.ref }}
 
       - name: Setup PHP Environment
-        uses: zmihai/.github/actions/setup-php-env@v0.10.2
+        uses: zmihai/.github/actions/setup-php-env@v0.11.0
         with:
           php-version: ${{ inputs.language-version || '8.4' }}
           working-directory: ${{ inputs.working-directory }}
@@ -221,10 +221,12 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
-    permissions:
-      security-events: write
-      contents: read
-      actions: read
+    # Deliberately NO permissions block: GitHub validates a nested job's
+    # permissions request against the caller's grant at STARTUP, regardless of
+    # the if: condition above — a static request here startup-fails every
+    # caller that keeps a least-privilege grant while leaving scan-code off.
+    # At runtime CodeQL needs security-events: write (SARIF upload) and
+    # actions: read; callers enabling scan-code must grant both.
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6

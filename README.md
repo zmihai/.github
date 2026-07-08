@@ -41,9 +41,16 @@ A comprehensive CI workflow that handles linting, testing, and building for mult
 
 **Example Usage:**
 ```yaml
+# The ref-resolution job inside the called workflow requests these reads;
+# GitHub validates nested permission requests against this grant at startup.
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
     with:
       language: 'php'
       language-version: '8.4'
@@ -77,9 +84,17 @@ The security scan workflow is independent from the CI workflow and does not buil
 
 **Example Usage:**
 ```yaml
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  # Needed only because scan-code is true below (CodeQL):
+  security-events: write
+  actions: read
+
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.0
     with:
       scan-dependencies: true
       scan-code: true
@@ -106,15 +121,67 @@ The Gemini workflows select models from task-specific variables first, then fall
   CLI releases tightened environment/MCP permissions and require prompt/action
   updates before they can safely replace the pinned default.
 
+### Gemini Guard
+
+**Path:** `.github/workflows/reusable-gemini-guard.yml`
+
+The single source of truth for the Gemini trigger policy. Run it as the **first job** of your caller workflow — before any job that checks out code or receives secrets — and gate everything downstream on its outputs. `reusable-gemini-dispatch` calls it internally too, so your gate and the dispatch's gate can never drift apart.
+
+It validates the trigger (non-fork `pull_request` events; `issues` opened/reopened; comments/reviews starting with `@gemini-cli` from an `OWNER`/`MEMBER`/`COLLABORATOR` human user — and `@gemini-cli` commands in *any* event, including issue bodies, are honored only from such authors), resolves the PR head SHA (via the API for `issue_comment` events, whose payload carries no PR head — without this a caller-side build silently builds the default branch), and computes `is_fork` **failing closed**.
+
+**Inputs:**
+- `ref` (string, optional): Overrides PR-head resolution.
+
+**Outputs:**
+- `proceed` (`'true'`/`'false'`): Whether the event passes the trigger policy. Gate every downstream job on this.
+- `resolved_ref`: The PR head SHA (or the `ref` input, or the event SHA). Pass it as the `ref` input of `reusable-ci`, `reusable-security-scan`, and `reusable-gemini-dispatch` so every job builds and reviews the same commit.
+- `is_fork` (`'true'`/`'false'`): Fails closed — never build or expose secrets to the ref when `'true'`.
+- `is_pr` (`'true'`/`'false'`): Whether the event relates to a PR. Use it to skip build jobs on plain issues.
+- `command`, `request`, `additional_context`, `issue_number`: The parsed `@gemini-cli` command and its context.
+
+**Recommended caller-side gates:**
+
+```yaml
+jobs:
+  guard:
+    uses: zmihai/.github/.github/workflows/reusable-gemini-guard.yml@v0.11.0
+
+  ci:
+    needs: guard
+    if: >-
+      needs.guard.outputs.proceed == 'true' &&
+      needs.guard.outputs.is_pr == 'true' &&
+      needs.guard.outputs.is_fork == 'false'
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
+    with:
+      language: 'javascript'
+      language-version: '20'
+      ref: ${{ needs.guard.outputs.resolved_ref }}
+```
+
+See `workflow-templates/gemini.yml` for the full caller pattern.
+
 ### Gemini Dispatch
 
 **Path:** `.github/workflows/reusable-gemini-dispatch.yml`
 
-The entry point for Gemini commands. It parses comments like `@gemini-cli /review` and dispatches to the appropriate workflow.
+The entry point for Gemini commands. It parses comments like `@gemini-cli /review` (via the Gemini Guard workflow above) and dispatches to the appropriate workflow.
 
 **Inputs:**
 - `projects` (string, required): JSON list of projects.
 - `ref` (string, optional): The branch, tag or SHA to checkout. Automatically resolves the PR head SHA if available. Defaults to `github.sha` otherwise.
+
+**Caller permissions:** the caller's `GITHUB_TOKEN` caps what called reusable workflows can do, so the calling workflow must grant at least:
+
+```yaml
+permissions:
+  contents: write        # gemini-merge pushes remediation commits and merges
+  pull-requests: write   # reviews, review comments, merging
+  issues: write          # acknowledgement / failure comments
+  id-token: write        # GCP Workload Identity Federation (Vertex AI), if used
+```
+
+Callers that also run `reusable-security-scan` with `scan-code: true` (CodeQL) additionally need `security-events: write` and `actions: read` — CodeQL uploads SARIF and reads workflow metadata at runtime. (The `codeql-scan` job deliberately carries no `permissions:` block: GitHub validates nested permission requests against the caller's grant at startup regardless of `if:` conditions, so a static request would startup-fail every least-privilege caller that leaves `scan-code` off.)
 
 ### Gemini Review
 
@@ -176,7 +243,7 @@ Sets up Node.js environment with caching and automatic dependency installation.
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-node-env@v0.10.2
+  - uses: zmihai/.github/actions/setup-node-env@v0.11.0
     with:
       node-version: '20'
       cache: 'npm'
@@ -198,7 +265,7 @@ Sets up PHP environment with composer caching and automatic dependency installat
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-php-env@v0.10.2
+  - uses: zmihai/.github/actions/setup-php-env@v0.11.0
     with:
       php-version: '8.2'
       extensions: 'gd, intl, zip'
@@ -220,7 +287,7 @@ Sets up Python environment with pip caching and automatic dependency installatio
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-python-env@v0.10.2
+  - uses: zmihai/.github/actions/setup-python-env@v0.11.0
     with:
       python-version: '3.11'
 ```
@@ -245,7 +312,7 @@ Sets up a JDK (Temurin by default) and auto-detects the build tool (Maven via `p
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-java-env@v0.10.2
+  - uses: zmihai/.github/actions/setup-java-env@v0.11.0
     with:
       java-version: '21'
       distribution: 'temurin'
@@ -261,6 +328,7 @@ Workflow templates are starter workflows that appear in the "Actions" tab of you
 Available templates:
 - **CI Workflow** (`workflow-templates/ci.yml`) - Complete CI pipeline
 - **Security Scan** (`workflow-templates/security-scan.yml`) - Security scanning
+- **Gemini Review & Merge** (`workflow-templates/gemini.yml`) - AI review/merge automation with the guard → CI/scan → dispatch wiring, least-privilege `permissions`, and a per-PR `concurrency` group
 
 Templates are served from the repository's **default branch** (not a version tag), so changes to the `workflow-templates/` directory take effect without a new release.
 
@@ -289,10 +357,18 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+# Union of what the called workflows' jobs request (validated at startup):
+# the reads for ref resolution, plus gemini-merge's write set.
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
 jobs:
   ci_project_a:
     name: CI - Project A
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
     with:
       language: 'python'
       language-version: '3.11'
@@ -300,7 +376,7 @@ jobs:
 
   security_project_a:
     name: Security - Project A
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.0
     with:
       language: 'python'
       language-version: '3.11'
@@ -308,7 +384,7 @@ jobs:
 
   ci_project_b:
     name: CI - Project B
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
     with:
       language: 'javascript'
       language-version: '20'
@@ -316,7 +392,7 @@ jobs:
 
   security_project_b:
     name: Security - Project B
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.0
     with:
       language: 'javascript'
       language-version: '20'
@@ -359,7 +435,7 @@ jobs:
   gemini_merge:
     name: Gemini Merge
     needs: aggregate
-    uses: zmihai/.github/.github/workflows/gemini-merge.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/gemini-merge.yml@v0.11.0
     with:
       pull_request_number: ${{ github.event.pull_request.number }}
       projects: ${{ needs.aggregate.outputs.projects_json }}
@@ -377,15 +453,23 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  # Needed only because scan-code is true below (CodeQL):
+  security-events: write
+  actions: read
+
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
     with:
       language: 'php'
       language-version: '8.5'
 
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.0
     with:
       language: 'php'
       language-version: '8.5'
@@ -404,15 +488,23 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  # Needed only because scan-code is true below (CodeQL):
+  security-events: write
+  actions: read
+
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
     with:
       language: 'python'
       language-version: '3.13'
 
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.0
     with:
       language: 'python'
       language-version: '3.13'
@@ -431,9 +523,17 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  # Needed only because scan-code is true below (CodeQL):
+  security-events: write
+  actions: read
+
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
     with:
       language: 'java'
       language-version: '21'
@@ -441,7 +541,7 @@ jobs:
       extensions: 'protobuf-compiler'
 
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.0
     with:
       language: 'java'
       language-version: '21'
@@ -460,15 +560,15 @@ jobs:
 ### Using Reusable Workflows
 
 1. In your repository, create a workflow file (e.g., `.github/workflows/ci.yml`)
-2. Reference reusable workflows using `uses: zmihai/.github/.github/workflows/<name>.yml@v0.10.2`
-3. Reference composite actions using `uses: zmihai/.github/actions/<name>@v0.10.2`
+2. Reference reusable workflows using `uses: zmihai/.github/.github/workflows/<name>.yml@v0.11.0`
+3. Reference composite actions using `uses: zmihai/.github/actions/<name>@v0.11.0`
 4. Pass required inputs and secrets
 
 ---
 
 ## 📚 Best Practices
 
-1. **Pin versions**: Use specific tags (like `@v0.10.2`) or commit SHAs in production.
+1. **Pin versions**: Use specific tags (like `@v0.11.0`) or commit SHAs in production.
 2. **Security**: Use GitHub Secrets for all sensitive information.
 3. **Testing**: Test workflow changes in a separate branch before merging to master
 4. **Documentation**: Keep this README updated when adding new workflows or actions

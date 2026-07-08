@@ -47,35 +47,31 @@ jobs:
           env | grep '^DEBUG_'
 
 
+  # The trigger policy (which events proceed, command extraction, ref/fork
+  # resolution) lives in reusable-gemini-guard.yml so callers can run the
+  # exact same gate before their own CI jobs.
+  guard:
+    uses: './.github/workflows/reusable-gemini-guard.yml'
+    with:
+      ref: '${{ inputs.ref }}'
+
   dispatch:
-    # For PRs: only if not from a fork
-    # For issues: only on open/reopen
-    # For comments: only if user types @gemini-cli and is OWNER/MEMBER/COLLABORATOR
+    needs: 'guard'
     if: |-
-      (
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.fork == false
-      ) || (
-        github.event_name == 'issues' &&
-        contains(fromJSON('["opened", "reopened"]'), github.event.action)
-      ) || (
-        github.event.sender.type == 'User' &&
-        startsWith(github.event.comment.body || github.event.review.body || github.event.issue.body, '@gemini-cli') &&
-        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association || github.event.review.author_association || github.event.issue.author_association)
-      )
+      ${{ needs.guard.outputs.proceed == 'true' }}
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
       issues: 'write'
       pull-requests: 'write'
     outputs:
-      command: '${{ steps.extract_command.outputs.command }}'
-      request: '${{ steps.extract_command.outputs.request }}'
-      additional_context: '${{ steps.extract_command.outputs.additional_context }}'
+      command: '${{ needs.guard.outputs.command }}'
+      request: '${{ needs.guard.outputs.request }}'
+      additional_context: '${{ needs.guard.outputs.additional_context }}'
       issue_number: '${{ github.event.pull_request.number || github.event.issue.number }}'
       projects: '${{ inputs.projects }}'
-      resolved_ref: '${{ steps.extract_command.outputs.resolved_ref }}'
-      is_fork: '${{ steps.extract_command.outputs.is_fork }}'
+      resolved_ref: '${{ needs.guard.outputs.resolved_ref }}'
+      is_fork: '${{ needs.guard.outputs.is_fork }}'
     steps:
       - name: 'Mint identity token'
         id: 'mint_identity_token'
@@ -89,80 +85,8 @@ jobs:
           permission-issues: 'write'
           permission-pull-requests: 'write'
 
-      - name: 'Extract command and resolve ref'
-        id: 'extract_command'
-        uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
-        env:
-          EVENT_TYPE: '${{ github.event_name }}.${{ github.event.action }}'
-          REQUEST: '${{ github.event.comment.body || github.event.review.body || github.event.issue.body }}'
-          ACTOR: '${{ github.actor }}'
-          INPUT_REF: '${{ inputs.ref }}'
-        with:
-          github-token: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
-          script: |
-            const eventType = process.env.EVENT_TYPE;
-            const request = process.env.REQUEST;
-            const actor = process.env.ACTOR;
-            const inputRef = process.env.INPUT_REF;
-            let additionalContext = '';
-            core.setOutput('request', request);
-
-            // 1. Resolve Command
-            let command = 'fallthrough';
-            if (eventType.startsWith("pull_request.")) {
-              if (actor === 'dependabot[bot]') {
-                command = 'review-and-merge';
-              } else {
-                command = 'review';
-              }
-            } else if (request.startsWith("@gemini-cli /review")) {
-              if (request.startsWith("@gemini-cli /review-and-merge")) {
-                command = 'review-and-merge';
-                additionalContext = request.replace(/^@gemini-cli \/review-and-merge/, '').trim();
-              } else {
-                command = 'review';
-                additionalContext = request.replace(/^@gemini-cli \/review/, '').trim();
-              }
-              core.setOutput('additional_context', additionalContext);
-            } else if (request.startsWith("@gemini-cli /merge")) {
-              command = 'merge';
-            }
-
-            // 2. Resolve Ref and Fork Status
-            let resolvedRef = inputRef || context.payload.pull_request?.head?.sha || context.sha;
-            let isFork = 'false'; // Default false unless proven it's a fork
-
-            if (context.payload.pull_request) {
-               isFork = context.payload.pull_request.head.repo.fork ? 'true' : 'false';
-            } else if (context.payload.issue?.pull_request) {
-               const issueNumber = context.payload.issue.number;
-               try {
-                 const { data: pr } = await github.rest.pulls.get({
-                   owner: context.repo.owner,
-                   repo: context.repo.repo,
-                   pull_number: issueNumber,
-                 });
-                 if (!inputRef) {
-                   resolvedRef = pr.head.sha;
-                   console.log(`Resolved PR head SHA: ${resolvedRef}`);
-                 }
-                 isFork = pr.head.repo.fork ? 'true' : 'false';
-               } catch (e) {
-                 console.log(`Could not fetch PR data for issue ${issueNumber}. Failing closed by assuming it is a fork.`);
-                 isFork = 'true'; // Fail closed: set to true if fetch fails to prevent secret exposure
-               }
-            }
-
-            if (isFork === 'true' && command !== 'fallthrough') {
-               command = 'unsupported-fork';
-            }
-
-            core.setOutput('command', command);
-            core.setOutput('is_fork', isFork);
-            core.setOutput('resolved_ref', resolvedRef);
-
       - name: 'Acknowledge request'
-        if: ${{ steps.extract_command.outputs.command != 'fallthrough' && steps.extract_command.outputs.command != 'unsupported-fork' }}
+        if: ${{ needs.guard.outputs.command != 'fallthrough' && needs.guard.outputs.command != 'unsupported-fork' }}
         env:
           GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
           ISSUE_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
@@ -175,7 +99,7 @@ jobs:
             --repo "${REPOSITORY}"
 
       - name: 'Acknowledge unsupported fork'
-        if: ${{ steps.extract_command.outputs.command == 'unsupported-fork' }}
+        if: ${{ needs.guard.outputs.command == 'unsupported-fork' }}
         env:
           GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
           ISSUE_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
@@ -214,10 +138,11 @@ jobs:
     if: |-
       ${{ needs.dispatch.outputs.command == 'merge' || needs.review.outputs.command == 'review-and-merge' }}
     uses: './.github/workflows/gemini-merge.yml'
+    # Mirrors the permissions gemini-merge.yml's job actually requests —
+    # anything listed here becomes part of the mandatory caller grant
+    # (GitHub validates nested requests against the caller's token).
     permissions:
-      security-events: 'write'
       contents: 'write'
-      actions: 'read'
       id-token: 'write'
       issues: 'write'
       pull-requests: 'write'

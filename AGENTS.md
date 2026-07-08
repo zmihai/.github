@@ -26,7 +26,8 @@ builds — there is no app build.
 ```
 .github/
   workflows/
-    reusable-gemini-dispatch.yml   # entry point: parse @gemini-cli command, fan out
+    reusable-gemini-guard.yml      # trigger policy + PR-head ref resolution (shared gate)
+    reusable-gemini-dispatch.yml   # entry point: guard, then fan out on the command
     gemini-review.yml              # code-review pass + security pass (2 Gemini calls)
     gemini-merge.yml               # classify failures, optionally remediate, squash-merge
     reusable-ci.yml                # language dispatcher → ci-{npm,python,php,java}.yml
@@ -56,14 +57,28 @@ prompt, composite action, or template. The summary below is enough for orientati
 **Gemini automation** (`reusable-gemini-dispatch.yml` → `gemini-review.yml` /
 `gemini-merge.yml`, driven by `.github/commands/*.toml`):
 
-- **Dispatch** is the gatekeeper. It runs only for non-fork `pull_request` events, opened/
-  reopened issues, and `@gemini-cli`-prefixed comments from an `OWNER`/`MEMBER`/
-  `COLLABORATOR`. It derives a command (`review`, `review-and-merge`, `merge`,
-  `fallthrough`, `unsupported-fork`), resolves the PR head ref, and computes `is_fork`
-  **failing closed** (fork PRs are unsupported and never receive secrets). Dependabot PRs
-  map to `review-and-merge`.
+- **Guard** (`reusable-gemini-guard.yml`) is the single source of truth for the trigger
+  policy. It allows only non-fork `pull_request` events, opened/reopened issues, and
+  `@gemini-cli`-prefixed comments from an `OWNER`/`MEMBER`/`COLLABORATOR` human user; it
+  derives the command (`review`, `review-and-merge`, `merge`, `fallthrough`,
+  `unsupported-fork`), resolves the PR head ref (via the API for `issue_comment` events,
+  whose payload has no PR head SHA), and computes `is_fork` **failing closed** (fork PRs
+  are unsupported and never receive secrets). Dependabot PRs map to `review-and-merge`.
+  Downstream callers run it as their **first job** — before any job that checks out code
+  or receives secrets — gate CI on `proceed`/`is_pr`/`is_fork`, and feed `resolved_ref`
+  to their CI/scan/dispatch calls. Dispatch calls it internally too, so caller-side and
+  dispatch-side gates cannot drift.
+  - Inputs: `ref` (optional override). Outputs: `proceed`, `command`, `request`,
+    `additional_context`, `resolved_ref`, `is_fork`, `is_pr`, `issue_number`.
+- **Dispatch** runs the guard, then (for allowed events) posts the acknowledgement
+  comment and fans out to review/merge.
   - Inputs: `projects` (required JSON string), `ref` (optional).
   - Secrets: `GEMINI_API_KEY` (required), `CALLER_GITHUB_TOKEN` (required).
+  - Callers must grant at least `contents: write`, `pull-requests: write`,
+    `issues: write`, `id-token: write` — the caller's token caps what called reusable
+    workflows can do, and GitHub validates nested `permissions:` requests against it.
+    `security-events: write` + `actions: read` are needed only when CodeQL is enabled
+    (`reusable-security-scan` with `scan-code: true`).
 - **Review** runs two *separate* Gemini invocations in one job: a code-review pass
   (code-review extension, GitHub MCP `v0.27.0`) and a security pass (security extension,
   GitHub MCP `v0.18.0`, `/security:analyze-github-pr`). They must stay separate —
@@ -104,11 +119,14 @@ uses: zmihai/.github/.github/workflows/reusable-ci.yml@vX.Y.Z
 uses: zmihai/.github/actions/setup-node-env@vX.Y.Z
 ```
 
-To wire up the Gemini automation, a downstream repo runs `reusable-ci.yml` and
-`reusable-security-scan.yml` per project, aggregates their `outcome`s into a `projects`
-JSON array (`working-directory`, `language`, `language-version`, `ci-outcome`,
-`scan-outcome` per project), and passes it to the Gemini workflows with `secrets: inherit`.
-See `README.md` / `QUICKSTART.md` / `examples/` for full caller examples.
+To wire up the Gemini automation, a downstream repo runs `reusable-gemini-guard.yml` as
+its first job, then `reusable-ci.yml` and `reusable-security-scan.yml` per project (gated
+on the guard's `proceed`/`is_pr`/`is_fork` and checking out the guard's `resolved_ref`),
+aggregates their `outcome`s into a `projects` JSON array (`working-directory`, `language`,
+`language-version`, `ci-outcome`, `scan-outcome` per project), and passes it to the Gemini
+workflows with `secrets: inherit`. `workflow-templates/gemini.yml` is the canonical caller
+(trigger set including `pull_request: synchronize`, per-PR `concurrency` group, and the
+minimum `permissions` grant); see also `README.md` / `QUICKSTART.md` / `examples/`.
 
 **Operational practice:** run the review/merge workflows **one PR at a time** to avoid
 merge conflicts. The merge workflow has a `concurrency` group enforcing a single merge in
@@ -161,7 +179,7 @@ before relying on them.
   `gh pr merge <n> --squash` (token from env). **Never** `curl` with a token in argv (it
   leaks into telemetry), and **never** push/merge to the default branch — remediation fixes
   go to the **PR's source branch** (`head_ref`).
-- **Merge safety policy (the current "v0.9.0" posture):** classify each failure
+- **Merge safety policy:** classify each failure
   **related** vs **unrelated/pre-existing** (when in doubt → related); related failures
   must pass or be remediated, unrelated pre-existing failures (including security) do not
   block; any **🔴 Critical / 🟠 High** review or security finding → **REQUEST_CHANGES**
@@ -174,6 +192,16 @@ before relying on them.
 - **GitHub MCP Tool Naming:** Use the exact **`mcp_github_*`-prefixed** tool names in prompt templates (e.g., `mcp_github_pull_request_review_write`). Bare names are wrong.
 - **Parsing JSON Arrays with `jq`:** Inject JSON-array variables (like `PROJECTS`) into `.gemini/context.json` with `jq --argjson` instead of `--arg` (which stringifies it and breaks array-typed schemas).
 - **YOLO Mode Tool Policy:** To allow unrestricted shell execution in YOLO mode, specify `"run_shell_command"` with **no** arguments (specifying an argument like `"run_shell_command(echo)"` restricts execution only to that command).
+
+**Permissions in reusable workflows:**
+
+- **GitHub validates every nested job's `permissions:` request against the caller's grant
+  at startup, regardless of `if:` conditions.** A conditionally-skipped job with a
+  `permissions:` block exceeding the documented caller baseline startup-fails every
+  least-privilege caller — even though the job would never run. Jobs whose permissions
+  exceed the baseline for an opt-in feature (e.g. CodeQL) must carry **no** job-level
+  `permissions:` block; document the runtime needs instead and have opt-in callers grant
+  them.
 
 **Reusable security scan & dependency auditing rules:**
 
@@ -207,6 +235,7 @@ before relying on them.
 
 ## Key Files Reference
 
+- `.github/workflows/reusable-gemini-guard.yml` — shared trigger policy + ref/fork resolution.
 - `.github/workflows/reusable-gemini-dispatch.yml` — entry point / command router.
 - `.github/workflows/gemini-review.yml` — code-review + security passes; builds `review_summary`.
 - `.github/workflows/gemini-merge.yml` — merge policy execution + durable-outcome gate.

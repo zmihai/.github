@@ -9,9 +9,19 @@ on:
     # Run every day at 2 AM UTC
     - cron: '0 2 * * *'
 
+# The called workflow's ref-resolution job requests these reads, and GitHub
+# validates nested permissions requests against this grant at startup — repos
+# whose default token is contents-read-only startup-fail without the block.
+# Enabling CodeQL (scan-code: true below) additionally requires:
+#   security-events: write + actions: read
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.0
     with:
       scan-dependencies: true
       scan-code: false
