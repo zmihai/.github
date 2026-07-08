@@ -18,10 +18,12 @@ references; nothing here builds an app of its own.
 
 The Gemini automation reviews PRs, runs a security pass, and conditionally squash-merges,
 all driven by the Gemini CLI (`google-github-actions/run-gemini-cli`) running the GitHub
-MCP server. There are three workflows plus two prompt files:
+MCP server. There are four workflows plus two prompt files:
 
 ```
-reusable-gemini-dispatch.yml   ── entry point; parses the command, fans out
+reusable-gemini-guard.yml      ── trigger policy + command/ref/fork resolution (shared gate)
+reusable-gemini-dispatch.yml   ── entry point; runs the guard, fans out
+   ├─> reusable-gemini-guard.yml (internal)
    ├─> gemini-review.yml        ── code-review pass + security pass (2 Gemini invocations)
    └─> gemini-merge.yml         ── classify failures, optionally remediate, squash-merge
 
@@ -29,25 +31,47 @@ reusable-gemini-dispatch.yml   ── entry point; parses the command, fans out
 .github/commands/gemini-merge.toml    ── the review-and-merge prompt (loaded via /gemini-merge)
 ```
 
+### 1.0 `reusable-gemini-guard.yml` — the shared gate
+
+The single source of truth for the trigger policy, extracted from the dispatch so
+downstream callers can run the **exact same gate before their own CI jobs** (which check
+out code and receive secrets). A single `github-script` job:
+
+- **Trigger policy** (`proceed` output): allows non-fork `pull_request` events; `issues`
+  opened/reopened; and comments/reviews/issue-bodies that **start with `@gemini-cli`**
+  *and* come from an `OWNER`/`MEMBER`/`COLLABORATOR` human user (`sender.type == 'User'`).
+  When the policy rejects the event, the job short-circuits: no ref lookup, `is_fork`
+  reported `'true'` (fail closed).
+- Resolves a **command**: `pull_request` events → `review` (or `review-and-merge` when
+  the actor is `dependabot[bot]`); `@gemini-cli /review` → `review`,
+  `@gemini-cli /review-and-merge` → `review-and-merge`, `@gemini-cli /merge` → `merge`;
+  otherwise `fallthrough`.
+- Resolves the **ref** (`resolved_ref`): the `ref` input if given, else the PR head SHA —
+  looked up via the API for `issue_comment` events, whose payload carries **no** PR head
+  SHA (without this a caller-side build silently builds the default branch).
+- Computes **`is_fork`**, **failing closed** (`is_fork='true'`) if the PR lookup throws,
+  to avoid leaking secrets to forks. A fork + real command becomes `unsupported-fork`.
+- Reports **`is_pr`** so callers can skip build jobs on plain issues.
+
+**Inputs:** `ref` (optional override).
+**Outputs:** `proceed`, `command`, `request`, `additional_context`, `resolved_ref`,
+`is_fork`, `is_pr`, `issue_number`.
+
+Recommended caller gates: CI/build jobs require `proceed == 'true' && is_pr == 'true' &&
+is_fork == 'false'` and check out `resolved_ref`; the dispatch call requires
+`proceed == 'true'`. See `workflow-templates/gemini.yml` for the canonical wiring.
+
 ### 1.1 `reusable-gemini-dispatch.yml` — entry point
 
 The downstream caller wires this to `pull_request`, `issue_comment`, `issues`, and
 `pull_request_review` events. Jobs:
 
 - **`debugger`** — gated on `vars.DEBUG`/`ACTIONS_STEP_DEBUG`; dumps event context.
-- **`dispatch`** — the gatekeeper. The `if:` allows: non-fork `pull_request` events;
-  `issues` opened/reopened; and comments/reviews/issue-bodies that **start with
-  `@gemini-cli`** *and* come from an `OWNER`/`MEMBER`/`COLLABORATOR`. It then runs an
-  `actions/github-script` step (`extract_command`) that:
-  - Resolves a **command**: `pull_request` events → `review` (or `review-and-merge` when
-    the actor is `dependabot[bot]`); `@gemini-cli /review` → `review`,
-    `@gemini-cli /review-and-merge` → `review-and-merge`, `@gemini-cli /merge` → `merge`;
-    otherwise `fallthrough`.
-  - Resolves the **ref** (PR head SHA, looked up via the API for issue-comment events).
-  - Computes **`is_fork`**, **failing closed** (`is_fork='true'`) if the PR lookup throws,
-    to avoid leaking secrets to forks. A fork + real command becomes `unsupported-fork`,
-    which posts a "forks not supported" comment.
-  - Posts an acknowledgement comment to the PR/issue.
+- **`guard`** — calls `reusable-gemini-guard.yml` (above) with the `ref` input, so the
+  dispatch-side gate can never drift from the caller-side one.
+- **`dispatch`** — runs only when the guard's `proceed` is `'true'`; re-exports the
+  guard's outputs and posts the acknowledgement comment to the PR/issue (or the
+  "forks not supported" comment on `unsupported-fork`).
 - **`review`** / **`merge`** — call `gemini-review.yml` / `gemini-merge.yml` with
   `secrets: inherit`. `merge` runs when the command is `merge`, or when `review`'s output
   command is `review-and-merge`.
@@ -56,6 +80,9 @@ The downstream caller wires this to `pull_request`, `issue_comment`, `issues`, a
 
 **Inputs:** `projects` (required JSON string), `ref` (optional).
 **Secrets:** `GEMINI_API_KEY` (required), `CALLER_GITHUB_TOKEN` (required).
+**Caller permissions:** the caller's token caps what called reusable workflows can do; the
+calling workflow must grant at least `contents: write`, `pull-requests: write`,
+`issues: write`, `actions: read`, `id-token: write`, `security-events: write`.
 
 ### 1.2 Identity token
 
@@ -253,7 +280,10 @@ SHA with a `# ratchet:` comment.
 Starter workflows shown in repos' Actions tab. Served from the **default branch** (not a
 tag), so `workflow-templates/` edits take effect without a release.
 
-- `ci.yml` / `ci.properties.json` and `security-scan.yml` / `security-scan.properties.json`.
+- `ci.yml` / `ci.properties.json`, `security-scan.yml` / `security-scan.properties.json`,
+  and `gemini.yml` / `gemini.properties.json` (the canonical Gemini caller: guard-first
+  gating, `pull_request: synchronize` in the trigger set, a per-PR `concurrency` group
+  with `cancel-in-progress`, and the minimum `permissions` grant for the dispatch).
 - Templates can't auto-detect language, so they hardcode `language: 'javascript'` and list
   the supported languages in comments.
 - `*.properties.json` `filePatterns` are **regexes** (dots escaped, **not** anchored to

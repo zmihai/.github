@@ -1,0 +1,182 @@
+name: '🛡️ Reusable Gemini Guard'
+
+# Single source of truth for the Gemini trigger policy. Callers run this as
+# their first job — BEFORE any job that checks out code or receives secrets —
+# and gate everything downstream on its outputs. reusable-gemini-dispatch.yml
+# calls it internally too, so the caller-side gate and the dispatch gate can
+# never drift apart.
+#
+# Recommended caller-side gates:
+#   - CI / build jobs:  needs.guard.outputs.proceed == 'true' &&
+#                       needs.guard.outputs.is_pr == 'true' &&
+#                       needs.guard.outputs.is_fork == 'false'
+#   - dispatch:         needs.guard.outputs.proceed == 'true'
+# and pass `resolved_ref` as the `ref` input of reusable-ci /
+# reusable-security-scan / reusable-gemini-dispatch so every job builds and
+# reviews the same commit (on issue_comment events the payload carries no PR
+# head SHA — building without this resolves the default branch instead).
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'The branch, tag or SHA to use; overrides PR-head resolution'
+        required: false
+        type: string
+
+    outputs:
+      proceed:
+        description: >-
+          'true' when the event passes the trigger policy: a non-fork
+          pull_request event, an issue opened/reopened, or a comment/review/
+          issue body starting with @gemini-cli from an OWNER/MEMBER/COLLABORATOR
+          human user. Gate every downstream job on this.
+        value: '${{ jobs.guard.outputs.proceed }}'
+      command:
+        description: 'Resolved command: review | review-and-merge | merge | fallthrough | unsupported-fork'
+        value: '${{ jobs.guard.outputs.command }}'
+      request:
+        description: 'The triggering comment/review/issue body'
+        value: '${{ jobs.guard.outputs.request }}'
+      additional_context:
+        description: 'Free text following the @gemini-cli command, if any'
+        value: '${{ jobs.guard.outputs.additional_context }}'
+      resolved_ref:
+        description: 'The PR head SHA (API-resolved for issue_comment events), the ref input when given, or the event SHA'
+        value: '${{ jobs.guard.outputs.resolved_ref }}'
+      is_fork:
+        description: >-
+          'true' when the PR comes from a fork — or when the PR lookup failed
+          (fails closed). Never build or expose secrets to a ref when this is
+          'true'.
+        value: '${{ jobs.guard.outputs.is_fork }}'
+      is_pr:
+        description: >-
+          'true' when the event relates to a pull request (directly or via an
+          issue_comment on a PR). Use it to skip build jobs on plain issues.
+        value: '${{ jobs.guard.outputs.is_pr }}'
+      issue_number:
+        description: 'The PR or issue number the event relates to'
+        value: '${{ jobs.guard.outputs.issue_number }}'
+
+defaults:
+  run:
+    shell: 'bash'
+
+jobs:
+  guard:
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 5
+    permissions:
+      contents: 'read'
+      issues: 'read'
+      pull-requests: 'read'
+    outputs:
+      proceed: '${{ steps.evaluate.outputs.proceed }}'
+      command: '${{ steps.evaluate.outputs.command }}'
+      request: '${{ steps.evaluate.outputs.request }}'
+      additional_context: '${{ steps.evaluate.outputs.additional_context }}'
+      resolved_ref: '${{ steps.evaluate.outputs.resolved_ref }}'
+      is_fork: '${{ steps.evaluate.outputs.is_fork }}'
+      is_pr: '${{ steps.evaluate.outputs.is_pr }}'
+      issue_number: '${{ github.event.pull_request.number || github.event.issue.number }}'
+    steps:
+      - name: 'Evaluate trigger policy and resolve ref'
+        id: 'evaluate'
+        uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
+        env:
+          INPUT_REF: '${{ inputs.ref }}'
+        with:
+          script: |
+            const payload = context.payload;
+            const inputRef = process.env.INPUT_REF;
+            const eventType = `${context.eventName}.${payload.action}`;
+
+            // Same fallback chains the dispatch's `if:` expression used before
+            // this logic was extracted: comment, then review, then issue.
+            const request = payload.comment?.body || payload.review?.body || payload.issue?.body || '';
+            const association = payload.comment?.author_association || payload.review?.author_association || payload.issue?.author_association || '';
+
+            const isPr = Boolean(payload.pull_request || payload.issue?.pull_request);
+            core.setOutput('request', request);
+            core.setOutput('is_pr', isPr ? 'true' : 'false');
+
+            // 1. Trigger policy.
+            //    - PRs: only if not from a fork
+            //    - issues: only on open/reopen
+            //    - comments/reviews/issue bodies: only when they start with
+            //      @gemini-cli and the author is an OWNER/MEMBER/COLLABORATOR
+            //      human user
+            const proceed =
+              (context.eventName === 'pull_request' && payload.pull_request?.head?.repo?.fork === false) ||
+              (context.eventName === 'issues' && ['opened', 'reopened'].includes(payload.action)) ||
+              (payload.sender?.type === 'User' &&
+                request.startsWith('@gemini-cli') &&
+                ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association));
+
+            if (!proceed) {
+              // Nothing downstream may run, so don't spend an API call on the
+              // ref lookup; fail the fork check closed for defense in depth.
+              core.setOutput('proceed', 'false');
+              core.setOutput('command', 'fallthrough');
+              core.setOutput('additional_context', '');
+              core.setOutput('is_fork', 'true');
+              core.setOutput('resolved_ref', '');
+              return;
+            }
+
+            // 2. Resolve Command
+            let additionalContext = '';
+            let command = 'fallthrough';
+            if (eventType.startsWith("pull_request.")) {
+              if (context.actor === 'dependabot[bot]') {
+                command = 'review-and-merge';
+              } else {
+                command = 'review';
+              }
+            } else if (request.startsWith("@gemini-cli /review")) {
+              if (request.startsWith("@gemini-cli /review-and-merge")) {
+                command = 'review-and-merge';
+                additionalContext = request.replace(/^@gemini-cli \/review-and-merge/, '').trim();
+              } else {
+                command = 'review';
+                additionalContext = request.replace(/^@gemini-cli \/review/, '').trim();
+              }
+            } else if (request.startsWith("@gemini-cli /merge")) {
+              command = 'merge';
+            }
+            core.setOutput('additional_context', additionalContext);
+
+            // 3. Resolve Ref and Fork Status
+            let resolvedRef = inputRef || payload.pull_request?.head?.sha || context.sha;
+            let isFork = 'false'; // Default false unless proven it's a fork
+
+            if (payload.pull_request) {
+               isFork = payload.pull_request.head.repo.fork ? 'true' : 'false';
+            } else if (payload.issue?.pull_request) {
+               const issueNumber = payload.issue.number;
+                try {
+                  const { data: pr } = await github.rest.pulls.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: issueNumber,
+                  });
+                 if (!inputRef) {
+                  resolvedRef = pr.head.sha;
+                  console.log(`Resolved PR head SHA: ${resolvedRef}`);
+                 }
+                 isFork = pr.head.repo.fork ? 'true' : 'false';
+                } catch (e) {
+                 console.log(`Could not fetch PR data for issue ${issueNumber}. Failing closed by assuming it is a fork.`);
+                 isFork = 'true'; // Fail closed: set to true if fetch fails to prevent secret exposure
+                }
+              }
+
+            if (isFork === 'true' && command !== 'fallthrough') {
+               command = 'unsupported-fork';
+            }
+
+            core.setOutput('proceed', 'true');
+            core.setOutput('command', command);
+            core.setOutput('is_fork', isFork);
+            core.setOutput('resolved_ref', resolvedRef);

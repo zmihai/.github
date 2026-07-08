@@ -1,0 +1,17 @@
+{
+  "name": "Gemini Review & Merge",
+  "description": "AI-powered PR review and merge automation, gated on CI and security-scan outcomes",
+  "iconName": "octicon hubot",
+  "categories": ["Automation", "Code review"],
+  "filePatterns": [
+    "package\\.json$",
+    "composer\\.json$",
+    "requirements\\.txt$",
+    "pyproject\\.toml$",
+    "pom\\.xml$",
+    "build\\.gradle$",
+    "build\\.gradle\\.kts$",
+    "settings\\.gradle$",
+    "settings\\.gradle\\.kts$"
+  ]
+}

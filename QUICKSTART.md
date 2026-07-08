@@ -19,7 +19,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.10.2
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
     with:
       language: 'javascript'
       language-version: '20'
@@ -32,7 +32,7 @@ Add this to any workflow job:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-node-env@v0.10.2
+  - uses: zmihai/.github/actions/setup-node-env@v0.11.0
     with:
       node-version: '20'
 ```
@@ -52,8 +52,11 @@ When creating a new workflow in any repository:
 - **Security Scan** - Dependency and code security scanning (JS, Python, PHP & Java)
 
 ### 🤖 Gemini AI Workflows
+- **Gemini Guard** - Shared trigger gate: validates `@gemini-cli` commands and resolves the PR head ref before any job sees code or secrets
 - **Gemini Review** - AI-powered PR review
 - **Gemini Test & Merge** - Automated merging based on CI/Security outcomes
+
+To wire up the full automation, start from the **Gemini Review & Merge** workflow template (Actions tab → New workflow) — it ships the guard-first job graph, the minimum `permissions` grant, and a per-PR `concurrency` group.
 
 ### 🎬 Composite Actions
 - **Setup Node Environment** - Node.js with caching
