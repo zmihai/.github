@@ -182,7 +182,7 @@ tools/extensions/env.
   - After `gh pr merge` exits 0, **re-read the PR to confirm `merged`** (a 0 exit can mean
     "auto-merge enabled / queued", not merged).
 
-### 1.6 Merge safety policy (the "v0.9.0 posture")
+### 1.6 Merge safety policy
 
 Encoded in `gemini-merge.toml` and summarized in `.github/copilot-instructions.md`:
 

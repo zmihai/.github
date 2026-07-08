@@ -179,7 +179,7 @@ before relying on them.
   `gh pr merge <n> --squash` (token from env). **Never** `curl` with a token in argv (it
   leaks into telemetry), and **never** push/merge to the default branch — remediation fixes
   go to the **PR's source branch** (`head_ref`).
-- **Merge safety policy (the current "v0.9.0" posture):** classify each failure
+- **Merge safety policy:** classify each failure
   **related** vs **unrelated/pre-existing** (when in doubt → related); related failures
   must pass or be remediated, unrelated pre-existing failures (including security) do not
   block; any **🔴 Critical / 🟠 High** review or security finding → **REQUEST_CHANGES**
