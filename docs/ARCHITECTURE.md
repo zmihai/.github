@@ -62,7 +62,10 @@ out code and receive secrets). A single `github-script` job:
 
 Recommended caller gates: CI/build jobs require `proceed == 'true' && is_pr == 'true' &&
 is_fork == 'false'` and check out `resolved_ref`; the dispatch call requires
-`proceed == 'true'`. See `workflow-templates/gemini.yml` for the canonical wiring.
+`proceed == 'true' && is_pr == 'true'` — deliberately **not** `is_fork`, because on fork
+PRs the dispatch never checks out code (review/merge skip on `unsupported-fork`) and must
+run to post the "forks not supported" acknowledgement. See `workflow-templates/gemini.yml`
+for the canonical wiring.
 
 ### 1.1 `reusable-gemini-dispatch.yml` — entry point
 

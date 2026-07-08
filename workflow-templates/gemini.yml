@@ -117,6 +117,9 @@ jobs:
   # is_pr gate as defense-in-depth: an @gemini-cli comment on a plain (non-PR)
   # issue passes the guard, but the review/merge pipeline is PR-only — without
   # this it would inherit secrets just to fail against a non-PR number.
+  # Deliberately NO is_fork gate here: on fork PRs the dispatch never checks
+  # out code (review/merge skip on command == 'unsupported-fork') and must run
+  # to post the "forks not supported" acknowledgement comment.
   dispatch:
     needs: [guard, projects-output]
     if: >-

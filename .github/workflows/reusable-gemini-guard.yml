@@ -10,7 +10,11 @@ name: '🛡️ Reusable Gemini Guard'
 #   - CI / build jobs:  needs.guard.outputs.proceed == 'true' &&
 #                       needs.guard.outputs.is_pr == 'true' &&
 #                       needs.guard.outputs.is_fork == 'false'
-#   - dispatch:         needs.guard.outputs.proceed == 'true'
+#   - dispatch:         needs.guard.outputs.proceed == 'true' &&
+#                       needs.guard.outputs.is_pr == 'true'
+#     (deliberately no is_fork gate: on fork PRs the dispatch never checks
+#     out code — review/merge skip on command == 'unsupported-fork' — and it
+#     must run to post the "forks not supported" acknowledgement)
 # and pass `resolved_ref` as the `ref` input of reusable-ci /
 # reusable-security-scan / reusable-gemini-dispatch so every job builds and
 # reviews the same commit (on issue_comment events the payload carries no PR
