@@ -191,6 +191,16 @@ before relying on them.
 - **Parsing JSON Arrays with `jq`:** Inject JSON-array variables (like `PROJECTS`) into `.gemini/context.json` with `jq --argjson` instead of `--arg` (which stringifies it and breaks array-typed schemas).
 - **YOLO Mode Tool Policy:** To allow unrestricted shell execution in YOLO mode, specify `"run_shell_command"` with **no** arguments (specifying an argument like `"run_shell_command(echo)"` restricts execution only to that command).
 
+**Permissions in reusable workflows:**
+
+- **GitHub validates every nested job's `permissions:` request against the caller's grant
+  at startup, regardless of `if:` conditions.** A conditionally-skipped job with a
+  `permissions:` block exceeding the documented caller baseline startup-fails every
+  least-privilege caller — even though the job would never run. Jobs whose permissions
+  exceed the baseline for an opt-in feature (e.g. CodeQL) must carry **no** job-level
+  `permissions:` block; document the runtime needs instead and have opt-in callers grant
+  them.
+
 **Reusable security scan & dependency auditing rules:**
 
 - **No Build on Untrusted PRs:** Workflows or steps triggered on untrusted PR refs (such as dependency scans) must **never build the project, run installer scripts, or trigger build hooks** (e.g., running `pip install .` on a custom `setup.py`/`pyproject.toml` or compiling Java projects during audit jobs). This prevents untrusted PRs from executing arbitrary code on our runners.

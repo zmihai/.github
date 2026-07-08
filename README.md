@@ -163,10 +163,10 @@ permissions:
   contents: write        # gemini-merge pushes remediation commits and merges
   pull-requests: write   # reviews, review comments, merging
   issues: write          # acknowledgement / failure comments
-  actions: read          # gemini-merge reads check-run results
   id-token: write        # GCP Workload Identity Federation (Vertex AI), if used
-  security-events: write # gemini-merge reads code-scanning results
 ```
+
+Callers that also run `reusable-security-scan` with `scan-code: true` (CodeQL) additionally need `security-events: write` and `actions: read` — CodeQL uploads SARIF and reads workflow metadata at runtime. (The `codeql-scan` job deliberately carries no `permissions:` block: GitHub validates nested permission requests against the caller's grant at startup regardless of `if:` conditions, so a static request would startup-fail every least-privilege caller that leaves `scan-code` off.)
 
 ### Gemini Review
 

@@ -86,9 +86,12 @@ The downstream caller wires this to `pull_request`, `issue_comment`, `issues`, a
 
 **Inputs:** `projects` (required JSON string), `ref` (optional).
 **Secrets:** `GEMINI_API_KEY` (required), `CALLER_GITHUB_TOKEN` (required).
-**Caller permissions:** the caller's token caps what called reusable workflows can do; the
-calling workflow must grant at least `contents: write`, `pull-requests: write`,
-`issues: write`, `actions: read`, `id-token: write`, `security-events: write`.
+**Caller permissions:** the caller's token caps what called reusable workflows can do, and
+GitHub validates each nested job's `permissions:` request against the caller's grant — so
+every permission a `uses:` job requests becomes part of the mandatory caller contract. The
+dispatch chain requires `contents: write`, `pull-requests: write`, `issues: write`,
+`id-token: write`. Callers running `reusable-security-scan` with `scan-code: true` (CodeQL)
+additionally need `security-events: write` and `actions: read`.
 
 ### 1.2 Identity token
 
@@ -263,7 +266,11 @@ did not run).
     assessed.
   - unsupported language → `dependency-scan-unsupported` fails.
 - **CodeQL** (`scan-code`, default false) — init/autobuild/analyze for `inputs.language`;
-  needs `security-events: write`.
+  needs `security-events: write` + `actions: read` **at runtime, granted by the caller**.
+  The job deliberately has no `permissions:` block: GitHub validates nested permission
+  requests against the caller's grant at startup **regardless of `if:` conditions**, so a
+  static request here would startup-fail every least-privilege caller with `scan-code`
+  off.
 
 ---
 
