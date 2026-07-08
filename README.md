@@ -41,6 +41,13 @@ A comprehensive CI workflow that handles linting, testing, and building for mult
 
 **Example Usage:**
 ```yaml
+# The ref-resolution job inside the called workflow requests these reads;
+# GitHub validates nested permission requests against this grant at startup.
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
 jobs:
   ci:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
@@ -77,6 +84,14 @@ The security scan workflow is independent from the CI workflow and does not buil
 
 **Example Usage:**
 ```yaml
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  # Needed only because scan-code is true below (CodeQL):
+  security-events: write
+  actions: read
+
 jobs:
   security:
     uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.0
@@ -342,6 +357,14 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+# Union of what the called workflows' jobs request (validated at startup):
+# the reads for ref resolution, plus gemini-merge's write set.
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
 jobs:
   ci_project_a:
     name: CI - Project A
@@ -430,6 +453,14 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  # Needed only because scan-code is true below (CodeQL):
+  security-events: write
+  actions: read
+
 jobs:
   ci:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
@@ -457,6 +488,14 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  # Needed only because scan-code is true below (CodeQL):
+  security-events: write
+  actions: read
+
 jobs:
   ci:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
@@ -483,6 +522,14 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  # Needed only because scan-code is true below (CodeQL):
+  security-events: write
+  actions: read
 
 jobs:
   ci:

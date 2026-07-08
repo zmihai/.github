@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [$default-branch, develop]
 
+# The called workflow's ref-resolution job requests these reads, and GitHub
+# validates nested permissions requests against this grant at startup — repos
+# whose default token is contents-read-only startup-fail without the block.
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
 jobs:
   ci:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0

@@ -17,6 +17,13 @@ name: CI
 
 on: [push, pull_request]
 
+# Required: the called workflow's ref-resolution job requests these reads,
+# validated against this grant at startup.
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
 jobs:
   ci:
     uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.0
