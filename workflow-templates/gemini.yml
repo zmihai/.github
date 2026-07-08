@@ -30,16 +30,14 @@ concurrency:
 #   contents: write        — gemini-merge pushes remediation commits and merges
 #   pull-requests: write   — reviews, review comments, merging
 #   issues: write          — acknowledgement / failure comments
-#   actions: read          — gemini-merge reads check-run results
 #   id-token: write        — GCP Workload Identity Federation (Vertex AI), if used
-#   security-events: write — gemini-merge reads code-scanning results
+# Enabling CodeQL (scan-code: true below) additionally requires:
+#   security-events: write + actions: read
 permissions:
   contents: write
   pull-requests: write
   issues: write
-  actions: read
   id-token: write
-  security-events: write
 
 jobs:
   guard:
@@ -79,6 +77,8 @@ jobs:
       language: 'javascript'
       language-version: '20'
       scan-dependencies: true
+      # Flipping scan-code to true requires adding security-events: write and
+      # actions: read to the workflow permissions block above.
       scan-code: false
       ref: ${{ needs.guard.outputs.resolved_ref }}
     secrets: inherit

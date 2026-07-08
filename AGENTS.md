@@ -75,8 +75,10 @@ prompt, composite action, or template. The summary below is enough for orientati
   - Inputs: `projects` (required JSON string), `ref` (optional).
   - Secrets: `GEMINI_API_KEY` (required), `CALLER_GITHUB_TOKEN` (required).
   - Callers must grant at least `contents: write`, `pull-requests: write`,
-    `issues: write`, `actions: read`, `id-token: write`, `security-events: write` —
-    the caller's token caps what called reusable workflows can do.
+    `issues: write`, `id-token: write` — the caller's token caps what called reusable
+    workflows can do, and GitHub validates nested `permissions:` requests against it.
+    `security-events: write` + `actions: read` are needed only when CodeQL is enabled
+    (`reusable-security-scan` with `scan-code: true`).
 - **Review** runs two *separate* Gemini invocations in one job: a code-review pass
   (code-review extension, GitHub MCP `v0.27.0`) and a security pass (security extension,
   GitHub MCP `v0.18.0`, `/security:analyze-github-pr`). They must stay separate —

@@ -138,10 +138,11 @@ jobs:
     if: |-
       ${{ needs.dispatch.outputs.command == 'merge' || needs.review.outputs.command == 'review-and-merge' }}
     uses: './.github/workflows/gemini-merge.yml'
+    # Mirrors the permissions gemini-merge.yml's job actually requests —
+    # anything listed here becomes part of the mandatory caller grant
+    # (GitHub validates nested requests against the caller's token).
     permissions:
-      security-events: 'write'
       contents: 'write'
-      actions: 'read'
       id-token: 'write'
       issues: 'write'
       pull-requests: 'write'
