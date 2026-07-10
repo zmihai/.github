@@ -64,7 +64,15 @@ defaults:
     shell: bash
 
 jobs:
+  # Runs only when the caller did not pass `ref`. Every billed job rounds up
+  # to a full minute, so echoing an already-resolved ref back from its own
+  # job charges a minute per call for no work — callers that follow the
+  # guard pattern always pass the guard's resolved_ref. Downstream jobs use
+  # `inputs.ref || needs.resolve-ref.outputs.ref` (a skipped job's outputs
+  # are empty strings) and gate on `!failure() && !cancelled()` so a genuine
+  # resolve failure still stops them while a skip does not.
   resolve-ref:
+    if: ${{ inputs.ref == '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
@@ -103,7 +111,7 @@ jobs:
 
   ci-npm:
     needs: resolve-ref
-    if: ${{ inputs.language == 'javascript' }}
+    if: ${{ !failure() && !cancelled() && inputs.language == 'javascript' }}
     uses: './.github/workflows/ci-npm.yml'
     with:
       node-version: ${{ inputs.language-version }}
@@ -112,24 +120,24 @@ jobs:
       run-test: ${{ inputs.run-test }}
       run-build: ${{ inputs.run-build }}
       build-before-test: ${{ inputs.build-before-test }}
-      ref: ${{ needs.resolve-ref.outputs.ref }}
+      ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
     secrets: inherit
 
   ci-python:
     needs: resolve-ref
-    if: ${{ inputs.language == 'python' }}
+    if: ${{ !failure() && !cancelled() && inputs.language == 'python' }}
     uses: './.github/workflows/ci-python.yml'
     with:
       python-version: ${{ inputs.language-version }}
       working-directory: ${{ inputs.working-directory }}
       run-lint: ${{ inputs.run-lint }}
       run-test: ${{ inputs.run-test }}
-      ref: ${{ needs.resolve-ref.outputs.ref }}
+      ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
     secrets: inherit
 
   ci-php:
     needs: resolve-ref
-    if: ${{ inputs.language == 'php' }}
+    if: ${{ !failure() && !cancelled() && inputs.language == 'php' }}
     uses: './.github/workflows/ci-php.yml'
     with:
       php-version: ${{ inputs.language-version }}
@@ -137,12 +145,12 @@ jobs:
       extensions: ${{ inputs.extensions }}
       run-lint: ${{ inputs.run-lint }}
       run-test: ${{ inputs.run-test }}
-      ref: ${{ needs.resolve-ref.outputs.ref }}
+      ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
     secrets: inherit
 
   ci-java:
     needs: resolve-ref
-    if: ${{ inputs.language == 'java' }}
+    if: ${{ !failure() && !cancelled() && inputs.language == 'java' }}
     uses: './.github/workflows/ci-java.yml'
     with:
       java-version: ${{ inputs.language-version }}
@@ -151,7 +159,7 @@ jobs:
       run-lint: ${{ inputs.run-lint }}
       run-test: ${{ inputs.run-test }}
       run-build: ${{ inputs.run-build }}
-      ref: ${{ needs.resolve-ref.outputs.ref }}
+      ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
     secrets: inherit
 
   ci-unsupported:

@@ -47,7 +47,14 @@ defaults:
     shell: bash
 
 jobs:
+  # Runs only when the caller did not pass `ref` — same pattern and rationale
+  # as in reusable-ci.yml: a billed job that merely echoes an input back
+  # charges a rounded-up minute per call for no work. Downstream jobs use
+  # `inputs.ref || needs.resolve-ref.outputs.ref` and gate on
+  # `!failure() && !cancelled()` so a genuine resolve failure still stops
+  # them while a skip does not.
   resolve-ref:
+    if: ${{ inputs.ref == '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
@@ -86,7 +93,7 @@ jobs:
 
   dependency-scan-javascript:
     needs: resolve-ref
-    if: ${{ inputs.scan-dependencies && inputs.language == 'javascript' }}
+    if: ${{ !failure() && !cancelled() && inputs.scan-dependencies && inputs.language == 'javascript' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -96,7 +103,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
         with:
-          ref: ${{ needs.resolve-ref.outputs.ref }}
+          ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
 
       - name: Setup Node Environment
         uses: zmihai/.github/actions/setup-node-env@v0.11.1
@@ -110,7 +117,7 @@ jobs:
 
   dependency-scan-python:
     needs: resolve-ref
-    if: ${{ inputs.scan-dependencies && inputs.language == 'python' }}
+    if: ${{ !failure() && !cancelled() && inputs.scan-dependencies && inputs.language == 'python' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -120,7 +127,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
         with:
-          ref: ${{ needs.resolve-ref.outputs.ref }}
+          ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
 
       - name: Setup Python Environment
         uses: zmihai/.github/actions/setup-python-env@v0.11.1
@@ -161,7 +168,7 @@ jobs:
 
   dependency-scan-php:
     needs: resolve-ref
-    if: ${{ inputs.scan-dependencies && inputs.language == 'php' }}
+    if: ${{ !failure() && !cancelled() && inputs.scan-dependencies && inputs.language == 'php' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -171,7 +178,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
         with:
-          ref: ${{ needs.resolve-ref.outputs.ref }}
+          ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
 
       - name: Setup PHP Environment
         uses: zmihai/.github/actions/setup-php-env@v0.11.1
@@ -185,14 +192,14 @@ jobs:
 
   dependency-scan-java:
     needs: resolve-ref
-    if: ${{ inputs.scan-dependencies && inputs.language == 'java' }}
+    if: ${{ !failure() && !cancelled() && inputs.scan-dependencies && inputs.language == 'java' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
         with:
-          ref: ${{ needs.resolve-ref.outputs.ref }}
+          ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
 
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # ratchet:aquasecurity/trivy-action@v0.36.0
@@ -215,7 +222,7 @@ jobs:
 
   codeql-scan:
     needs: resolve-ref
-    if: ${{ inputs.scan-code }}
+    if: ${{ !failure() && !cancelled() && inputs.scan-code }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -231,7 +238,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
         with:
-          ref: ${{ needs.resolve-ref.outputs.ref }}
+          ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@38697555549f1db7851b81482ff19f1fa5c4fedc # ratchet:github/codeql-action/init@v4
