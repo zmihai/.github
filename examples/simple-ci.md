@@ -15,7 +15,7 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.2
     with:
       language: 'javascript'
       language-version: '20'
@@ -38,7 +38,7 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.2
     with:
       language: 'python'
       language-version: '3.11'
@@ -58,7 +58,7 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.2
     with:
       language: 'php'
       language-version: '8.4'
@@ -78,7 +78,7 @@ on:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.2
     with:
       language: 'java'
       language-version: '21'
@@ -93,7 +93,7 @@ jobs:
 ```yaml
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.2
     with:
       language: 'javascript'
       language-version: '24'
@@ -108,14 +108,14 @@ jobs:
 ```yaml
 jobs:
   ci-frontend:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.2
     with:
       language: 'javascript'
       language-version: '22'
       working-directory: './frontend'
 
   ci-backend:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.2
     with:
       language: 'python'
       language-version: '3.11'
