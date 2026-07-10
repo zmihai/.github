@@ -44,7 +44,7 @@ permissions:
 
 jobs:
   guard:
-    uses: zmihai/.github/.github/workflows/reusable-gemini-guard.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-gemini-guard.yml@v0.11.2
 
   ci:
     needs: guard
@@ -53,7 +53,7 @@ jobs:
       needs.guard.outputs.proceed == 'true' &&
       needs.guard.outputs.is_pr == 'true' &&
       needs.guard.outputs.is_fork == 'false'
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.2
     with:
       # Supported languages: javascript, python, php, java.
       # Adjust language and language-version to match your project,
@@ -74,7 +74,7 @@ jobs:
       needs.guard.outputs.proceed == 'true' &&
       needs.guard.outputs.is_pr == 'true' &&
       needs.guard.outputs.is_fork == 'false'
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.11.2
     with:
       working-directory: '.'
       language: 'javascript'
@@ -137,7 +137,7 @@ jobs:
       needs.guard.outputs.proceed == 'true' &&
       needs.guard.outputs.is_pr == 'true' &&
       needs.projects-output.result == 'success'
-    uses: zmihai/.github/.github/workflows/reusable-gemini-dispatch.yml@v0.11.1
+    uses: zmihai/.github/.github/workflows/reusable-gemini-dispatch.yml@v0.11.2
     with:
       projects: ${{ needs.projects-output.outputs.projects_json }}
       ref: ${{ needs.guard.outputs.resolved_ref }}

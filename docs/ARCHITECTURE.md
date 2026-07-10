@@ -221,7 +221,10 @@ Resolved per task, each falling back to a shared var, then a literal default:
 ## 2. Reusable CI (`reusable-ci.yml` + per-language sub-workflows)
 
 `reusable-ci.yml` is a thin dispatcher. A `resolve-ref` job resolves the checkout ref
-(input `ref` → PR head SHA → `github.sha`), then exactly one language job runs based on
+(PR head SHA → `github.sha`); it is skipped entirely when the caller passes `ref` —
+billed jobs round up to a whole minute, so echoing an input back from a dedicated job
+charges a minute per call for no work — and the language jobs fall back to
+`inputs.ref || needs.resolve-ref.outputs.ref`. Exactly one language job runs based on
 `inputs.language`, delegating to a local per-language workflow. The composite `outcome`
 output is the result of whichever language job actually ran (`'failure'` otherwise). An
 unsupported language hits `ci-unsupported`, which fails explicitly.
@@ -253,7 +256,8 @@ Per-language notes:
 ## 3. Reusable security scan (`reusable-security-scan.yml`)
 
 Independent of CI — it does **not** build the project or generate lockfiles first
-(it runs against untrusted PR refs). Same `resolve-ref` pattern. The `outcome` output is
+(it runs against untrusted PR refs). Same `resolve-ref` pattern (including the skip when
+the caller passes `ref`). The `outcome` output is
 `success` only if every relevant scan job is `success`/`skipped` (and the unsupported job
 did not run).
 
