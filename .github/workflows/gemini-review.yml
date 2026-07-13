@@ -109,6 +109,26 @@ jobs:
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
           PROJECTS: '${{ inputs.projects }}'
 
+      # Canonical rationale for the pre-install steps (the other pre-install steps here and in
+      # gemini-merge.yml reference this comment): run-gemini-cli's bundled installer pipes a
+      # single "Y" into `gemini extensions install`, but extensions that declare Agent Skills
+      # (code-review does) raise a SECOND consent prompt, and piped input beyond the first prompt
+      # is dropped — the read hits EOF and the install aborts with exit 1, failing the run. So
+      # install here with the CLI's `--consent` flag, which skips the consent prompts entirely;
+      # stdin is </dev/null so a future extra prompt can never consume CI input (it hits EOF and
+      # aborts or stalls, and the job-level timeout-minutes bounds the worst case). The
+      # run-gemini-cli step below picks the extension up from $HOME/.gemini — its `extensions:`
+      # input is intentionally NOT set (re-installing there would re-prompt and fail again).
+      - name: 'Pre-install code-review extension (non-interactive)'
+        if: ${{ inputs.is_fork != 'true' }}
+        env:
+          # Keep in sync with the `gemini_cli_version` passed to run-gemini-cli below. Unlike the
+          # action (which builds non-semver refs from source), npx resolves npm versions and
+          # dist-tags only (e.g. 0.46.0, latest, preview, nightly) — never set a git ref here.
+          GEMINI_CLI_VERSION: "${{ vars.GEMINI_CLI_VERSION || '0.46.0' }}"
+        run: |-
+          npx --yes "@google/gemini-cli@${GEMINI_CLI_VERSION}" extensions install --consent 'https://github.com/gemini-cli-extensions/code-review' </dev/null
+
       - name: 'Run Gemini pull request review'
         if: ${{ inputs.is_fork != 'true' }}
         uses: 'google-github-actions/run-gemini-cli@3ca2577f2714990269a7378904cf70ae1e01e288' # ratchet:google-github-actions/run-gemini-cli@main
@@ -127,6 +147,9 @@ jobs:
           # includes the MCP tool FQNs (mcp_github_*), which is required for the GitHub MCP
           # tools to be exposed to the model (verified on 0.42.0 through 0.46.0 — tools.core
           # acts as a global allowlist that also filters MCP tools, not just built-ins).
+          # activate_skill is allowlisted because extension Agent Skills (the code-review
+          # extension declares one) activate via that built-in tool; leaving it unlisted makes
+          # the model burn turns on denied calls (run-gemini-cli issue #532).
           gemini_cli_version: "${{ vars.GEMINI_CLI_VERSION || '0.46.0' }}"
           gemini_debug: '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
           gemini_model: "${{ vars.GEMINI_REVIEW_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}"
@@ -174,23 +197,38 @@ jobs:
                   "grep_search",
                   "list_directory",
                   "read_file",
+                  "activate_skill",
                   "mcp_github_pull_request_review_write",
                   "mcp_github_add_comment_to_pending_review",
                   "mcp_github_pull_request_read"
                 ]
               }
             }
-          extensions: |
-            [
-              "https://github.com/gemini-cli-extensions/code-review"
-            ]
           prompt: '/gemini-review --repository=${{ github.repository }} --pr=${{ inputs.issue_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}"'
 
-      # Extra, security-focused pass using the gemini-cli security extension. Run as a SEPARATE gemini
-      # invocation with its own extension + MCP config so it does not collide with the code-review
-      # extension/MCP wiring of the step above (loading both in one invocation causes tool-registration
-      # collisions). This mirrors the github MCP version (v0.18.0) and tool names the security extension
-      # was authored against. Findings are posted to the PR and folded into review_summary below.
+      # Extra, security-focused pass using the gemini-cli security extension. Run as a SEPARATE
+      # gemini invocation because each pass needs its own per-invocation settings: github MCP
+      # server version (v0.18.0 here, matching what the security extension was authored against),
+      # includeTools, and tools.core allowlist. Findings are posted to the PR and folded into
+      # review_summary below.
+
+      # Installed with `--consent` — see the 'Pre-install code-review extension' step above for
+      # the canonical rationale. The CLI loads EVERY extension under $HOME/.gemini, so the
+      # code-review extension installed for the step above is removed first: this invocation runs
+      # with only the security extension, keeping its context and skills untouched by
+      # code-review's.
+      - name: 'Pre-install security extension (non-interactive)'
+        if: ${{ inputs.is_fork != 'true' }}
+        env:
+          # Keep in sync with the `gemini_cli_version` passed to run-gemini-cli below (npm
+          # versions/dist-tags only — see the code-review pre-install step).
+          GEMINI_CLI_VERSION: "${{ vars.GEMINI_CLI_VERSION || '0.46.0' }}"
+        run: |-
+          if [ -d "${HOME}/.gemini/extensions/code-review" ]; then
+            npx --yes "@google/gemini-cli@${GEMINI_CLI_VERSION}" extensions uninstall code-review </dev/null
+          fi
+          npx --yes "@google/gemini-cli@${GEMINI_CLI_VERSION}" extensions install --consent 'https://github.com/gemini-cli-extensions/security.git' </dev/null
+
       - name: 'Run Gemini security analysis'
         if: ${{ inputs.is_fork != 'true' }}
         uses: 'google-github-actions/run-gemini-cli@3ca2577f2714990269a7378904cf70ae1e01e288' # ratchet:google-github-actions/run-gemini-cli@main
@@ -211,7 +249,8 @@ jobs:
           gcp_workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
           # See the review step above: tools.core must list the mcp_github_* FQNs for the
-          # MCP tools to reach the model, on all CLI versions including latest.
+          # MCP tools to reach the model, on all CLI versions including latest, and
+          # activate_skill in case the security extension ever declares Agent Skills.
           gemini_cli_version: "${{ vars.GEMINI_CLI_VERSION || '0.46.0' }}"
           gemini_debug: '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
           gemini_model: "${{ vars.GEMINI_SECURITY_REVIEW_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}"
@@ -260,6 +299,7 @@ jobs:
                   "grep_search",
                   "list_directory",
                   "read_file",
+                  "activate_skill",
                   "mcp_github_add_comment_to_pending_review",
                   "mcp_github_create_pending_pull_request_review",
                   "mcp_github_pull_request_read",
@@ -267,10 +307,6 @@ jobs:
                 ]
               }
             }
-          extensions: |
-            [
-              "https://github.com/gemini-cli-extensions/security.git"
-            ]
           prompt: '/security:analyze-github-pr'
 
       # Fold the code-review summary and the security-analysis summary into one review_summary, so the merge

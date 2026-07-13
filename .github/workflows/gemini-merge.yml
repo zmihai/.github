@@ -165,6 +165,20 @@ jobs:
             core.setOutput('decisive_review_ids', JSON.stringify(decisiveIds));
             core.info(`Pre-run snapshot: merged=${isMerged}, decisive reviews=${decisiveIds.length}`);
 
+      # Installed with `--consent` because run-gemini-cli's own installer cannot answer the Agent
+      # Skills consent prompt — see the 'Pre-install code-review extension' step in
+      # gemini-review.yml for the canonical rationale. The run-gemini-cli step below picks the
+      # extension up from $HOME/.gemini — its `extensions:` input is intentionally NOT set
+      # (re-installing there would re-prompt and fail again).
+      - name: 'Pre-install code-review extension (non-interactive)'
+        if: ${{ inputs.is_fork != 'true' }}
+        env:
+          # Keep in sync with the `gemini_cli_version` passed to run-gemini-cli below (npm
+          # versions/dist-tags only — see gemini-review.yml).
+          GEMINI_CLI_VERSION: "${{ vars.GEMINI_CLI_VERSION || '0.46.0' }}"
+        run: |-
+          npx --yes "@google/gemini-cli@${GEMINI_CLI_VERSION}" extensions install --consent 'https://github.com/gemini-cli-extensions/code-review' </dev/null
+
       - name: 'Run Gemini pull request merge'
         if: ${{ inputs.is_fork != 'true' }}
         uses: 'google-github-actions/run-gemini-cli@3ca2577f2714990269a7378904cf70ae1e01e288' # ratchet:google-github-actions/run-gemini-cli@main
@@ -183,6 +197,9 @@ jobs:
           # includes the MCP tool FQNs (mcp_github_*), which is required for the GitHub MCP
           # tools to be exposed to the model (verified on 0.42.0 through 0.46.0 — tools.core
           # acts as a global allowlist that also filters MCP tools, not just built-ins).
+          # activate_skill is allowlisted because extension Agent Skills (the code-review
+          # extension declares one) activate via that built-in tool; leaving it unlisted makes
+          # the model burn turns on denied calls (run-gemini-cli issue #532).
           gemini_cli_version: "${{ vars.GEMINI_CLI_VERSION || '0.46.0' }}"
           gemini_debug: '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
           gemini_model: "${{ vars.GEMINI_MERGE_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}"
@@ -231,6 +248,7 @@ jobs:
                   "grep_search",
                   "list_directory",
                   "read_file",
+                  "activate_skill",
                   "mcp_github_pull_request_review_write",
                   "mcp_github_add_comment_to_pending_review",
                   "mcp_github_merge_pull_request",
@@ -238,10 +256,6 @@ jobs:
                 ]
               }
             }
-          extensions: |
-            [
-              "https://github.com/gemini-cli-extensions/code-review"
-            ]
           prompt: '/gemini-merge --merge_strategy=squash --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}" --review_summary="${{ inputs.review_summary }}"'
 
       # The Gemini CLI step reports "success" whenever the process exits 0, which happens even when the
