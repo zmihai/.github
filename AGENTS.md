@@ -191,6 +191,7 @@ before relying on them.
 
 - **GitHub MCP Tool Naming:** Use the exact **`mcp_github_*`-prefixed** tool names in prompt templates (e.g., `mcp_github_pull_request_review_write`). Bare names are wrong.
 - **Parsing JSON Arrays with `jq`:** Inject JSON-array variables (like `PROJECTS`) into `.gemini-context.json` with `jq --argjson` instead of `--arg` (which stringifies it and breaks array-typed schemas).
+- **Custom /commands must be installed, with non-colliding names:** the CLI treats an unresolved `/command` as literal prompt text (no error), and run-gemini-cli copies its own bundled commands (including a `gemini-review.toml`) into `.gemini/commands/` right before the CLI runs, overwriting same-named files. Hence the `install-gemini-commands` composite action and the `pr-review`/`pr-merge` names.
 - **`@{file}` includes silently drop gitignored paths:** the Gemini CLI's at-file include filters through `.gitignore`/`.geminiignore` (verified in 0.46.0) — an ignored file vanishes from the prompt with no error. That's why the prompt context file lives at the repo root as `.gemini-context.json` (several consumer repos gitignore `.gemini/`) and why the Prepare-prompt-context steps guard it with `git check-ignore`. Never move it back under `.gemini/`.
 - **YOLO Mode Tool Policy:** To allow unrestricted shell execution in YOLO mode, specify `"run_shell_command"` with **no** arguments (specifying an argument like `"run_shell_command(echo)"` restricts execution only to that command).
 

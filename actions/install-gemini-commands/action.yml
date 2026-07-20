@@ -1,0 +1,26 @@
+name: 'Install Gemini commands'
+description: 'Installs this repository''s Gemini CLI custom commands (.github/commands/*.toml) into the workspace''s .gemini/commands/ directory, where the Gemini CLI discovers them.'
+
+# Why a composite action instead of checking this repository out from the workflow:
+# command delivery must not depend on this repository's visibility or on the consumer
+# job's token scope (a GITHUB_TOKEN is scoped to the consumer repo and cannot read
+# other private repositories). A composite action is materialized from the runner's
+# action cache — the whole action repository is downloaded when the `uses:` ref
+# resolves — so the command files ship with the action itself, token-free and without
+# a runtime checkout. github.action_path points at this directory inside that
+# materialized copy; the commands live two levels up.
+#
+# The `uses:` pin in the calling workflow is bumped on every release (same pattern as
+# the ci-*.yml → setup-*-env pins), which keeps the installed commands version-matched
+# to the workflows that invoke them.
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Install commands into workspace'
+      shell: 'bash'
+      env:
+        ACTION_PATH: '${{ github.action_path }}'
+      run: |-
+        mkdir -p .gemini/commands
+        cp "${ACTION_PATH}/../../.github/commands/"*.toml .gemini/commands/

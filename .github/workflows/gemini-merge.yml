@@ -214,29 +214,16 @@ jobs:
       # model as literal prompt text, without any error. The workspace here is the CONSUMER repo,
       # which has no command files, so without this step /pr-merge does not exist and the model
       # runs with a one-line prompt instead of the merge policy in .github/commands/pr-merge.toml.
-      # The commands are fetched from this reusable workflow's own repo at the exact ref the
-      # caller pinned (job.workflow_repository/job.workflow_sha — the repo and commit of the
-      # workflow file that defines THIS job), so consumers can never see version-skewed
-      # prompts. Command names are deliberately distinct from run-gemini-cli's bundled set
-      # (gemini-review, gemini-invoke, gemini-triage, ...): the action copies its bundled files
-      # into `.gemini/commands/` AFTER this step and silently overwrites same-named files.
-      - name: 'Fetch repo Gemini commands'
-        if: ${{ inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
-        uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # ratchet:actions/checkout@v6
-        with:
-          repository: '${{ job.workflow_repository }}'
-          ref: '${{ job.workflow_sha }}'
-          path: '.reusable-workflows-src'
-          sparse-checkout: '.github/commands'
-          persist-credentials: false
-
+      # Delivery is via the install-gemini-commands composite action (token-free — a composite
+      # action's repo files are materialized from the runner's action cache; see that action's
+      # header for the mechanism); its release-pinned `uses:` ref keeps the prompts
+      # version-matched to these workflows. Command names are deliberately distinct from
+      # run-gemini-cli's bundled set (gemini-review, gemini-invoke, gemini-triage, ...): the
+      # action copies its bundled files into `.gemini/commands/` AFTER this step and silently
+      # overwrites same-named files.
       - name: 'Install repo Gemini commands'
         if: ${{ inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
-        shell: 'bash'
-        run: |-
-          mkdir -p .gemini/commands
-          cp .reusable-workflows-src/.github/commands/*.toml .gemini/commands/
-          rm -rf .reusable-workflows-src
+        uses: 'zmihai/.github/actions/install-gemini-commands@v0.12.1'
 
       # Installed with `--consent` because run-gemini-cli's own installer cannot answer the Agent
       # Skills consent prompt — see the 'Pre-install code-review extension' step in
