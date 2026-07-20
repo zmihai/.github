@@ -194,7 +194,12 @@ jobs:
             const latestDecisiveByUser = new Map();
             for (const r of ordered) {
               if (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED' || r.state === 'DISMISSED') {
-                latestDecisiveByUser.set(r.user?.login ?? `id:${r.user?.id}`, r);
+                // Ghost/deleted reviewers can lack a login (or a user object entirely). Never
+                // let unattributable reviews share one key — they must not supersede each other,
+                // so key those by review id instead (conservative: an orphaned CHANGES_REQUESTED
+                // keeps blocking until dismissed).
+                const key = r.user?.login ?? (r.user?.id != null ? `id:${r.user.id}` : `review:${r.id}`);
+                latestDecisiveByUser.set(key, r);
               }
             }
             const blocking = [...latestDecisiveByUser.values()].filter(r => r.state === 'CHANGES_REQUESTED');
