@@ -27,8 +27,8 @@ reusable-gemini-dispatch.yml   ── entry point; runs the guard, fans out
    ├─> gemini-review.yml        ── code-review pass + security pass (2 Gemini invocations)
    └─> gemini-merge.yml         ── classify failures, optionally remediate, squash-merge
 
-.github/commands/gemini-review.toml   ── the review prompt (loaded via /gemini-review)
-.github/commands/gemini-merge.toml    ── the review-and-merge prompt (loaded via /gemini-merge)
+.github/commands/pr-review.toml       ── the review prompt (loaded via /pr-review)
+.github/commands/pr-merge.toml        ── the review-and-merge prompt (loaded via /pr-merge)
 ```
 
 ### 1.0 `reusable-gemini-guard.yml` — the shared gate
@@ -113,19 +113,24 @@ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secret
 `cancel-in-progress: true`. Steps:
 
 1. Mint token, checkout the resolved ref.
-2. **Prepare prompt context** — writes `.gemini/context.json` via `jq`. Note `projects`
-   is injected with **`--argjson`** (not `--arg`) so it stays a JSON array (see [AGENTS.md](../AGENTS.md)).
+2. **Prepare prompt context** — writes `.gemini-context.json` (repo root, **not** under
+   `.gemini/`: the CLI's `@{file}` include silently drops gitignored paths and some consumer
+   repos gitignore `.gemini/`; a `git check-ignore` guard fails the step loudly if the path
+   is ever ignored) via `jq`. Note `projects` is injected with **`--argjson`** (not `--arg`)
+   so it stays a JSON array (see [AGENTS.md](../AGENTS.md)).
 3. **Run Gemini pull request review** — `run-gemini-cli` with the
    `gemini-cli-extensions/code-review` extension and the GitHub MCP server
-   **`ghcr.io/github/github-mcp-server:v0.27.0`**. Runs the `/gemini-review` prompt.
+   **`ghcr.io/github/github-mcp-server:v0.27.0`**. Runs the `/pr-review` prompt.
 4. **Run Gemini security analysis** — a **separate** `run-gemini-cli` invocation (loading
    both extensions in one invocation causes tool-registration collisions) using the
    `gemini-cli-extensions/security` extension, pinned to GitHub MCP **`v0.18.0`** (the
    version that extension was authored against). Runs `/security:analyze-github-pr`.
    `upload_artifacts: 'false'` here to avoid colliding with the review step's artifact.
 5. **Combine review and security summaries** — folds both into a single `review_summary`
-   output (with `## Code Review` and `## Security Analysis` sections) so the merge gate
-   applies to security findings too.
+   output (with `## Security Analysis` and `## Code Review` sections, in that order:
+   security's routine "no findings" all-clear must not occupy the summary's
+   highest-recency position, where it has been observed outweighing blocking code-review
+   findings) so the merge gate applies to security findings too.
 
 MCP tool wiring for the review pass: `includeTools` exposes `pull_request_review_write`,
 `add_comment_to_pending_review`, `pull_request_read`; `tools.core` lists those same tools
@@ -147,15 +152,23 @@ time** (`cancel-in-progress` is false for dependabot). Steps:
    branch name is later substituted into `git push origin HEAD:refs/heads/<head_ref>` in a
    shell that holds write credentials, and git permits shell metacharacters in branch
    names.
-3. **Prepare prompt context** — writes `.gemini/context.json` including `review_summary`
-   and `head_ref`.
+3. **Prepare prompt context** — writes `.gemini-context.json` including `review_summary`
+   and `head_ref` (repo root + `git check-ignore` guard, same rationale as the review job;
+   `review_summary` reaches the model **only** through this file — it is deliberately not a
+   prompt argument, where it would sit in the prompt's highest-recency position).
 4. **Snapshot PR review state** (`pre_state`) — records the set of decisive review IDs
    (`APPROVED`/`CHANGES_REQUESTED`) and the merged state **before** the model runs, by
-   **identity (IDs), not timestamps** — immune to clock skew and second-granularity.
+   **identity (IDs), not timestamps** — immune to clock skew and second-granularity. Also
+   computes **`blocking_review`**: whether any reviewer's latest non-dismissed decisive
+   review is `CHANGES_REQUESTED`. If so, the merge model, extension pre-install, and
+   outcome-verification steps are **skipped deterministically** (the blocking review is the
+   durable outcome; the job stays green so the dispatch fallthrough doesn't post a spurious
+   failure comment). This gate exists because the merge model was observed approving and
+   merging past an active `CHANGES_REQUESTED` review.
 5. **Run Gemini pull request merge** — `run-gemini-cli` with the code-review extension and
    GitHub MCP **`v0.27.0`**; `includeTools` adds **`merge_pull_request`** (and its
-   `mcp_github_merge_pull_request` FQN in `tools.core`). Runs `/gemini-merge
-   --merge_strategy=squash …`.
+   `mcp_github_merge_pull_request` FQN in `tools.core`).
+   Runs `/pr-merge --merge_strategy=squash …`.
 6. **Verify durable merge outcome** — fails the job unless **this run** either merged the
    PR (`merged_at` newly non-null) or added a **new** decisive review not in the
    pre-snapshot. This catches the model narrating "I merged it" without actually invoking
@@ -167,10 +180,10 @@ time** (`cancel-in-progress` is false for dependabot). Steps:
 These are the actual instructions the model follows; the workflow YAML only wires up
 tools/extensions/env.
 
-- **`gemini-review.toml`** — pure review. Posts a pending review, adds severity-tagged
+- **`pr-review.toml`** — pure review. Posts a pending review, adds severity-tagged
   inline comments (`🔴`/`🟠`/`🟡`/`🟢`), and submits `REQUEST_CHANGES` (on 🔴/🟠),
   `APPROVE`, or `COMMENT`. **Tool-exclusive: no git/gh/shell mutation of repo state.**
-- **`gemini-merge.toml`** — review **and** conditionally merge. Encodes the merge policy
+- **`pr-merge.toml`** — review **and** conditionally merge. Encodes the merge policy
   (below). Key mechanism rules baked into the prompt:
   - **Merge** via `mcp_github_merge_pull_request` (squash) first; fall back to
     `gh pr merge <n> --squash --repo <owner>/<repo>` (reads `GITHUB_TOKEN` from env).
@@ -184,7 +197,7 @@ tools/extensions/env.
 
 ### 1.6 Merge safety policy
 
-Encoded in `gemini-merge.toml` and summarized in `.github/copilot-instructions.md`:
+Encoded in `pr-merge.toml` and summarized in `.github/copilot-instructions.md`:
 
 - Each failing `ci-outcome`/`scan-outcome` is classified **related** vs
   **unrelated/pre-existing**. **When in doubt → related.**

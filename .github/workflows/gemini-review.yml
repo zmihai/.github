@@ -89,9 +89,17 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
+      # The context file deliberately lives at the repository root, NOT under .gemini/ — the Gemini
+      # CLI's @{file} include SILENTLY drops gitignored paths, and some consumer repos gitignore
+      # `.gemini/`. See the 'Prepare prompt context' step in gemini-merge.yml for the canonical
+      # rationale; keep the two steps' guard and path in sync.
       - name: 'Prepare prompt context'
         shell: 'bash'
         run: |-
+          if git check-ignore -q "${CONTEXT_FILE}"; then
+            echo "::error::'${CONTEXT_FILE}' is ignored by a .gitignore rule in this repository. The Gemini CLI silently drops gitignored @{} includes, so the review agent would run without its Input Data. Remove the ignore rule or relocate the context file."
+            exit 1
+          fi
           mkdir -p .gemini
           jq -n \
             --arg repo "${REPOSITORY}" \
@@ -100,14 +108,36 @@ jobs:
             --arg issue_body "${ISSUE_BODY}" \
             --arg context "${ADDITIONAL_CONTEXT}" \
             --argjson projects "${PROJECTS:-[]}" \
-            '{repository: $repo, pull_request_number: $pr, issue_title: $issue_title, issue_body: $issue_body, additional_context: $context, projects: $projects}' > .gemini/context.json
+            '{repository: $repo, pull_request_number: $pr, issue_title: $issue_title, issue_body: $issue_body, additional_context: $context, projects: $projects}' > "${CONTEXT_FILE}"
         env:
+          CONTEXT_FILE: '.gemini-context.json'
           REPOSITORY: '${{ github.repository }}'
           PULL_REQUEST_NUMBER: '${{ inputs.issue_number }}'
           ISSUE_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
           ISSUE_BODY: '${{ github.event.pull_request.body || github.event.issue.body }}'
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
           PROJECTS: '${{ inputs.projects }}'
+
+      # See the 'Fetch repo Gemini commands' step in gemini-merge.yml for the canonical rationale
+      # (unresolved /commands silently degrade to literal prompt text; the action's own command
+      # copy runs later and overwrites same-named files — hence the distinctive names).
+      - name: 'Fetch repo Gemini commands'
+        if: ${{ inputs.is_fork != 'true' }}
+        uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # ratchet:actions/checkout@v6
+        with:
+          repository: '${{ job.workflow_repository }}'
+          ref: '${{ job.workflow_sha }}'
+          path: '.reusable-workflows-src'
+          sparse-checkout: '.github/commands'
+          persist-credentials: false
+
+      - name: 'Install repo Gemini commands'
+        if: ${{ inputs.is_fork != 'true' }}
+        shell: 'bash'
+        run: |-
+          mkdir -p .gemini/commands
+          cp .reusable-workflows-src/.github/commands/*.toml .gemini/commands/
+          rm -rf .reusable-workflows-src
 
       # Canonical rationale for the pre-install steps (the other pre-install steps here and in
       # gemini-merge.yml reference this comment): run-gemini-cli's bundled installer pipes a
@@ -204,7 +234,7 @@ jobs:
                 ]
               }
             }
-          prompt: '/gemini-review --repository=${{ github.repository }} --pr=${{ inputs.issue_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}"'
+          prompt: '/pr-review --repository=${{ github.repository }} --pr=${{ inputs.issue_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}"'
 
       # Extra, security-focused pass using the gemini-cli security extension. Run as a SEPARATE
       # gemini invocation because each pass needs its own per-invocation settings: github MCP
@@ -312,6 +342,11 @@ jobs:
       # Fold the code-review summary and the security-analysis summary into one review_summary, so the merge
       # job's existing "Critical/High in the Review Summary blocks the merge" gate applies to security
       # findings too. Runs even if a prior gemini step errored, capturing whatever summaries exist.
+      # Order matters: the security summary of a dependency-only PR routinely ends with an emphatic
+      # all-clear ("no findings were identified"), and with it last that all-clear sat in the
+      # highest-recency position of the merge prompt, outweighing blocking findings above it in an
+      # observed run. Code review goes last so the section likelier to carry blocking findings is
+      # what the merge model reads most recently.
       - name: 'Combine review and security summaries'
         id: 'combine_summary'
         if: ${{ !cancelled() && inputs.is_fork != 'true' }}
@@ -322,10 +357,10 @@ jobs:
         run: |-
           {
             echo "summary<<GEMINI_SUMMARY_EOF"
-            echo "## Code Review"
-            echo "${REVIEW_SUMMARY:-(no code review summary produced)}"
-            echo ""
             echo "## Security Analysis"
             echo "${SECURITY_SUMMARY:-(no security analysis summary produced)}"
+            echo ""
+            echo "## Code Review"
+            echo "${REVIEW_SUMMARY:-(no code review summary produced)}"
             echo "GEMINI_SUMMARY_EOF"
           } >> "${GITHUB_OUTPUT}"

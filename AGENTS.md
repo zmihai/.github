@@ -34,8 +34,8 @@ builds — there is no app build.
     ci-npm.yml / ci-python.yml / ci-php.yml / ci-java.yml   # per-language CI
     reusable-security-scan.yml     # dependency audit + optional CodeQL
   commands/
-    gemini-review.toml             # the review prompt
-    gemini-merge.toml              # the review-and-merge prompt (encodes merge policy)
+    pr-review.toml                 # the review prompt
+    pr-merge.toml                  # the review-and-merge prompt (encodes merge policy)
   copilot-instructions.md          # review guidance for AI reviewers of THIS repo
 actions/
   setup-node-env/ setup-python-env/ setup-php-env/ setup-java-env/   # composite actions
@@ -190,7 +190,8 @@ before relying on them.
 **Gemini prompt-authoring & sandbox conventions:**
 
 - **GitHub MCP Tool Naming:** Use the exact **`mcp_github_*`-prefixed** tool names in prompt templates (e.g., `mcp_github_pull_request_review_write`). Bare names are wrong.
-- **Parsing JSON Arrays with `jq`:** Inject JSON-array variables (like `PROJECTS`) into `.gemini/context.json` with `jq --argjson` instead of `--arg` (which stringifies it and breaks array-typed schemas).
+- **Parsing JSON Arrays with `jq`:** Inject JSON-array variables (like `PROJECTS`) into `.gemini-context.json` with `jq --argjson` instead of `--arg` (which stringifies it and breaks array-typed schemas).
+- **`@{file}` includes silently drop gitignored paths:** the Gemini CLI's at-file include filters through `.gitignore`/`.geminiignore` (verified in 0.46.0) — an ignored file vanishes from the prompt with no error. That's why the prompt context file lives at the repo root as `.gemini-context.json` (several consumer repos gitignore `.gemini/`) and why the Prepare-prompt-context steps guard it with `git check-ignore`. Never move it back under `.gemini/`.
 - **YOLO Mode Tool Policy:** To allow unrestricted shell execution in YOLO mode, specify `"run_shell_command"` with **no** arguments (specifying an argument like `"run_shell_command(echo)"` restricts execution only to that command).
 
 **Permissions in reusable workflows:**
@@ -239,8 +240,8 @@ before relying on them.
 - `.github/workflows/reusable-gemini-dispatch.yml` — entry point / command router.
 - `.github/workflows/gemini-review.yml` — code-review + security passes; builds `review_summary`.
 - `.github/workflows/gemini-merge.yml` — merge policy execution + durable-outcome gate.
-- `.github/commands/gemini-merge.toml` — the prompt encoding the merge/remediation policy.
-- `.github/commands/gemini-review.toml` — the review prompt (severity levels, comment format).
+- `.github/commands/pr-merge.toml` — the prompt encoding the merge/remediation policy.
+- `.github/commands/pr-review.toml` — the review prompt (severity levels, comment format).
 - `.github/workflows/reusable-ci.yml` + `ci-{npm,python,php,java}.yml` — reusable CI.
 - `.github/workflows/reusable-security-scan.yml` — dependency audits + CodeQL.
 - `actions/setup-{node,python,php,java}-env/action.yml` — composite setup actions.

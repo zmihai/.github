@@ -107,9 +107,21 @@ jobs:
             }
             return headRef;
 
+      # The context file deliberately lives at the repository root, NOT under .gemini/: the Gemini
+      # CLI's @{file} include resolves through the workspace file filter, which SILENTLY drops any
+      # path matched by .gitignore or .geminiignore (verified in gemini-cli 0.46.0:
+      # readPathFromWorkspace returns [] for ignored single files, and AtFileProcessor turns that
+      # into "file was ignored ... and was not included in the prompt"). Several consumer repos
+      # gitignore `.gemini/`, which used to strip the entire Input Data block from the merge prompt
+      # without any error. The check-ignore guard fails loudly if the chosen path is ever ignored
+      # (it does not evaluate .geminiignore — keep the context file out of any .geminiignore too).
       - name: 'Prepare prompt context'
         shell: 'bash'
         run: |-
+          if git check-ignore -q "${CONTEXT_FILE}"; then
+            echo "::error::'${CONTEXT_FILE}' is ignored by a .gitignore rule in this repository. The Gemini CLI silently drops gitignored @{} includes, so the merge agent would run without its Input Data. Remove the ignore rule or relocate the context file."
+            exit 1
+          fi
           mkdir -p .gemini
           jq -n \
             --arg repo "${REPOSITORY}" \
@@ -120,8 +132,9 @@ jobs:
             --argjson projects "${PROJECTS:-[]}" \
             --arg review_summary "${REVIEW_SUMMARY}" \
             --arg head_ref "${HEAD_REF}" \
-            '{repository: $repo, pull_request_number: $pr, issue_title: $issue_title, issue_body: $issue_body, additional_context: $context, projects: $projects, review_summary: $review_summary, head_ref: $head_ref}' > .gemini/context.json
+            '{repository: $repo, pull_request_number: $pr, issue_title: $issue_title, issue_body: $issue_body, additional_context: $context, projects: $projects, review_summary: $review_summary, head_ref: $head_ref}' > "${CONTEXT_FILE}"
         env:
+          CONTEXT_FILE: '.gemini-context.json'
           REPOSITORY: '${{ github.repository }}'
           PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
           ISSUE_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
@@ -136,6 +149,16 @@ jobs:
       # Comparing IDs (not times) is immune to whole-second timestamp granularity and to clock skew
       # between the runner and the GitHub API, and it correctly excludes pre-existing reviews/merges and
       # the review submitted earlier in the same dispatch by the review job (which completes first).
+      #
+      # The step additionally computes `blocking_review`: whether the PR carries an ACTIVE
+      # CHANGES_REQUESTED review (a reviewer whose most recent decisive review is CHANGES_REQUESTED
+      # and has not been dismissed or superseded by their own later APPROVED). The merge prompt
+      # already forbids merging over such a review, but that gate lived only in model compliance —
+      # and the model has been observed merging past it. When `blocking_review` is true the merge
+      # model is not invoked at all (a deterministic skip): the blocking review IS the durable
+      # outcome, the author already has actionable feedback from the review job, and there is
+      # nothing useful for the merge agent to add. The job stays green — a red here would make the
+      # dispatch fallthrough post a spurious "failure" comment on every correctly-blocked PR.
       - name: 'Snapshot PR review state'
         id: 'pre_state'
         if: ${{ inputs.is_fork != 'true' }}
@@ -158,12 +181,62 @@ jobs:
             const decisiveIds = reviews
               .filter(r => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED')
               .map(r => r.id);
+            // Active CHANGES_REQUESTED detection. GitHub review semantics: per reviewer, a later
+            // APPROVED or CHANGES_REQUESTED supersedes their earlier one, and a dismissed review
+            // flips to state DISMISSED. COMMENTED reviews never supersede anything. So a reviewer
+            // blocks iff their LATEST review among {APPROVED, CHANGES_REQUESTED, DISMISSED} is
+            // CHANGES_REQUESTED. listReviews is observed to return submission order, but that
+            // ordering is not documented — sort by submitted_at (Array.prototype.sort is stable,
+            // so same-second reviews keep their API order) instead of relying on it.
+            const ordered = [...reviews].sort(
+              (a, b) => new Date(a.submitted_at ?? 0) - new Date(b.submitted_at ?? 0)
+            );
+            const latestDecisiveByUser = new Map();
+            for (const r of ordered) {
+              if (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED' || r.state === 'DISMISSED') {
+                latestDecisiveByUser.set(r.user?.login ?? `id:${r.user?.id}`, r);
+              }
+            }
+            const blocking = [...latestDecisiveByUser.values()].filter(r => r.state === 'CHANGES_REQUESTED');
             // Use merged_at (non-null when merged) as the merged indicator — reliably present on the
             // single-PR GET response.
             const isMerged = pr.merged_at != null;
             core.setOutput('was_merged', String(isMerged));
             core.setOutput('decisive_review_ids', JSON.stringify(decisiveIds));
-            core.info(`Pre-run snapshot: merged=${isMerged}, decisive reviews=${decisiveIds.length}`);
+            core.setOutput('blocking_review', String(blocking.length > 0));
+            for (const r of blocking) {
+              core.notice(`PR #${prNumber} has an active CHANGES_REQUESTED review by ${r.user?.login} (review ${r.id}) — the merge model will not be invoked.`);
+            }
+            core.info(`Pre-run snapshot: merged=${isMerged}, decisive reviews=${decisiveIds.length}, blocking reviews=${blocking.length}`);
+
+      # The Gemini CLI resolves /commands from the workspace's `.gemini/commands/` (plus
+      # ~/.gemini/commands and extensions) — and it passes an UNRESOLVED /command through to the
+      # model as literal prompt text, without any error. The workspace here is the CONSUMER repo,
+      # which has no command files, so without this step /pr-merge does not exist and the model
+      # runs with a one-line prompt instead of the merge policy in .github/commands/pr-merge.toml.
+      # The commands are fetched from this reusable workflow's own repo at the exact ref the
+      # caller pinned (job.workflow_repository/job.workflow_sha — the repo and commit of the
+      # workflow file that defines THIS job), so consumers can never see version-skewed
+      # prompts. Command names are deliberately distinct from run-gemini-cli's bundled set
+      # (gemini-review, gemini-invoke, gemini-triage, ...): the action copies its bundled files
+      # into `.gemini/commands/` AFTER this step and silently overwrites same-named files.
+      - name: 'Fetch repo Gemini commands'
+        if: ${{ inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
+        uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # ratchet:actions/checkout@v6
+        with:
+          repository: '${{ job.workflow_repository }}'
+          ref: '${{ job.workflow_sha }}'
+          path: '.reusable-workflows-src'
+          sparse-checkout: '.github/commands'
+          persist-credentials: false
+
+      - name: 'Install repo Gemini commands'
+        if: ${{ inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
+        shell: 'bash'
+        run: |-
+          mkdir -p .gemini/commands
+          cp .reusable-workflows-src/.github/commands/*.toml .gemini/commands/
+          rm -rf .reusable-workflows-src
 
       # Installed with `--consent` because run-gemini-cli's own installer cannot answer the Agent
       # Skills consent prompt — see the 'Pre-install code-review extension' step in
@@ -171,7 +244,7 @@ jobs:
       # extension up from $HOME/.gemini — its `extensions:` input is intentionally NOT set
       # (re-installing there would re-prompt and fail again).
       - name: 'Pre-install code-review extension (non-interactive)'
-        if: ${{ inputs.is_fork != 'true' }}
+        if: ${{ inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
         env:
           # Keep in sync with the `gemini_cli_version` passed to run-gemini-cli below (npm
           # versions/dist-tags only — see gemini-review.yml).
@@ -180,7 +253,7 @@ jobs:
           npx --yes "@google/gemini-cli@${GEMINI_CLI_VERSION}" extensions install --consent 'https://github.com/gemini-cli-extensions/code-review' </dev/null
 
       - name: 'Run Gemini pull request merge'
-        if: ${{ inputs.is_fork != 'true' }}
+        if: ${{ inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
         uses: 'google-github-actions/run-gemini-cli@3ca2577f2714990269a7378904cf70ae1e01e288' # ratchet:google-github-actions/run-gemini-cli@main
         id: 'gemini_pr_merge'
         env:
@@ -256,7 +329,14 @@ jobs:
                 ]
               }
             }
-          prompt: '/gemini-merge --merge_strategy=squash --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}" --review_summary="${{ inputs.review_summary }}"'
+          # review_summary is deliberately NOT passed as a prompt argument: arguments are appended
+          # after the command template's final "## Arguments:" line, so a multi-line summary used to
+          # occupy the highest-recency position in the prompt — in one observed run the security
+          # section's closing "no findings were identified" outweighed both a High-severity code
+          # review and failing CI, and the model merged. The summary now reaches the model only
+          # through the Input Data context file (whose delivery the check-ignore guard above makes
+          # deterministic).
+          prompt: '/pr-merge --merge_strategy=squash --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }} --title=${{ github.event.pull_request.title || github.event.issue.title }} --projects="${{ inputs.projects }}"'
 
       # The Gemini CLI step reports "success" whenever the process exits 0, which happens even when the
       # model only narrates actions (e.g. "I merged the PR") without invoking the corresponding tools.
@@ -267,7 +347,7 @@ jobs:
       # the same dispatch by the review job. A run that ends with only pending/comment activity is
       # treated as a failure so it surfaces red and triggers the dispatch fallthrough notification.
       - name: 'Verify durable merge outcome'
-        if: ${{ success() && inputs.is_fork != 'true' }}
+        if: ${{ success() && inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
         uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
         env:
           INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
