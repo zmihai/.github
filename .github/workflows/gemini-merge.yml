@@ -185,9 +185,14 @@ jobs:
             // APPROVED or CHANGES_REQUESTED supersedes their earlier one, and a dismissed review
             // flips to state DISMISSED. COMMENTED reviews never supersede anything. So a reviewer
             // blocks iff their LATEST review among {APPROVED, CHANGES_REQUESTED, DISMISSED} is
-            // CHANGES_REQUESTED. listReviews returns reviews in submission order.
+            // CHANGES_REQUESTED. listReviews is observed to return submission order, but that
+            // ordering is not documented — sort by submitted_at (Array.prototype.sort is stable,
+            // so same-second reviews keep their API order) instead of relying on it.
+            const ordered = [...reviews].sort(
+              (a, b) => new Date(a.submitted_at ?? 0) - new Date(b.submitted_at ?? 0)
+            );
             const latestDecisiveByUser = new Map();
-            for (const r of reviews) {
+            for (const r of ordered) {
               if (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED' || r.state === 'DISMISSED') {
                 latestDecisiveByUser.set(r.user?.login ?? `id:${r.user?.id}`, r);
               }

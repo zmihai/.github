@@ -167,8 +167,8 @@ time** (`cancel-in-progress` is false for dependabot). Steps:
    merging past an active `CHANGES_REQUESTED` review.
 5. **Run Gemini pull request merge** — `run-gemini-cli` with the code-review extension and
    GitHub MCP **`v0.27.0`**; `includeTools` adds **`merge_pull_request`** (and its
-   `mcp_github_merge_pull_request` FQN in `tools.core`). Runs `/pr-merge
-   --merge_strategy=squash …`.
+   `mcp_github_merge_pull_request` FQN in `tools.core`).
+   Runs `/pr-merge --merge_strategy=squash …`.
 6. **Verify durable merge outcome** — fails the job unless **this run** either merged the
    PR (`merged_at` newly non-null) or added a **new** decisive review not in the
    pre-snapshot. This catches the model narrating "I merged it" without actually invoking
