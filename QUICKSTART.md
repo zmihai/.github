@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.11.3
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.12.0
     with:
       language: 'javascript'
       language-version: '20'
@@ -39,7 +39,7 @@ Add this to any workflow job:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-node-env@v0.11.3
+  - uses: zmihai/.github/actions/setup-node-env@v0.12.0
     with:
       node-version: '20'
 ```

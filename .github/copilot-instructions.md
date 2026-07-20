@@ -29,7 +29,7 @@ When reviewing a pull request:
 
 ## Context that affects reviews
 
-- The merge automation lives in `.github/workflows/gemini-merge.yml` and `.github/commands/gemini-merge.toml`.
+- The merge automation lives in `.github/workflows/gemini-merge.yml` and `.github/commands/pr-merge.toml`.
 - The merge policy is intentional: failures are classified **related** vs **unrelated/pre-existing**;
   related failures must pass or be remediated, while unrelated pre-existing failures (including
   security) do not block the merge. Review changes against this policy rather than assuming an
