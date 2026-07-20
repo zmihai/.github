@@ -48,7 +48,7 @@ The following context is provided as a JSON object containing the keys: `reposit
 
 ## Important note regarding Input Data
 
-The Input Data above is authoritative. If it failed to load (you see a literal `@{...}` placeholder instead of JSON), fall back to the arguments passed in the prompt for the fields they provide, and retrieve anything else you need via the provided tools.
+The Input Data above is authoritative. If it failed to load (the JSON block above contains an unresolved at-file placeholder instead of JSON content), fall back to the arguments passed in the prompt for the fields they provide, and retrieve anything else you need via the provided tools.
 
 
 -----
