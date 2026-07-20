@@ -22,5 +22,10 @@ runs:
       env:
         ACTION_PATH: '${{ github.action_path }}'
       run: |-
+        src="${ACTION_PATH}/../../.github/commands"
+        if ! compgen -G "${src}/*.toml" > /dev/null; then
+          echo "::error::No Gemini command files found at '${src}/*.toml' — the action repository layout may have changed. Without them the Gemini CLI would treat the /pr-review and /pr-merge prompts as literal text."
+          exit 1
+        fi
         mkdir -p .gemini/commands
-        cp "${ACTION_PATH}/../../.github/commands/"*.toml .gemini/commands/
+        cp -v "${src}/"*.toml .gemini/commands/
