@@ -210,7 +210,7 @@ jobs:
             core.setOutput('decisive_review_ids', JSON.stringify(decisiveIds));
             core.setOutput('blocking_review', String(blocking.length > 0));
             for (const r of blocking) {
-              core.notice(`PR #${prNumber} has an active CHANGES_REQUESTED review by ${r.user?.login} (review ${r.id}) — the merge model will not be invoked.`);
+              core.notice(`PR #${prNumber} has an active CHANGES_REQUESTED review by ${r.user?.login ?? '<unknown user>'} (review ${r.id}) — the merge model will not be invoked.`);
             }
             core.info(`Pre-run snapshot: merged=${isMerged}, decisive reviews=${decisiveIds.length}, blocking reviews=${blocking.length}`);
 
