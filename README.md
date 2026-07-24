@@ -365,6 +365,12 @@ permissions:
   issues: write
   id-token: write
 
+# Per-PR serialization — load-bearing for the merge step: the reusable merge
+# workflow has no concurrency group of its own and relies on the caller's.
+concurrency:
+  group: gemini-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   ci_project_a:
     name: CI - Project A
