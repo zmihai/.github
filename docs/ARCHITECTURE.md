@@ -143,8 +143,10 @@ makes git commands "denied by policy" and fails the step.
 
 ### 1.4 `gemini-merge.yml` — review, remediate, merge
 
-`timeout-minutes: 15`, `concurrency` group `…-merge-…` so **only one merge runs at a
-time** (`cancel-in-progress` is false for dependabot). Steps:
+`timeout-minutes: 15`, deliberately **no `concurrency` group** — per-PR serialization
+comes from the caller's group (a former repo-wide `…-merge-…` group silently evicted
+queued merge runs whenever several Dependabot PRs arrived together, since Actions keeps
+only one pending run per group). Steps:
 
 1. Mint token, checkout resolved ref.
 2. **Resolve PR head ref** — `github-script` returns the PR's `head.ref`. It **validates

@@ -24,6 +24,9 @@ on:
 # happens at queue time — BEFORE the guard can rule an event irrelevant — so
 # an unconditional cancel lets any bot review or comment kill the in-flight
 # build seconds after it starts.
+# This block is also load-bearing for the merge step: the reusable merge
+# workflow deliberately has no concurrency group of its own and relies on this
+# per-PR group for serialization — don't remove it.
 concurrency:
   group: gemini-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

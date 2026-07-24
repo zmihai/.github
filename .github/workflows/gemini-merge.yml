@@ -37,9 +37,16 @@ on:
         required: false
         type: string
 
-concurrency:
-  group: '${{ github.workflow }}-merge-${{ github.event_name }}' # Only one merge should run at a time, to avoid cases where the previous merge causes a conflict
-  cancel-in-progress: ${{ github.actor != 'dependabot[bot]' }}
+# Deliberately no `concurrency` block here. Per-PR serialization of the whole
+# guard -> dispatch -> review/merge pipeline comes from the caller workflow's
+# per-PR concurrency group (see workflow-templates/gemini.yml), so two runs for
+# the same PR never execute concurrently. A repo-wide merge group used to live
+# here, but GitHub Actions keeps at most ONE pending run per group and silently
+# cancels the rest, so simultaneous Dependabot PRs evicted each other's merge
+# jobs and were left fully reviewed yet unmerged, with nothing to retry them.
+# Cross-PR merge races are the accepted trade-off: a losing merge fails
+# visibly, and Dependabot auto-rebases when the base branch moves, which
+# triggers a fresh run.
 
 defaults:
   run:

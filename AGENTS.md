@@ -128,9 +128,12 @@ workflows with `secrets: inherit`. `workflow-templates/gemini.yml` is the canoni
 (trigger set including `pull_request: synchronize`, per-PR `concurrency` group, and the
 minimum `permissions` grant); see also `README.md` / `QUICKSTART.md` / `examples/`.
 
-**Operational practice:** run the review/merge workflows **one PR at a time** to avoid
-merge conflicts. The merge workflow has a `concurrency` group enforcing a single merge in
-flight.
+**Operational practice:** merge serialization is **per PR**, via the caller template's
+`concurrency` group; the merge workflow deliberately has no group of its own. (A former
+repo-wide merge group let queued merge runs be silently evicted — Actions keeps only one
+pending run per group — leaving simultaneous Dependabot PRs reviewed but unmerged.)
+Merges of different PRs may race; the losing merge fails visibly, and Dependabot
+auto-rebases when the base moves, triggering a fresh run.
 
 ## Versioning & Release
 
