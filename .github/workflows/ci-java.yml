@@ -62,7 +62,7 @@ jobs:
 
       - name: Setup Java Environment
         id: setup
-        uses: zmihai/.github/actions/setup-java-env@v0.12.2
+        uses: zmihai/.github/actions/setup-java-env@v0.12.3
         with:
           java-version: ${{ inputs.java-version }}
           distribution: ${{ inputs.distribution }}
