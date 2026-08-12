@@ -296,7 +296,7 @@ steps:
 
 **Path:** `actions/setup-java-env/action.yml`
 
-Sets up a JDK (Temurin by default) and auto-detects the build tool (Maven via `pom.xml`, Gradle via `build.gradle(.kts)`/`settings.gradle(.kts)`). The action fails if no supported build tool is found. Enables build-tool caching and best-effort dependency resolution.
+Sets up a JDK (Temurin by default) and auto-detects the build tool (Maven via `pom.xml`, Gradle via `build.gradle(.kts)`/`settings.gradle(.kts)`). The action fails if no supported build tool is found. Caches the dependency store (`~/.m2/repository` / `~/.gradle/caches` + `~/.gradle/wrapper`) with a `restore-keys` fallback, so a PR that changes a build file (e.g. a dependency bump) restores the closest previous cache and downloads only the delta. Performs best-effort dependency resolution.
 
 **Inputs:**
 - `java-version` (default: '21'): Java version

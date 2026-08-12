@@ -106,7 +106,10 @@ project. Exposes an `outcome` output.
 
 **Composite actions** (`actions/<name>@vX.Y.Z`) — `setup-node-env`, `setup-python-env`,
 `setup-php-env`, `setup-java-env`: set up the toolchain with caching and best-effort
-dependency install. `setup-java-env` auto-detects Maven/Gradle and outputs `build-tool`.
+dependency install. `setup-java-env` auto-detects Maven/Gradle and outputs `build-tool`;
+its dependency cache is an explicit `actions/cache` with a `restore-keys` prefix fallback
+(not setup-java's built-in cache, which has none), so build-file changes restore the
+closest previous cache instead of downloading everything cold.
 
 ## How Downstream Repos Consume These
 
