@@ -123,7 +123,7 @@ jobs:
       # copy runs later and overwrites same-named files — hence the distinctive names).
       - name: 'Install repo Gemini commands'
         if: ${{ inputs.is_fork != 'true' }}
-        uses: 'zmihai/.github/actions/install-gemini-commands@v0.12.2'
+        uses: 'zmihai/.github/actions/install-gemini-commands@v0.12.3'
 
       # Canonical rationale for the pre-install steps (the other pre-install steps here and in
       # gemini-merge.yml reference this comment): run-gemini-cli's bundled installer pipes a

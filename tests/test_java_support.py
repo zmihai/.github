@@ -37,6 +37,30 @@ def test_setup_java_env_safely_installs_system_packages():
     assert 'sudo apt-get install -y --no-install-recommends -- "${packages[@]}"' in script
     assert '$PACKAGES' not in script
 
+def test_setup_java_env_dependency_caches_have_restore_keys():
+    with open('actions/setup-java-env/action.yml', 'r') as f:
+        action = yaml.safe_load(f)
+    steps = action['runs']['steps']
+    # setup-java's built-in cache keys on an exact build-file hash with no
+    # restore-keys, so every dependency bump would re-download cold — the
+    # explicit actions/cache steps below must stay the only caching layer.
+    setup = next(s for s in steps if s.get('name') == 'Setup Java')
+    assert 'cache' not in setup['with']
+    assert 'cache-dependency-path' not in setup['with']
+    for tool, name in (('maven', 'Cache Maven repository'),
+                       ('gradle', 'Cache Gradle dependencies')):
+        step = next(s for s in steps if s.get('name') == name)
+        assert step['uses'].startswith('actions/cache@')
+        assert f"steps.detect.outputs.tool == '{tool}'" in step['if']
+        assert 'hashFiles' in step['with']['key']
+        assert f'-{tool}-' in step['with']['key']
+        assert step['with']['restore-keys'].strip() == f'${{{{ runner.os }}}}-{tool}-'
+    maven = next(s for s in steps if s.get('name') == 'Cache Maven repository')
+    assert maven['with']['path'] == '~/.m2/repository'
+    gradle = next(s for s in steps if s.get('name') == 'Cache Gradle dependencies')
+    assert '~/.gradle/caches' in gradle['with']['path']
+    assert '~/.gradle/wrapper' in gradle['with']['path']
+
 def test_ci_java_passes_extensions_as_system_packages():
     with open('.github/workflows/ci-java.yml', 'r') as f:
         workflow = yaml.safe_load(f)

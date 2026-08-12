@@ -310,7 +310,7 @@ SHA with a `# ratchet:` comment.
 | `setup-node-env`   | `node-version` (20), `cache` (npm), `install-dependencies` (true), `working-directory` (.) | `cache-hit` | Installs via `npm ci` / `yarn --frozen-lockfile` / `pnpm --frozen-lockfile` by cache type. |
 | `setup-python-env` | `python-version` (3.11), `install-dependencies` (true), `working-directory` (.) | `cache-hit` | pip cache keyed on `requirements.txt`/`pyproject.toml`; installs `pip install .` (pyproject) or `-r requirements.txt`. |
 | `setup-php-env`    | `php-version` (8.4), `install-dependencies` (true), `working-directory` (.), `extensions` ('') | — | `extensions` defaults to `json, mbstring, xml, iconv`; composer:v2; composer cache; `composer install`. |
-| `setup-java-env`   | `java-version` (21), `distribution` (temurin), `install-dependencies` (true), `working-directory` (.), `system-packages` ('') | `build-tool` | Auto-detects maven/gradle (fails if neither); validates & apt-installs `system-packages`; best-effort dependency warmup. |
+| `setup-java-env`   | `java-version` (21), `distribution` (temurin), `install-dependencies` (true), `working-directory` (.), `system-packages` ('') | `build-tool` | Auto-detects maven/gradle (fails if neither); validates & apt-installs `system-packages`; best-effort dependency warmup; caches `~/.m2` / `~/.gradle` via explicit `actions/cache` with a restore-keys fallback (setup-java's built-in cache has none, so dependency bumps would always miss). |
 
 ---
 
