@@ -119,8 +119,16 @@ jobs:
             //    - comments/reviews/issue bodies: only when they start with
             //      @gemini-cli and the author is an OWNER/MEMBER/COLLABORATOR
             //      human user
+            //
+            // "From a fork" means the PR's head lives in a DIFFERENT repo than
+            // the one the workflow runs in — compare repo identities, never the
+            // head repo's `fork` attribute: a consumer repo that is itself a
+            // GitHub fork carries fork=true on its own same-repo PRs, which
+            // would wrongly skip the whole pipeline on every PR. Optional
+            // chaining fails closed: a missing head repo (deleted fork) yields
+            // undefined === id → false.
             const proceed =
-              (context.eventName === 'pull_request' && payload.pull_request?.head?.repo?.fork === false) ||
+              (context.eventName === 'pull_request' && payload.pull_request?.head?.repo?.id === payload.repository?.id) ||
               (context.eventName === 'issues' && ['opened', 'reopened'].includes(payload.action)) ||
               (authorizedAuthor && request.startsWith('@gemini-cli'));
 
@@ -166,7 +174,9 @@ jobs:
             let isFork = 'false'; // Default false unless proven it's a fork
 
             if (payload.pull_request) {
-               isFork = payload.pull_request.head.repo.fork ? 'true' : 'false';
+               // Same repo-identity comparison as the trigger policy above
+               // (fails closed when the head repo is gone).
+               isFork = payload.pull_request.head.repo?.id === payload.repository?.id ? 'false' : 'true';
             } else if (payload.issue?.pull_request) {
                const issueNumber = payload.issue.number;
                 try {
@@ -179,7 +189,7 @@ jobs:
                   resolvedRef = pr.head.sha;
                   console.log(`Resolved PR head SHA: ${resolvedRef}`);
                  }
-                 isFork = pr.head.repo.fork ? 'true' : 'false';
+                 isFork = pr.head.repo?.id === pr.base.repo.id ? 'false' : 'true';
                 } catch (e) {
                  console.log(`Could not fetch PR data for issue ${issueNumber}. Failing closed by assuming it is a fork.`);
                  isFork = 'true'; // Fail closed: set to true if fetch fails to prevent secret exposure
