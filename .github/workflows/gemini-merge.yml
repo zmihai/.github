@@ -235,7 +235,7 @@ jobs:
       # overwrites same-named files.
       - name: 'Install repo Gemini commands'
         if: ${{ inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
-        uses: 'zmihai/.github/actions/install-gemini-commands@v0.12.3'
+        uses: 'zmihai/.github/actions/install-gemini-commands@v0.12.4'
 
       # Installed with `--consent` because run-gemini-cli's own installer cannot answer the Agent
       # Skills consent prompt — see the 'Pre-install code-review extension' step in
