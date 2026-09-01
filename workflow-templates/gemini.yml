@@ -90,9 +90,9 @@ jobs:
       # actions: read to the workflow permissions block above.
       scan-code: false
       ref: ${{ needs.guard.outputs.resolved_ref }}
-    # `secrets: inherit` forwards secrets only between workflows that share an
-    # owner. A consumer in another user/org must replace it with an explicit
-    # map for any secret this call needs (e.g. CUSTOM_TOKEN).
+    # The security-scan workflow currently declares and uses no secrets, so
+    # this `inherit` is inert; it is kept for forward compatibility. (Note
+    # `secrets: inherit` only forwards between workflows that share an owner.)
     secrets: inherit
 
   # Aggregate the outcomes into the `projects` JSON the dispatch expects.
