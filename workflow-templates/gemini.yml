@@ -144,4 +144,11 @@ jobs:
     with:
       projects: ${{ needs.projects-output.outputs.projects_json }}
       ref: ${{ needs.guard.outputs.resolved_ref }}
-    secrets: inherit
+    # Pass secrets explicitly — `secrets: inherit` only carries secrets
+    # between workflows that share an owner, so a repo consuming these
+    # workflows from another user or organization would run review/merge
+    # with empty credentials. Add GOOGLE_API_KEY / APP_PRIVATE_KEY lines
+    # only if you use those auth paths. For a distinct bot identity on PR
+    # updates, configure a GitHub App (vars.APP_ID + APP_PRIVATE_KEY).
+    secrets:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

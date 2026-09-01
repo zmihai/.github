@@ -445,7 +445,9 @@ jobs:
     with:
       pull_request_number: ${{ github.event.pull_request.number }}
       projects: ${{ needs.aggregate.outputs.projects_json }}
-    secrets: inherit
+    # Explicit — `secrets: inherit` only carries secrets between same-owner workflows.
+    secrets:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 ```
 
 ### Complete CI Pipeline (PHP)

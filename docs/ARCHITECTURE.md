@@ -80,14 +80,20 @@ The downstream caller wires this to `pull_request`, `issue_comment`, `issues`, a
 - **`dispatch`** — runs only when the guard's `proceed` is `'true'`; re-exports the
   guard's outputs and posts the acknowledgement comment to the PR/issue (or the
   "forks not supported" comment on `unsupported-fork`).
-- **`review`** / **`merge`** — call `gemini-review.yml` / `gemini-merge.yml` with
-  `secrets: inherit`. `merge` runs when the command is `merge`, or when `review`'s output
-  command is `review-and-merge`.
+- **`review`** / **`merge`** — call `gemini-review.yml` / `gemini-merge.yml`, forwarding
+  the pipeline secrets explicitly (`secrets: inherit` only carries secrets between
+  workflows that share an owner, so it silently delivers nothing to cross-owner callers).
+  `merge` runs when the command is `merge`, or when `review`'s output command is
+  `review-and-merge`.
 - **`fallthrough`** — runs on `failure()` or an unrecognized command; posts a failure
   comment.
 
 **Inputs:** `projects` (required JSON string), `ref` (optional).
-**Secrets:** `GEMINI_API_KEY` (required), `CALLER_GITHUB_TOKEN` (required).
+**Secrets (all optional, forwarded explicitly to review/merge):** `GEMINI_API_KEY`,
+`GOOGLE_API_KEY`, `APP_PRIVATE_KEY`. At least one Gemini auth method
+(`GEMINI_API_KEY`, `GOOGLE_API_KEY`, or Vertex AI via vars-configured WIF) must be
+configured or review/merge fail at the Gemini CLI step; the GitHub App path
+(`vars.APP_ID` + `APP_PRIVATE_KEY`) is GitHub identity only, not Gemini auth.
 **Caller permissions:** the caller's token caps what called reusable workflows can do, and
 GitHub validates each nested job's `permissions:` request against the caller's grant — so
 every permission a `uses:` job requests becomes part of the mandatory caller contract. The
@@ -104,7 +110,7 @@ its reviews/merges are attributable to a bot identity. The token fallback chain 
 throughout is:
 
 ```
-steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token
+steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token
 ```
 
 ### 1.3 `gemini-review.yml` — two sequential Gemini passes

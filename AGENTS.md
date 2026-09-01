@@ -73,7 +73,10 @@ prompt, composite action, or template. The summary below is enough for orientati
 - **Dispatch** runs the guard, then (for allowed events) posts the acknowledgement
   comment and fans out to review/merge.
   - Inputs: `projects` (required JSON string), `ref` (optional).
-  - Secrets: `GEMINI_API_KEY` (required), `CALLER_GITHUB_TOKEN` (required).
+  - Secrets (all optional, forwarded explicitly to review/merge — `secrets: inherit`
+    only works between same-owner workflows): `GEMINI_API_KEY`, `GOOGLE_API_KEY`,
+    `APP_PRIVATE_KEY`. A distinct identity for PR updates comes from the GitHub App
+    path (`vars.APP_ID` + `APP_PRIVATE_KEY`); otherwise the default token is used.
   - Callers must grant at least `contents: write`, `pull-requests: write`,
     `issues: write`, `id-token: write` — the caller's token caps what called reusable
     workflows can do, and GitHub validates nested `permissions:` requests against it.
@@ -127,7 +130,7 @@ its first job, then `reusable-ci.yml` and `reusable-security-scan.yml` per proje
 on the guard's `proceed`/`is_pr`/`is_fork` and checking out the guard's `resolved_ref`),
 aggregates their `outcome`s into a `projects` JSON array (`working-directory`, `language`,
 `language-version`, `ci-outcome`, `scan-outcome` per project), and passes it to the Gemini
-workflows with `secrets: inherit`. `workflow-templates/gemini.yml` is the canonical caller
+workflows with an explicit `secrets:` map (inherit does not cross owners). `workflow-templates/gemini.yml` is the canonical caller
 (trigger set including `pull_request: synchronize`, per-PR `concurrency` group, and the
 minimum `permissions` grant); see also `README.md` / `QUICKSTART.md` / `examples/`.
 

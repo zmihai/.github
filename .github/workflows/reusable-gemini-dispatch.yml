@@ -16,11 +16,14 @@ on:
 
     secrets:
       GEMINI_API_KEY:
-        description: 'Required for calling the Gemini API'
-        required: true
-      CALLER_GITHUB_TOKEN:
-        description: 'Required for the workflow to update PRs'
-        required: true
+        description: 'Gemini API key. Optional only when review/merge authenticate to Gemini another way (GOOGLE_API_KEY, or Vertex AI via vars-configured WIF); with no Gemini auth method at all they fail at the Gemini CLI step.'
+        required: false
+      GOOGLE_API_KEY:
+        description: 'Optional alternative Gemini auth, forwarded to review/merge.'
+        required: false
+      APP_PRIVATE_KEY:
+        description: 'Private key for the GitHub App identity (vars.APP_ID), forwarded to review/merge.'
+        required: false
 
 defaults:
   run:
@@ -88,7 +91,7 @@ jobs:
       - name: 'Acknowledge request'
         if: ${{ needs.guard.outputs.command != 'fallthrough' && needs.guard.outputs.command != 'unsupported-fork' }}
         env:
-          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
           ISSUE_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
           MESSAGE: |-
             🤖 Hi @${{ github.actor }}, I've received your request, and I'm working on it now! You can track my progress [in the logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for more details.
@@ -101,7 +104,7 @@ jobs:
       - name: 'Acknowledge unsupported fork'
         if: ${{ needs.guard.outputs.command == 'unsupported-fork' }}
         env:
-          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
           ISSUE_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
           MESSAGE: |-
             🤖 Hi @${{ github.actor }}, unfortunately, fork PRs are not supported by the Gemini CLI workflows.
@@ -129,7 +132,15 @@ jobs:
       is_fork: '${{ needs.dispatch.outputs.is_fork }}'
       projects: '${{ needs.dispatch.outputs.projects }}'
       ref: ${{ needs.dispatch.outputs.resolved_ref }}
-    secrets: 'inherit'
+    # Forward secrets explicitly, never `inherit`: the inherit keyword only
+    # carries secrets between workflows that share an owner, so on a caller
+    # from another user or organization it silently delivers nothing and
+    # review/merge run with empty credentials. Explicit passing works at
+    # every hop regardless of owner.
+    secrets:
+      GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
+      GOOGLE_API_KEY: '${{ secrets.GOOGLE_API_KEY }}'
+      APP_PRIVATE_KEY: '${{ secrets.APP_PRIVATE_KEY }}'
 
   merge:
     needs:
@@ -153,7 +164,11 @@ jobs:
       review_summary: '${{ needs.review.outputs.review_summary }}'
       projects: '${{ needs.dispatch.outputs.projects }}'
       ref: ${{ needs.dispatch.outputs.resolved_ref }}
-    secrets: 'inherit'
+    # Explicit for the same cross-owner reason as the review call above.
+    secrets:
+      GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
+      GOOGLE_API_KEY: '${{ secrets.GOOGLE_API_KEY }}'
+      APP_PRIVATE_KEY: '${{ secrets.APP_PRIVATE_KEY }}'
 
   fallthrough:
     needs:
@@ -182,7 +197,7 @@ jobs:
 
       - name: 'Send failure comment'
         env:
-          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
           ISSUE_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
           MESSAGE: |-
             🤖 I'm sorry @${{ github.actor }}, but I was unable to process your request. Please [see the logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for more details.
