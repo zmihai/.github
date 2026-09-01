@@ -16,7 +16,7 @@ on:
 
     secrets:
       GEMINI_API_KEY:
-        description: 'Gemini API key. Optional only when review/merge authenticate another way (Vertex AI via vars, or a GitHub App); with no auth method at all they fail at the Gemini CLI step.'
+        description: 'Gemini API key. Optional only when review/merge authenticate to Gemini another way (GOOGLE_API_KEY, or Vertex AI via vars-configured WIF); with no Gemini auth method at all they fail at the Gemini CLI step.'
         required: false
       GOOGLE_API_KEY:
         description: 'Optional alternative Gemini auth, forwarded to review/merge.'

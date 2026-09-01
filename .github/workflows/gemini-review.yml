@@ -37,7 +37,7 @@ on:
 
     secrets:
       GEMINI_API_KEY:
-        description: 'Gemini API key (optional when authenticating via Vertex AI or a GitHub App)'
+        description: 'Gemini API key (optional when authenticating to Gemini via GOOGLE_API_KEY or Vertex AI)'
         required: false
       GOOGLE_API_KEY:
         description: 'Optional alternative Gemini auth'

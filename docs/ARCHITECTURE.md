@@ -91,8 +91,9 @@ The downstream caller wires this to `pull_request`, `issue_comment`, `issues`, a
 **Inputs:** `projects` (required JSON string), `ref` (optional).
 **Secrets (all optional, forwarded explicitly to review/merge):** `GEMINI_API_KEY`,
 `GOOGLE_API_KEY`, `APP_PRIVATE_KEY`. At least one Gemini auth method
-(API key, Vertex AI via vars, or a GitHub App) must be configured or review/merge fail
-at the Gemini CLI step.
+(`GEMINI_API_KEY`, `GOOGLE_API_KEY`, or Vertex AI via vars-configured WIF) must be
+configured or review/merge fail at the Gemini CLI step; the GitHub App path
+(`vars.APP_ID` + `APP_PRIVATE_KEY`) is GitHub identity only, not Gemini auth.
 **Caller permissions:** the caller's token caps what called reusable workflows can do, and
 GitHub validates each nested job's `permissions:` request against the caller's grant — so
 every permission a `uses:` job requests becomes part of the mandatory caller contract. The
