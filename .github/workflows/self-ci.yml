@@ -43,7 +43,7 @@ jobs:
         run: |
           ./actionlint -color \
             -ignore 'property "result" is not defined in object type' \
-            .github/workflows/*.yml
+            .github/workflows/*.yml workflow-templates/*.yml
 
   template-tests:
     runs-on: 'ubuntu-latest'
