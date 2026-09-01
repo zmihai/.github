@@ -88,7 +88,7 @@ The downstream caller wires this to `pull_request`, `issue_comment`, `issues`, a
 - **`fallthrough`** — runs on `failure()` or an unrecognized command; posts a failure
   comment.
 
-**Inputs:** `projects` (required JSON string), `ref` (optional).
+**Inputs:** `projects` (optional JSON string, default `[]`), `ref` (optional).
 **Secrets (all optional, forwarded explicitly to review/merge):** `GEMINI_API_KEY`,
 `GOOGLE_API_KEY`, `APP_PRIVATE_KEY`. At least one Gemini auth method
 (`GEMINI_API_KEY`, `GOOGLE_API_KEY`, or Vertex AI via vars-configured WIF) must be
