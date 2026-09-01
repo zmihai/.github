@@ -168,7 +168,7 @@ See `workflow-templates/gemini.yml` for the full caller pattern.
 The entry point for Gemini commands. It parses comments like `@gemini-cli /review` (via the Gemini Guard workflow above) and dispatches to the appropriate workflow.
 
 **Inputs:**
-- `projects` (string, required): JSON list of projects.
+- `projects` (string, optional, default `[]`): JSON list of projects.
 - `ref` (string, optional): The branch, tag or SHA to checkout. Automatically resolves the PR head SHA if available. Defaults to `github.sha` otherwise.
 
 **Caller permissions:** the caller's `GITHUB_TOKEN` caps what called reusable workflows can do, so the calling workflow must grant at least:
@@ -204,7 +204,7 @@ Uses Gemini to analyze CI/Security results and merge the PR when the changes are
 
 **Inputs:**
 - `pull_request_number` (string, required): The PR number.
-- `projects` (string, required): A JSON array of project objects. Each object must follow this schema:
+- `projects` (string, optional, default `[]`): A JSON array of project objects. Each object must follow this schema:
   ```json
   {
     "working-directory": "./python-server",

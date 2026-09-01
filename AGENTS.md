@@ -72,7 +72,7 @@ prompt, composite action, or template. The summary below is enough for orientati
     `additional_context`, `resolved_ref`, `is_fork`, `is_pr`, `issue_number`.
 - **Dispatch** runs the guard, then (for allowed events) posts the acknowledgement
   comment and fans out to review/merge.
-  - Inputs: `projects` (required JSON string), `ref` (optional).
+  - Inputs: `projects` (optional JSON string, default `[]`), `ref` (optional).
   - Secrets (all optional, forwarded explicitly to review/merge — `secrets: inherit`
     only works between same-owner workflows): `GEMINI_API_KEY`, `GOOGLE_API_KEY`,
     `APP_PRIVATE_KEY`. A distinct identity for PR updates comes from the GitHub App
