@@ -1,0 +1,57 @@
+name: 'Self CI'
+
+# CI for this repository's own workflow files and templates. Plain YAML
+# parsing and the template tests cannot catch expression-context violations
+# (e.g. `secrets` referenced in a step-level `if:` fails GitHub's validation
+# at run time while parsing fine as YAML); actionlint does.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - 'master'
+
+permissions:
+  contents: 'read'
+
+defaults:
+  run:
+    shell: 'bash'
+
+jobs:
+  actionlint:
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 5
+    steps:
+      - uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # ratchet:actions/checkout@v6
+
+      - name: 'Install actionlint'
+        env:
+          VERSION: '1.7.12'
+          SHA256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
+        run: |
+          curl -sSfL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/actionlint_${VERSION}_linux_amd64.tar.gz"
+          echo "${SHA256}  actionlint.tar.gz" | sha256sum -c -
+          tar xzf actionlint.tar.gz actionlint
+
+      - name: 'Run actionlint'
+        # The single -ignore suppresses a known actionlint false positive:
+        # `jobs.<job_id>.result` in `on.workflow_call.outputs` is documented
+        # GitHub behavior (and load-bearing for the CI outcome plumbing), but
+        # actionlint models the jobs context with outputs only.
+        run: |
+          ./actionlint -color \
+            -ignore 'property "result" is not defined in object type' \
+            .github/workflows/*.yml
+
+  template-tests:
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 5
+    steps:
+      - uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # ratchet:actions/checkout@v6
+
+      - name: 'Run template tests'
+        run: |
+          python3 -m pip install --quiet pytest pyyaml
+          python3 -m pytest -q tests/

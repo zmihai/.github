@@ -5,7 +5,7 @@ on:
     inputs:
       projects:
         description: 'JSON list of projects with their language, version, directory, and outcomes.'
-        required: true
+        required: false
         type: string
         default: '[]'
 
