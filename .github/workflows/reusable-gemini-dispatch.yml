@@ -16,11 +16,17 @@ on:
 
     secrets:
       GEMINI_API_KEY:
-        description: 'Required for calling the Gemini API'
-        required: true
+        description: 'Gemini API key. Optional only when review/merge authenticate another way (Vertex AI via vars, or a GitHub App); with no auth method at all they fail at the Gemini CLI step.'
+        required: false
       CALLER_GITHUB_TOKEN:
-        description: 'Required for the workflow to update PRs'
-        required: true
+        description: 'Optional identity override for PR updates; the token chain falls back to the default workflow token.'
+        required: false
+      GOOGLE_API_KEY:
+        description: 'Optional alternative Gemini auth, forwarded to review/merge.'
+        required: false
+      APP_PRIVATE_KEY:
+        description: 'Private key for the GitHub App identity (vars.APP_ID), forwarded to review/merge.'
+        required: false
 
 defaults:
   run:
@@ -129,7 +135,16 @@ jobs:
       is_fork: '${{ needs.dispatch.outputs.is_fork }}'
       projects: '${{ needs.dispatch.outputs.projects }}'
       ref: ${{ needs.dispatch.outputs.resolved_ref }}
-    secrets: 'inherit'
+    # Forward secrets explicitly, never `inherit`: the inherit keyword only
+    # carries secrets between workflows that share an owner, so on a caller
+    # from another user or organization it silently delivers nothing and
+    # review/merge run with empty credentials. Explicit passing works at
+    # every hop regardless of owner.
+    secrets:
+      GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
+      CALLER_GITHUB_TOKEN: '${{ secrets.CALLER_GITHUB_TOKEN }}'
+      GOOGLE_API_KEY: '${{ secrets.GOOGLE_API_KEY }}'
+      APP_PRIVATE_KEY: '${{ secrets.APP_PRIVATE_KEY }}'
 
   merge:
     needs:
@@ -153,7 +168,12 @@ jobs:
       review_summary: '${{ needs.review.outputs.review_summary }}'
       projects: '${{ needs.dispatch.outputs.projects }}'
       ref: ${{ needs.dispatch.outputs.resolved_ref }}
-    secrets: 'inherit'
+    # Explicit for the same cross-owner reason as the review call above.
+    secrets:
+      GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
+      CALLER_GITHUB_TOKEN: '${{ secrets.CALLER_GITHUB_TOKEN }}'
+      GOOGLE_API_KEY: '${{ secrets.GOOGLE_API_KEY }}'
+      APP_PRIVATE_KEY: '${{ secrets.APP_PRIVATE_KEY }}'
 
   fallthrough:
     needs:

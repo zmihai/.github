@@ -37,6 +37,20 @@ on:
         required: false
         type: string
 
+    secrets:
+      GEMINI_API_KEY:
+        description: 'Gemini API key (optional when authenticating via Vertex AI or a GitHub App)'
+        required: false
+      CALLER_GITHUB_TOKEN:
+        description: 'Optional identity override for PR updates; falls back to the default workflow token'
+        required: false
+      GOOGLE_API_KEY:
+        description: 'Optional alternative Gemini auth'
+        required: false
+      APP_PRIVATE_KEY:
+        description: 'Private key for the GitHub App identity (vars.APP_ID)'
+        required: false
+
 # Deliberately no `concurrency` block here. Per-PR serialization of the whole
 # guard -> dispatch -> review/merge pipeline comes from the caller workflow's
 # per-PR concurrency group (see workflow-templates/gemini.yml), so two runs for
