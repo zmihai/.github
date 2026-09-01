@@ -39,9 +39,6 @@ on:
       GEMINI_API_KEY:
         description: 'Gemini API key (optional when authenticating via Vertex AI or a GitHub App)'
         required: false
-      CALLER_GITHUB_TOKEN:
-        description: 'Optional identity override for PR updates; falls back to the default workflow token'
-        required: false
       GOOGLE_API_KEY:
         description: 'Optional alternative Gemini auth'
         required: false
@@ -165,7 +162,7 @@ jobs:
         id: 'gemini_pr_review'
         env:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
-          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
           GEMINI_CLI_TRUST_WORKSPACE: '${{ inputs.is_fork != ''true'' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository) }}'
         with:
           gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
@@ -265,7 +262,7 @@ jobs:
         id: 'gemini_security'
         env:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
-          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
           GEMINI_CLI_TRUST_WORKSPACE: '${{ inputs.is_fork != ''true'' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository) }}'
           REPOSITORY: '${{ github.repository }}'
           PULL_REQUEST_NUMBER: '${{ inputs.issue_number }}'

@@ -74,9 +74,9 @@ prompt, composite action, or template. The summary below is enough for orientati
   comment and fans out to review/merge.
   - Inputs: `projects` (required JSON string), `ref` (optional).
   - Secrets (all optional, forwarded explicitly to review/merge — `secrets: inherit`
-    only works between same-owner workflows): `GEMINI_API_KEY`, `CALLER_GITHUB_TOKEN`
-    (identity override, falls back to the default workflow token), `GOOGLE_API_KEY`,
-    `APP_PRIVATE_KEY`.
+    only works between same-owner workflows): `GEMINI_API_KEY`, `GOOGLE_API_KEY`,
+    `APP_PRIVATE_KEY`. A distinct identity for PR updates comes from the GitHub App
+    path (`vars.APP_ID` + `APP_PRIVATE_KEY`); otherwise the default token is used.
   - Callers must grant at least `contents: write`, `pull-requests: write`,
     `issues: write`, `id-token: write` — the caller's token caps what called reusable
     workflows can do, and GitHub validates nested `permissions:` requests against it.

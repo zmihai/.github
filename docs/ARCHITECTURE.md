@@ -90,8 +90,7 @@ The downstream caller wires this to `pull_request`, `issue_comment`, `issues`, a
 
 **Inputs:** `projects` (required JSON string), `ref` (optional).
 **Secrets (all optional, forwarded explicitly to review/merge):** `GEMINI_API_KEY`,
-`CALLER_GITHUB_TOKEN` (identity override; the token chain falls back to the default
-workflow token), `GOOGLE_API_KEY`, `APP_PRIVATE_KEY`. At least one Gemini auth method
+`GOOGLE_API_KEY`, `APP_PRIVATE_KEY`. At least one Gemini auth method
 (API key, Vertex AI via vars, or a GitHub App) must be configured or review/merge fail
 at the Gemini CLI step.
 **Caller permissions:** the caller's token caps what called reusable workflows can do, and
@@ -110,7 +109,7 @@ its reviews/merges are attributable to a bot identity. The token fallback chain 
 throughout is:
 
 ```
-steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token
+steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token
 ```
 
 ### 1.3 `gemini-review.yml` — two sequential Gemini passes

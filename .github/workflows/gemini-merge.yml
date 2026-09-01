@@ -41,9 +41,6 @@ on:
       GEMINI_API_KEY:
         description: 'Gemini API key (optional when authenticating via Vertex AI or a GitHub App)'
         required: false
-      CALLER_GITHUB_TOKEN:
-        description: 'Optional identity override for PR updates; falls back to the default workflow token'
-        required: false
       GOOGLE_API_KEY:
         description: 'Optional alternative Gemini auth'
         required: false
@@ -187,7 +184,7 @@ jobs:
         env:
           INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
         with:
-          github-token: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          github-token: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
           script: |
             const prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
             if (!prNumber) {
@@ -271,7 +268,7 @@ jobs:
         id: 'gemini_pr_merge'
         env:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
-          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
           GEMINI_CLI_TRUST_WORKSPACE: '${{ inputs.is_fork != ''true'' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository) }}'
         with:
           gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
@@ -367,7 +364,7 @@ jobs:
           PRE_WAS_MERGED: '${{ steps.pre_state.outputs.was_merged }}'
           PRE_DECISIVE_REVIEW_IDS: '${{ steps.pre_state.outputs.decisive_review_ids }}'
         with:
-          github-token: '${{ steps.mint_identity_token.outputs.token || secrets.CALLER_GITHUB_TOKEN || secrets.GITHUB_TOKEN || github.token }}'
+          github-token: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
           script: |
             const prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
             if (!prNumber) {
