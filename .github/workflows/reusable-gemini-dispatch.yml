@@ -22,7 +22,7 @@ on:
         description: 'Optional alternative Gemini auth, forwarded to review/merge.'
         required: false
       APP_PRIVATE_KEY:
-        description: 'Private key for the GitHub App identity (vars.APP_ID), forwarded to review/merge.'
+        description: 'Private key for the GitHub App identity. The App path activates only when vars.APP_ID and this key are both set; with either missing, workflows fall back to the default token. Forwarded to review/merge.'
         required: false
 
 defaults:
@@ -63,6 +63,10 @@ jobs:
     if: |-
       ${{ needs.guard.outputs.proceed == 'true' }}
     runs-on: 'ubuntu-latest'
+    env:
+      # `secrets` is not an allowed context in a step-level `if`, so the
+      # mint gate below reads the key's presence through job env instead.
+      APP_KEY_AVAILABLE: ${{ secrets.APP_PRIVATE_KEY != '' }}
     permissions:
       contents: 'read'
       issues: 'write'
@@ -79,7 +83,7 @@ jobs:
       - name: 'Mint identity token'
         id: 'mint_identity_token'
         if: |-
-          ${{ vars.APP_ID }}
+          ${{ vars.APP_ID != '' && env.APP_KEY_AVAILABLE == 'true' }}
         uses: 'actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b' # ratchet:actions/create-github-app-token@v2
         with:
           app-id: '${{ vars.APP_ID }}'
@@ -178,6 +182,10 @@ jobs:
     if: |-
       ${{ always() && !cancelled() && (failure() || needs.dispatch.outputs.command == 'fallthrough') }}
     runs-on: 'ubuntu-latest'
+    env:
+      # `secrets` is not an allowed context in a step-level `if`, so the
+      # mint gate below reads the key's presence through job env instead.
+      APP_KEY_AVAILABLE: ${{ secrets.APP_PRIVATE_KEY != '' }}
     permissions:
       contents: 'read'
       issues: 'write'
@@ -186,7 +194,7 @@ jobs:
       - name: 'Mint identity token'
         id: 'mint_identity_token'
         if: |-
-          ${{ vars.APP_ID }}
+          ${{ vars.APP_ID != '' && env.APP_KEY_AVAILABLE == 'true' }}
         uses: 'actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b' # ratchet:actions/create-github-app-token@v2
         with:
           app-id: '${{ vars.APP_ID }}'

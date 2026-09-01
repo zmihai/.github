@@ -45,7 +45,7 @@ on:
         description: 'Optional alternative Gemini auth'
         required: false
       APP_PRIVATE_KEY:
-        description: 'Private key for the GitHub App identity (vars.APP_ID)'
+        description: 'Private key for the GitHub App identity. The App path activates only when vars.APP_ID and this key are both set; with either missing, this workflow falls back to the default token.'
         required: false
 
 # Deliberately no `concurrency` block here. Per-PR serialization of the whole
@@ -66,6 +66,10 @@ defaults:
 jobs:
   merge:
     runs-on: 'ubuntu-latest'
+    env:
+      # `secrets` is not an allowed context in a step-level `if`, so the
+      # mint gate below reads the key's presence through job env instead.
+      APP_KEY_AVAILABLE: ${{ secrets.APP_PRIVATE_KEY != '' }}
     timeout-minutes: 15
     permissions:
       contents: 'write'
@@ -76,7 +80,7 @@ jobs:
       - name: 'Mint identity token'
         id: 'mint_identity_token'
         if: |-
-          ${{ vars.APP_ID }}
+          ${{ vars.APP_ID != '' && env.APP_KEY_AVAILABLE == 'true' }}
         uses: 'actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b' # ratchet:actions/create-github-app-token@v2
         with:
           app-id: '${{ vars.APP_ID }}'
@@ -246,7 +250,7 @@ jobs:
       # overwrites same-named files.
       - name: 'Install repo Gemini commands'
         if: ${{ inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
-        uses: 'zmihai/.github/actions/install-gemini-commands@v0.13.0'
+        uses: 'zmihai/.github/actions/install-gemini-commands@v0.13.1'
 
       # Installed with `--consent` because run-gemini-cli's own installer cannot answer the Agent
       # Skills consent prompt — see the 'Pre-install code-review extension' step in

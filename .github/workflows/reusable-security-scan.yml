@@ -106,7 +106,7 @@ jobs:
           ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
 
       - name: Setup Node Environment
-        uses: zmihai/.github/actions/setup-node-env@v0.13.0
+        uses: zmihai/.github/actions/setup-node-env@v0.13.1
         with:
           node-version: ${{ inputs.language-version || 'lts/*' }}
           working-directory: ${{ inputs.working-directory }}
@@ -130,7 +130,7 @@ jobs:
           ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
 
       - name: Setup Python Environment
-        uses: zmihai/.github/actions/setup-python-env@v0.13.0
+        uses: zmihai/.github/actions/setup-python-env@v0.13.1
         with:
           python-version: ${{ inputs.language-version || '3.11' }}
           working-directory: ${{ inputs.working-directory }}
@@ -181,7 +181,7 @@ jobs:
           ref: ${{ inputs.ref || needs.resolve-ref.outputs.ref }}
 
       - name: Setup PHP Environment
-        uses: zmihai/.github/actions/setup-php-env@v0.13.0
+        uses: zmihai/.github/actions/setup-php-env@v0.13.1
         with:
           php-version: ${{ inputs.language-version || '8.4' }}
           working-directory: ${{ inputs.working-directory }}
