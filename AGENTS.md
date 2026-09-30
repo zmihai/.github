@@ -170,7 +170,8 @@ before relying on them.
 
 **Gemini / merge automation:**
 
-- **`gemini-flash-latest` is a deliberate, capable choice** (resolves to Flash 3.5). Do
+- **`gemini-flash-latest` is a deliberate, capable choice** (a floating alias for the current
+  Flash release). Do
   not treat it as weak or propose "upgrading" it. Model selection is `GEMINI_*_MODEL` →
   `GEMINI_MODEL` → `gemini-flash-latest`.
 - **Keep `GEMINI_DEBUG` `false`/unset.** Debug-on emits multi-MB stderr that exceeds GitHub
