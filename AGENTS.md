@@ -173,7 +173,9 @@ before relying on them.
 - **`gemini-flash-latest` is a deliberate, capable choice** (a floating alias for the current
   Flash release). Do
   not treat it as weak or propose "upgrading" it. Model selection is `GEMINI_*_MODEL` →
-  `GEMINI_MODEL` → `gemini-flash-latest`.
+  `GEMINI_MODEL` → `gemini-flash-latest`. Model comparisons are Gemini-vs-Gemini only
+  (the jobs run inside the Gemini CLI); the usage ratios and cost model for weighing a
+  candidate are in `docs/model-economics.md`.
 - **Keep `GEMINI_DEBUG` `false`/unset.** Debug-on emits multi-MB stderr that exceeds GitHub
   Actions' template object-size limit and fails the job. For observability use
   `UPLOAD_ARTIFACTS=true` (uploads `stdout.log`/`stderr.log`/`telemetry.log`) — note that

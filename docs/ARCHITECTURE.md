@@ -238,7 +238,8 @@ Resolved per task, each falling back to a shared var, then a literal default:
 
 - **`gemini-flash-latest` is a deliberate, capable default** (a floating alias for the
   current Flash release) — do
-  not treat it as weak or "upgrade" it.
+  not treat it as weak or "upgrade" it. Usage ratios, the cost model and how to compare
+  candidate Gemini models like for like are in [`model-economics.md`](model-economics.md).
 - **`GEMINI_CLI_VERSION`** defaults to a **pinned `0.46.0`** (not floating `latest`),
   because newer CLI releases tightened env/MCP permissions and need prompt/action updates
   before they can safely replace the pin.
