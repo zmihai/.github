@@ -10,9 +10,10 @@ description: 'Installs this repository''s Gemini CLI custom commands (.github/co
 # a runtime checkout. github.action_path points at this directory inside that
 # materialized copy; the commands live two levels up.
 #
-# The `uses:` pin in the calling workflow is bumped on every release (same pattern as
-# the ci-*.yml → setup-*-env pins), which keeps the installed commands version-matched
-# to the workflows that invoke them.
+# The calling workflows reference this action as `$/actions/install-gemini-commands`
+# (same pattern as the ci-*.yml → setup-*-env references), which resolves to this
+# repository at the commit the workflow itself is running from and so keeps the
+# installed commands version-matched to the workflows that invoke them.
 
 runs:
   using: 'composite'

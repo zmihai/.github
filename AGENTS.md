@@ -148,11 +148,12 @@ auto-rebases when the base moves, triggering a fresh run.
 - **The workflows reference this repo's own composite actions as `$/actions/<name>`** — the
   self repository reference, which resolves to this repository at the commit the workflow is
   running from and takes no `@ref`. A consumer calling `reusable-ci.yml@vX.Y.Z` therefore
-  gets the composite actions from that same tag, and a PR here exercises its own copies.
+  gets the composite actions from that same tag, and a consumer pointed at a branch of this
+  repo gets that branch's copies.
   Never write `zmihai/.github/actions/...@vX.Y.Z` inside `.github/workflows/` (the tag does
   not exist until the release is published), and never use `$/` in `workflow-templates/` (in
   a consumer it resolves to the consumer's repo). `tests/test_self_repository_refs.py`
-  enforces both.
+  guards both against honest mistakes.
 - **A release is not just a tag.** Cutting a new version requires sweeping every in-repo
   `@vX.Y.Z` reference to the new tag — the README, QUICKSTART, examples and templates
   contain many. Bump them all in the release commit, then tag. The workflow files

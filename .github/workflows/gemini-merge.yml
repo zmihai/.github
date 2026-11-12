@@ -243,8 +243,8 @@ jobs:
       # runs with a one-line prompt instead of the merge policy in .github/commands/pr-merge.toml.
       # Delivery is via the install-gemini-commands composite action (token-free — a composite
       # action's repo files are materialized from the runner's action cache; see that action's
-      # header for the mechanism); its release-pinned `uses:` ref keeps the prompts
-      # version-matched to these workflows. Command names are deliberately distinct from
+      # header for the mechanism); its `$/` self repository `uses:` ref resolves at this
+      # workflow's own commit, which keeps the prompts version-matched to these workflows. Command names are deliberately distinct from
       # run-gemini-cli's bundled set (gemini-review, gemini-invoke, gemini-triage, ...): the
       # action copies its bundled files into `.gemini/commands/` AFTER this step and silently
       # overwrites same-named files.

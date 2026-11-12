@@ -189,7 +189,8 @@ These are the actual instructions the model follows; the workflow YAML only wire
 tools/extensions/env. They are installed into the consumer workspace's `.gemini/commands/`
 by the **`install-gemini-commands` composite action** (token-free: a composite action's
 repo files are materialized from the runner's action cache — see the action's header;
-its release-pinned `uses:` ref keeps prompts version-matched to the workflows). An
+its `$/` self repository `uses:` ref resolves at the workflow's own commit, which keeps
+prompts version-matched to the workflows). An
 unresolved `/command` is passed to the model as literal prompt text with no error, so
 this installation is what makes the prompts take effect at all.
 
