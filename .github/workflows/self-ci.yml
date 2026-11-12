@@ -36,13 +36,18 @@ jobs:
           tar xzf actionlint.tar.gz actionlint
 
       - name: 'Run actionlint'
-        # The single -ignore suppresses a known actionlint false positive:
-        # `jobs.<job_id>.result` in `on.workflow_call.outputs` is documented
-        # GitHub behavior (and load-bearing for the CI outcome plumbing), but
-        # actionlint models the jobs context with outputs only.
+        # Each -ignore suppresses a known actionlint false positive:
+        # - `jobs.<job_id>.result` in `on.workflow_call.outputs` is documented
+        #   GitHub behavior (and load-bearing for the CI outcome plumbing), but
+        #   actionlint models the jobs context with outputs only.
+        # - `$/path` self repository references take no `@ref` by design;
+        #   actionlint 1.7.12 does not know the syntax and reports the ref as
+        #   missing. tests/test_self_repository_refs.py checks their shape
+        #   and targets instead.
         run: |
           ./actionlint -color \
             -ignore 'property "result" is not defined in object type' \
+            -ignore 'specifying action "\$/[^"]+" in invalid format because ref is missing' \
             .github/workflows/*.yml workflow-templates/*.yml
 
   template-tests:

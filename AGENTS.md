@@ -107,7 +107,7 @@ packages), `run-lint`/`run-test`/`run-build`, `build-before-test` (JS), `ref`. O
 (`scan-code`). Runs independently of CI and against untrusted refs, so it never builds the
 project. Exposes an `outcome` output.
 
-**Composite actions** (`actions/<name>@vX.Y.Z`) — `setup-node-env`, `setup-python-env`,
+**Composite actions** (`actions/<name>`) — `setup-node-env`, `setup-python-env`,
 `setup-php-env`, `setup-java-env`: set up the toolchain with caching and best-effort
 dependency install. `setup-java-env` auto-detects Maven/Gradle and outputs `build-tool`;
 its dependency cache is an explicit `actions/cache` with a `restore-keys` prefix fallback
@@ -143,13 +143,20 @@ auto-rebases when the base moves, triggering a fresh run.
 
 ## Versioning & Release
 
-- The repo is released as semver tags. All in-repo `@vX.Y.Z` references (README, templates, and the
-  `zmihai/.github/...` refs inside the workflows) point at that same tag.
+- The repo is released as semver tags. All in-repo `@vX.Y.Z` references (README, QUICKSTART,
+  examples, templates) point at that same tag.
+- **The workflows reference this repo's own composite actions as `$/actions/<name>`** — the
+  self repository reference, which resolves to this repository at the commit the workflow is
+  running from and takes no `@ref`. A consumer calling `reusable-ci.yml@vX.Y.Z` therefore
+  gets the composite actions from that same tag, and a PR here exercises its own copies.
+  Never write `zmihai/.github/actions/...@vX.Y.Z` inside `.github/workflows/` (the tag does
+  not exist until the release is published), and never use `$/` in `workflow-templates/` (in
+  a consumer it resolves to the consumer's repo). `tests/test_self_repository_refs.py`
+  enforces both.
 - **A release is not just a tag.** Cutting a new version requires sweeping every in-repo
-  `@vX.Y.Z` reference to the new tag — the per-language CI workflows and the security-scan
-  workflow reference the composite actions as `zmihai/.github/actions/...@vX.Y.Z`, and the
-  README/templates contain many `@vX.Y.Z` examples. Bump them all in the release commit,
-  then tag.
+  `@vX.Y.Z` reference to the new tag — the README, QUICKSTART, examples and templates
+  contain many. Bump them all in the release commit, then tag. The workflow files
+  themselves carry no version and need no sweep.
 - **Workflow templates are served from the default branch, not a tag** — edits to
   `workflow-templates/` take effect immediately without a release. (The `uses:` lines
   *inside* the templates still carry a pinned tag that must be bumped on release.)

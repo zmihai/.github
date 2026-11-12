@@ -348,7 +348,8 @@ tag), so `workflow-templates/` edits take effect without a release.
 
 - **All nested action refs are pinned by commit SHA** with a `# ratchet:` comment naming
   the human-readable version. Do not "clean up" these to floating tags.
-- references inside the workflows/templates are pinned to the release tag and
-  must be bumped on release (see AGENTS.md → Versioning).
+- The workflows reference this repo's own composite actions as `$/actions/<name>` (same
+  repository, running commit, no `@ref`); references inside the templates and docs are
+  pinned to the release tag and must be bumped on release (see AGENTS.md → Versioning).
 - Workflow expressions are quoted deliberately; jobs carry `timeout-minutes`.
 - `defaults.run.shell: bash` everywhere.
