@@ -189,7 +189,8 @@ These are the actual instructions the model follows; the workflow YAML only wire
 tools/extensions/env. They are installed into the consumer workspace's `.gemini/commands/`
 by the **`install-gemini-commands` composite action** (token-free: a composite action's
 repo files are materialized from the runner's action cache — see the action's header;
-its release-pinned `uses:` ref keeps prompts version-matched to the workflows). An
+its `$/` self repository `uses:` ref resolves at the workflow's own commit, which keeps
+prompts version-matched to the workflows). An
 unresolved `/command` is passed to the model as literal prompt text with no error, so
 this installation is what makes the prompts take effect at all.
 
@@ -348,7 +349,8 @@ tag), so `workflow-templates/` edits take effect without a release.
 
 - **All nested action refs are pinned by commit SHA** with a `# ratchet:` comment naming
   the human-readable version. Do not "clean up" these to floating tags.
-- references inside the workflows/templates are pinned to the release tag and
-  must be bumped on release (see AGENTS.md → Versioning).
+- The workflows reference this repo's own composite actions as `$/actions/<name>` (same
+  repository, running commit, no `@ref`); references inside the templates and docs are
+  pinned to the release tag and must be bumped on release (see AGENTS.md → Versioning).
 - Workflow expressions are quoted deliberately; jobs carry `timeout-minutes`.
 - `defaults.run.shell: bash` everywhere.
