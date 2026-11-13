@@ -23,9 +23,10 @@ When reviewing a pull request:
   an API or library. Avoid "this might be undefined / might fail" comments when the documented
   contract already guarantees the behavior — confirm before flagging.
 - **No duplicates.** If the same issue appears in several places, raise it once.
-- **Respect intentional patterns.** Actions are pinned by commit SHA with a `# ratchet:` comment,
-  and workflow expressions are quoted deliberately; these are intentional and should not be
-  flagged.
+- **Respect intentional patterns.** Third-party actions are referenced by full release tag and
+  pinned by commit in `.github/workflows/actions.lock` (`run-gemini-cli` alone stays on a commit
+  SHA), and workflow expressions are quoted deliberately; these are intentional and should not
+  be flagged.
 
 ## Context that affects reviews
 

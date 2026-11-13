@@ -64,9 +64,11 @@ jobs:
   # .github/workflows/actions.lock records the commit of every action the
   # workflows and composite actions use, transitive ones included; the runner
   # resolves actions from it, also when a consumer calls these workflows.
-  # --verify fails when a `uses:` has no matching entry (a ref was changed
-  # without re-running `gh actions-lock`) or a locked commit no longer
-  # verifies upstream.
+  # --verify fails when a `uses:` resolves to a commit the lockfile does not
+  # record or a locked commit no longer verifies upstream. It does NOT fail
+  # when a ref is merely respelled for the same commit (a SHA where the
+  # lockfile has the tag), although the runner then ignores the lockfile for
+  # that workflow; tests/test_actions_lockfile.py covers that case.
   lockfile:
     runs-on: 'ubuntu-latest'
     timeout-minutes: 5

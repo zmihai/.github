@@ -348,7 +348,8 @@ tag), so `workflow-templates/` edits take effect without a release.
 ## 6. Conventions baked into the source
 
 - **All third-party action refs name a full release tag and are pinned by commit in the
-  workflow lockfile** (`.github/workflows/actions.lock`, see AGENTS.md → Versioning). Do not
+  workflow lockfile** (`.github/workflows/actions.lock`, see AGENTS.md → Versioning);
+  `run-gemini-cli` is the one exception, pinned to a commit on `main` that has no tag. Do not
   replace them with floating tags or bare SHAs, and re-run `gh actions-lock` after changing one.
 - The workflows reference this repo's own composite actions as `$/actions/<name>` (same
   repository, running commit, no `@ref`); references inside the templates and docs are
