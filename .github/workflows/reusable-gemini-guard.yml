@@ -87,7 +87,7 @@ jobs:
     steps:
       - name: 'Evaluate trigger policy and resolve ref'
         id: 'evaluate'
-        uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
+        uses: 'actions/github-script@v8.0.0'
         env:
           INPUT_REF: '${{ inputs.ref }}'
         with:

@@ -81,7 +81,7 @@ jobs:
         id: 'mint_identity_token'
         if: |-
           ${{ vars.APP_ID != '' && env.APP_KEY_AVAILABLE == 'true' }}
-        uses: 'actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b' # ratchet:actions/create-github-app-token@v2
+        uses: 'actions/create-github-app-token@v2.1.1'
         with:
           app-id: '${{ vars.APP_ID }}'
           private-key: '${{ secrets.APP_PRIVATE_KEY }}'
@@ -90,13 +90,13 @@ jobs:
           permission-pull-requests: 'write'
 
       - name: 'Checkout repository'
-        uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # ratchet:actions/checkout@v6
+        uses: 'actions/checkout@v6.0.2'
         with:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: 'Resolve PR head ref'
         id: 'resolve_head_ref'
-        uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
+        uses: 'actions/github-script@v8.0.0'
         env:
           INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
         with:
@@ -184,7 +184,7 @@ jobs:
       - name: 'Snapshot PR review state'
         id: 'pre_state'
         if: ${{ inputs.is_fork != 'true' }}
-        uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
+        uses: 'actions/github-script@v8.0.0'
         env:
           INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
         with:
@@ -362,7 +362,7 @@ jobs:
       # treated as a failure so it surfaces red and triggers the dispatch fallthrough notification.
       - name: 'Verify durable merge outcome'
         if: ${{ success() && inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
-        uses: 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd' # ratchet:actions/github-script@v8
+        uses: 'actions/github-script@v8.0.0'
         env:
           INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
           PRE_WAS_MERGED: '${{ steps.pre_state.outputs.was_merged }}'

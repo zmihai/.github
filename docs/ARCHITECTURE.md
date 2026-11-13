@@ -310,8 +310,8 @@ did not run).
 
 ## 4. Composite actions (`actions/*/action.yml`)
 
-All use `runs.using: composite`, and pin nested actions by commit
-SHA with a `# ratchet:` comment.
+All use `runs.using: composite`, and reference nested actions by full release
+tag; the commits are pinned in `.github/workflows/actions.lock`.
 
 | Action             | Key inputs (defaults)                                              | Outputs       | Notes |
 |--------------------|-------------------------------------------------------------------|---------------|-------|
@@ -347,8 +347,9 @@ tag), so `workflow-templates/` edits take effect without a release.
 
 ## 6. Conventions baked into the source
 
-- **All nested action refs are pinned by commit SHA** with a `# ratchet:` comment naming
-  the human-readable version. Do not "clean up" these to floating tags.
+- **All third-party action refs name a full release tag and are pinned by commit in the
+  workflow lockfile** (`.github/workflows/actions.lock`, see AGENTS.md → Versioning). Do not
+  replace them with floating tags or bare SHAs, and re-run `gh actions-lock` after changing one.
 - The workflows reference this repo's own composite actions as `$/actions/<name>` (same
   repository, running commit, no `@ref`); references inside the templates and docs are
   pinned to the release tag and must be bumped on release (see AGENTS.md → Versioning).
