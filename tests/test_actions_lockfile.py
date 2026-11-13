@@ -7,12 +7,15 @@ REPO_ROOT = Path(__file__).parent.parent
 WORKFLOW_DIR = REPO_ROOT / '.github' / 'workflows'
 LOCKFILE = WORKFLOW_DIR / 'actions.lock'
 
-FULL_SHA = re.compile(r'[0-9a-f]{40}')
+# A full release tag: v6.0.2, 2.37.0. Not a floating v6 / v6.0, a branch or a SHA.
+RELEASE_TAG = re.compile(r'v?\d+\.\d+\.\d+')
 LOCKED_COMMIT = re.compile(r'sha1-[0-9a-f]{40}')
 
-# Actions that may be referenced by a bare commit SHA: the commit we need has
-# no release tag, so the lockfile keys the entry by that SHA.
-SHA_REF_ALLOWED = {'google-github-actions/run-gemini-cli'}
+# The one ref that is not a release tag: the commit we need is on main and has
+# no tag, so the workflows name the commit and the lockfile keys the entry by it.
+NON_TAG_REFS_ALLOWED = {
+    'google-github-actions/run-gemini-cli@3ca2577f2714990269a7378904cf70ae1e01e288',
+}
 
 # Why this file exists: the runner only resolves actions from the lockfile
 # when a workflow's `uses:` refs are the ones the lockfile lists for it. When
@@ -92,14 +95,16 @@ def test_every_listed_ref_has_a_locked_commit():
         assert LOCKED_COMMIT.fullmatch(str(dependencies[ref].get('commit'))), f'{ref} has no locked commit'
 
 
-def test_uses_refs_name_a_release_tag_not_a_bare_sha():
+def test_uses_refs_name_a_full_release_tag():
     documents = [load(p) for p in workflow_files()]
     documents += [load(p) for p in sorted((REPO_ROOT / 'actions').rglob('action.y*ml'))]
-    refs = [ref for document in documents for ref in step_uses(document) if '@' in ref]
-    assert refs, 'no versioned `uses:` refs found'
-    bare = sorted({
-        ref for ref in refs
-        if FULL_SHA.fullmatch(ref.partition('@')[2])
-        and '/'.join(ref.partition('@')[0].split('/')[:2]) not in SHA_REF_ALLOWED
-    })
-    assert bare == [], 'write the release tag and run `gh actions-lock`; the lockfile pins the commit'
+    refs = {lock_key(ref) for document in documents for ref in step_uses(document)
+            if not ref.startswith(('$/', './', 'docker://'))}
+    assert refs, 'no third-party `uses:` refs found'
+    assert NON_TAG_REFS_ALLOWED <= refs, 'an allowed exception is no longer used - remove it'
+    not_tags = sorted(ref for ref in refs - NON_TAG_REFS_ALLOWED
+                      if not RELEASE_TAG.fullmatch(ref.partition('@')[2]))
+    assert not_tags == [], (
+        'write the full release tag (not a SHA, a floating major/minor tag or a branch) '
+        'and run `gh actions-lock`; the lockfile pins the commit'
+    )
