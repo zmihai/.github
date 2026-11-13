@@ -23,7 +23,7 @@ jobs:
     runs-on: 'ubuntu-latest'
     timeout-minutes: 5
     steps:
-      - uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # ratchet:actions/checkout@v6
+      - uses: 'actions/checkout@v6.0.2'
 
       - name: 'Install actionlint'
         env:
@@ -54,9 +54,33 @@ jobs:
     runs-on: 'ubuntu-latest'
     timeout-minutes: 5
     steps:
-      - uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # ratchet:actions/checkout@v6
+      - uses: 'actions/checkout@v6.0.2'
 
       - name: 'Run template tests'
         run: |
           python3 -m pip install --quiet pytest==9.1.1 pyyaml==6.0.3
           python3 -m pytest -q tests/
+
+  # .github/workflows/actions.lock records the commit of every action the
+  # workflows and composite actions use, transitive ones included; the runner
+  # resolves actions from it, also when a consumer calls these workflows.
+  # --verify fails when a `uses:` resolves to a commit the lockfile does not
+  # record or a locked commit no longer verifies upstream. It does NOT fail
+  # when a ref is merely respelled for the same commit (a SHA where the
+  # lockfile has the tag), although the runner then ignores the lockfile for
+  # that workflow; tests/test_actions_lockfile.py covers that case.
+  lockfile:
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 5
+    steps:
+      - uses: 'actions/checkout@v6.0.2'
+        with:
+          persist-credentials: false
+
+      - name: 'Verify the actions lockfile'
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          VERSION: 'v0.4.1'
+        run: |
+          gh extension install github/gh-actions-lock --pin "${VERSION}"
+          gh actions-lock --verify
