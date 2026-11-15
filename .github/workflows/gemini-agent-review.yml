@@ -103,6 +103,8 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       # The request is built with jq so no value is ever spliced into JSON or a shell command.
+      # max_total_tokens goes in as a string: the CLI models it as one, and a number makes it
+      # read the body as a plain model request and reject the agent keys.
       # Tools are limited to code execution: no web search, no URL fetching.
       - name: 'Build the agent request'
         env:
@@ -149,7 +151,7 @@ jobs:
             --arg system "${system_instruction}" \
             --arg task "${task}" \
             --arg model "${MODEL}" \
-            --argjson budget "${MAX_TOTAL_TOKENS}" \
+            --arg budget "${MAX_TOTAL_TOKENS}" \
             --arg source "https://github.com/${REPOSITORY}" \
             --arg git_auth "Basic ${git_auth}" \
             '{
