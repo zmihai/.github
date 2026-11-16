@@ -207,6 +207,8 @@ jobs:
           fi
 
           echo "status=${status}" >> "${GITHUB_OUTPUT}"
+          echo "Usage: $(jq -c '.usage // {}' "${RUNNER_TEMP}/interaction.json")"
+          echo "Steps: $(jq -c '[.steps[]? | .type] | group_by(.) | map({(.[0]): length}) | add // {}' "${RUNNER_TEMP}/interaction.json")"
           {
             echo "### Agent run"
             echo "- Status: \`${status}\`"
