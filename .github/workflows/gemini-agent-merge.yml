@@ -5,10 +5,10 @@ name: '🧪 Gemini Agent Merge (experiment)'
 # actions/gemini-agent) instead of gemini-cli.
 #
 # How it differs from gemini-merge.yml:
-# - No remediation: the agent has no shell and no checkout, so it cannot fix a failing check and
-#   push. A related failure blocks the merge.
-# - The agent reads the pull request through the GitHub tools only, and merges only with the
-#   merge tool. The write-capable token reaches GitHub's hosted MCP server and nothing else.
+# - The agent works in a sandbox hosted by Google, on its own clone; the runner checks out
+#   nothing. Remediation (Step 2.5) runs there: the agent fixes, verifies and pushes to the pull
+#   request's branch with git, authenticated by the sandbox's egress proxy.
+# - The agent merges only with the merge tool; there is no `gh` fallback.
 # - The same command prompt (.github/commands/pr-merge.toml), with a short section appended that
 #   describes this environment.
 

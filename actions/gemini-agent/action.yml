@@ -4,9 +4,11 @@ description: 'EXPERIMENT. Runs the pr-review or pr-merge command prompt on the G
 # The agent runs in a sandbox hosted by Google. It reaches GitHub in two ways only:
 # - GitHub's hosted MCP server, which limits it to the pull request tools named in
 #   build_request.py (review: read, review, comment; merge: the same plus merge).
-# - review mode only: git clone and fetch over github.com, with the token attached by Google's
-#   egress proxy. The token is never placed in the sandbox and api.github.com is not on its
-#   network allowlist.
+# - git over github.com on its own clone, with the token attached by Google's egress proxy. The
+#   token is never placed in the sandbox. In review mode the token can only read and github.com
+#   is the whole network allowlist. In merge mode the token can write, so the agent can push a
+#   fix to the pull request's branch (and, like gemini-cli on the runner, to any unprotected
+#   branch), and the rest of the network is open so it can install dependencies and run checks.
 # In both cases the token travels to Google inside the request.
 #
 # Not a defence against a pull request whose content talks the model into a misleading review or
@@ -193,6 +195,8 @@ runs:
         echo "Agent ${MODE} on ${MODEL}: ${status} in ${seconds}s"
         echo "Usage: ${usage}"
         echo "Steps: ${steps}"
+        echo 'Sandbox tool calls:'
+        jq -r '.steps[]? | select(.type == "function_call") | "  \(.name // "?"): \(.arguments // {} | tostring | .[0:240])"' "${interaction_file}" || true
         echo 'GitHub tool calls:'
         jq -r '.steps[]? | select(.type == "mcp_server_tool_call") | "  \(.name) \(.arguments.method // "") \(.arguments.event // "") #\(.arguments.pullNumber // "")"' "${interaction_file}" || true
         echo 'GitHub tool results:'

@@ -50,13 +50,18 @@ REVIEW_NOTES = """
 """
 
 MERGE_NOTES = """
-- You have no shell, no checkout and no `gh` or `git`. Read the pull request only through
-  `pull_request_read`. The only way to merge is the `merge_pull_request` tool with
-  merge_method "squash"; there is no fallback.
-- Step 2.5 (remediation) does not exist in this environment: you cannot fix, commit or push
-  anything. A failure you classify as related therefore blocks the merge and leads to
-  "If Requesting Changes". Unrelated, pre-existing failures still do not block the merge;
-  itemise them in your summary.
+- The repository is cloned at /workspace/repo on its default branch. Before deciding, run in it:
+  `git fetch origin "pull/{pr}/head:agent-merge-head" "{base}"` then
+  `git checkout agent-merge-head`, and confirm that HEAD is {head}. Use the checkout to read the
+  surrounding code and, for Step 2.5, to diagnose, fix and verify.
+- The sandbox has no `gh` and holds no GitHub token. `git` commands against `origin` are
+  authenticated for you. The only way to merge is the `merge_pull_request` tool with
+  merge_method "squash"; the `gh pr merge` fallback does not exist here.
+- Step 2.5 (remediation) applies. Push a fix only with
+  `git push origin HEAD:refs/heads/<head_ref>`, with the literal `head_ref` from the Input Data.
+  Never force-push and never push to any other branch or tag. After the push, run
+  `git ls-remote origin "refs/heads/<head_ref>"` and confirm it shows your local HEAD; if the
+  push or that check fails, treat the remediation as aborted.
 - The Review Summary in the Input Data is one combined review that already contains the security
   analysis. Any Critical or High issue anywhere in it blocks the merge.
 - After acting, reply with what you did and one last line that reads exactly one of:
@@ -88,7 +93,7 @@ def main() -> None:
     if mode == "review":
         notes += REVIEW_NOTES.format(pr=env("PULL_REQUEST_NUMBER"), base=env("BASE_REF"), head=env("HEAD_SHA"))
     else:
-        notes += MERGE_NOTES
+        notes += MERGE_NOTES.format(pr=env("PULL_REQUEST_NUMBER"), base=env("BASE_REF"), head=env("HEAD_SHA"))
     prompt = f"{prompt.rstrip()} {env('PROMPT_ARGS')}\n\n-----\n{notes}"
 
     token = env("GH_TOKEN")
@@ -108,18 +113,18 @@ def main() -> None:
         # as a plain model request and reject the agent keys.
         "agent_config": {"type": "antigravity", "model": env("MODEL"), "max_total_tokens": str(int(env("MAX_TOTAL_TOKENS")))},
     }
-    if mode == "review":
-        git_auth = base64.b64encode(f"x-access-token:{token}".encode()).decode()
-        request["tools"] = [{"type": "code_execution"}, mcp]
-        request["environment"] = {
-            "type": "remote",
-            "sources": [{"type": "repository", "source": f"https://github.com/{env('REPOSITORY')}", "target": "/workspace/repo"}],
-            "network": {"allowlist": [{"domain": "github.com", "transform": {"Authorization": f"Basic {git_auth}"}}]},
-        }
-    else:
-        # No clone and no code execution: the write-capable token reaches GitHub's MCP server only.
-        request["tools"] = [mcp]
-        request["environment"] = "remote"
+    # The token is attached to github.com requests by the egress proxy and never enters the sandbox.
+    git_auth = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    allowlist = [{"domain": "github.com", "transform": {"Authorization": f"Basic {git_auth}"}}]
+    if mode == "merge":
+        # Remediation installs dependencies and runs the project's checks, as the runner did.
+        allowlist.append({"domain": "*"})
+    request["tools"] = [{"type": "code_execution"}, mcp]
+    request["environment"] = {
+        "type": "remote",
+        "sources": [{"type": "repository", "source": f"https://github.com/{env('REPOSITORY')}", "target": "/workspace/repo"}],
+        "network": {"allowlist": allowlist},
+    }
 
     with open(env("REQUEST_FILE"), "w", encoding="utf-8") as handle:
         json.dump(request, handle)
