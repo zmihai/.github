@@ -196,7 +196,7 @@ runs:
         echo 'GitHub tool calls:'
         jq -r '.steps[]? | select(.type == "mcp_server_tool_call") | "  \(.name) \(.arguments.method // "") \(.arguments.event // "") #\(.arguments.pullNumber // "")"' "${interaction_file}" || true
         echo 'GitHub tool results:'
-        jq -r '.steps[]? | select(.type == "mcp_server_tool_result") | "  \(.name): \(.result.result // .result | tostring | .[0:140] | gsub("\n"; " "))"' "${interaction_file}" || true
+        jq -r '.steps[]? | select(.type == "mcp_server_tool_result") | "  \(.name): \(.result | tostring | .[0:160])"' "${interaction_file}" || true
         {
           echo "### Agent ${MODE} (\`${MODEL}\`)"
           echo "- Status: \`${status}\` in ${seconds}s"
