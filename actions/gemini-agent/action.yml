@@ -1,0 +1,224 @@
+name: 'Run the Gemini managed agent'
+description: 'EXPERIMENT. Runs the pr-review or pr-merge command prompt on the Gemini API managed agent (driven by the gemini-api CLI) instead of gemini-cli, and waits for it to finish.'
+
+# The agent runs in a sandbox hosted by Google. It reaches GitHub in two ways only:
+# - GitHub's hosted MCP server, which limits it to the pull request tools named in
+#   build_request.py (review: read, review, comment; merge: the same plus merge).
+# - review mode only: git clone and fetch over github.com, with the token attached by Google's
+#   egress proxy. The token is never placed in the sandbox and api.github.com is not on its
+#   network allowlist.
+# In both cases the token travels to Google inside the request.
+#
+# Not a defence against a pull request whose content talks the model into a misleading review or
+# into misusing those tools.
+
+inputs:
+  mode:
+    description: 'review or merge'
+    required: true
+  model:
+    description: 'Model the agent runs on (an agent_config.model value)'
+    required: true
+  max_total_tokens:
+    description: 'Token budget for the whole run (input + output + thinking)'
+    required: false
+    default: '3000000'
+  pull_request_number:
+    description: 'The pull request number'
+    required: true
+  context_file:
+    description: 'Path of the Input Data JSON file'
+    required: true
+  prompt_args:
+    description: 'Arguments appended to the command prompt'
+    required: false
+    default: ''
+  github_token:
+    description: 'Token the agent uses on GitHub'
+    required: true
+  gemini_api_key:
+    description: 'Gemini API key'
+    required: true
+
+outputs:
+  status:
+    description: 'Final status of the agent run'
+    value: '${{ steps.run.outputs.status }}'
+  reply_file:
+    description: 'Path of the file holding the agent''s final reply'
+    value: '${{ steps.run.outputs.reply_file }}'
+
+runs:
+  using: 'composite'
+  steps:
+    # The CLI is in beta and its maintainers ask CI users to pin a release. The archive is
+    # checked against the digest GitHub publishes for the release asset.
+    - name: 'Install the Gemini API CLI'
+      shell: 'bash'
+      env:
+        VERSION: 'v0.4.6'
+        SHA256: '78862dde519d9b47a9fb70b1f0340d19fa1245934d65e83f0e2dbc1d17cd2fa6'
+      run: |-
+        mkdir -p "${RUNNER_TEMP}/gemini-api"
+        cd "${RUNNER_TEMP}/gemini-api"
+        curl -sSfL -o gemini-api.tar.gz \
+          "https://github.com/google-gemini/gemini-api-cli/releases/download/${VERSION}/gemini-api_Linux_x86_64.tar.gz"
+        echo "${SHA256}  gemini-api.tar.gz" | sha256sum -c -
+        tar xzf gemini-api.tar.gz
+        binary="$(find . -type f -name 'gemini-api' | head -n 1)"
+        if [[ -z "${binary}" ]]; then
+          echo '::error::The release archive holds no gemini-api binary.'
+          exit 1
+        fi
+        chmod +x "${binary}"
+        (cd "$(dirname "${binary}")" && pwd) >> "${GITHUB_PATH}"
+
+    - name: 'Read the pull request'
+      id: 'pr'
+      shell: 'bash'
+      env:
+        GH_TOKEN: '${{ inputs.github_token }}'
+        REPOSITORY: '${{ github.repository }}'
+        PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
+      run: |-
+        if [[ ! "${PULL_REQUEST_NUMBER}" =~ ^[0-9]+$ ]]; then
+          echo "::error::pull_request_number must be a number, got '${PULL_REQUEST_NUMBER}'."
+          exit 1
+        fi
+        gh pr view "${PULL_REQUEST_NUMBER}" -R "${REPOSITORY}" \
+          --json baseRefName,headRefOid > "${RUNNER_TEMP}/agent-pr.json"
+        base="$(jq -r '.baseRefName' "${RUNNER_TEMP}/agent-pr.json")"
+        head="$(jq -r '.headRefOid' "${RUNNER_TEMP}/agent-pr.json")"
+        if [[ ! "${head}" =~ ^[0-9a-f]{40}$ || ! "${base}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+          echo '::error::Could not read a usable head commit and base branch for the pull request.'
+          exit 1
+        fi
+        {
+          echo "base=${base}"
+          echo "head=${head}"
+        } >> "${GITHUB_OUTPUT}"
+
+    # Fails early, with the HTTP status in the log, if GitHub's hosted MCP server refuses the token.
+    - name: 'Check the GitHub MCP server accepts the token'
+      shell: 'bash'
+      env:
+        GH_TOKEN: '${{ inputs.github_token }}'
+        GITHUB_MCP_URL: 'https://api.githubcopilot.com/mcp/'
+      run: |-
+        http_status="$(curl -sS -o "${RUNNER_TEMP}/mcp-init.txt" -w '%{http_code}' -X POST "${GITHUB_MCP_URL}" \
+          -H "Authorization: Bearer ${GH_TOKEN}" \
+          -H 'Content-Type: application/json' \
+          -H 'Accept: application/json, text/event-stream' \
+          -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"gemini-agent-preflight","version":"0"}}}')"
+        echo "GitHub MCP initialize: HTTP ${http_status}"
+        if [[ "${http_status}" != '200' ]]; then
+          head -c 600 "${RUNNER_TEMP}/mcp-init.txt"
+          echo
+          echo '::error::The GitHub MCP server did not accept the token.'
+          exit 1
+        fi
+
+    - name: 'Build the agent request'
+      shell: 'bash'
+      env:
+        MODE: '${{ inputs.mode }}'
+        MODEL: '${{ inputs.model }}'
+        MAX_TOTAL_TOKENS: '${{ inputs.max_total_tokens }}'
+        PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
+        CONTEXT_FILE: '${{ inputs.context_file }}'
+        PROMPT_ARGS: '${{ inputs.prompt_args }}'
+        GH_TOKEN: '${{ inputs.github_token }}'
+        GITHUB_MCP_URL: 'https://api.githubcopilot.com/mcp/'
+        REPOSITORY: '${{ github.repository }}'
+        BASE_REF: '${{ steps.pr.outputs.base }}'
+        HEAD_SHA: '${{ steps.pr.outputs.head }}'
+        ACTION_PATH: '${{ github.action_path }}'
+      run: |-
+        git_auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w 0)"
+        echo "::add-mask::${git_auth}"
+        export COMMANDS_DIR="${ACTION_PATH}/../../.github/commands"
+        export REQUEST_FILE="${RUNNER_TEMP}/agent-request-${MODE}.json"
+        python3 -I "${ACTION_PATH}/build_request.py"
+
+    - name: 'Run the agent'
+      id: 'run'
+      shell: 'bash'
+      env:
+        GEMINI_API_KEY: '${{ inputs.gemini_api_key }}'
+        MODE: '${{ inputs.mode }}'
+        MODEL: '${{ inputs.model }}'
+        AGENT: 'antigravity-preview-09-2026'
+        POLL_SECONDS: '15'
+        MAX_POLLS: '100'
+      run: |-
+        interaction_file="${RUNNER_TEMP}/agent-interaction-${MODE}.json"
+        reply_file="${RUNNER_TEMP}/agent-reply-${MODE}.md"
+        started="$(date +%s)"
+        interaction_id="$(gemini-api agent run \
+          --agent "${AGENT}" \
+          --body "@${RUNNER_TEMP}/agent-request-${MODE}.json" \
+          --background --stream=false --output-format json --jq '.id')"
+        interaction_id="${interaction_id//\"/}"
+        if [[ -z "${interaction_id}" ]]; then
+          echo '::error::The agent run returned no interaction ID.'
+          exit 1
+        fi
+        echo "Interaction: ${interaction_id}"
+
+        status='in_progress'
+        for ((i = 1; i <= MAX_POLLS; i++)); do
+          sleep "${POLL_SECONDS}"
+          if ! gemini-api agent status "${interaction_id}" \
+            --stream=false --output-format json > "${interaction_file}"; then
+            echo "::warning::Status poll ${i} failed; trying again."
+            continue
+          fi
+          status="$(jq -r '.status // "unknown"' "${interaction_file}")"
+          echo "Poll ${i}: ${status}"
+          case "${status}" in
+            in_progress | queued) ;;
+            *) break ;;
+          esac
+        done
+
+        if [[ "${status}" == 'in_progress' || "${status}" == 'queued' ]]; then
+          gemini-api agent cancel "${interaction_id}" || true
+          echo '::error::The agent did not finish in time; the run was cancelled.'
+          exit 1
+        fi
+
+        seconds="$(( $(date +%s) - started ))"
+        usage="$(jq -c '.usage // {} | {total_tokens, total_input_tokens, total_cached_tokens, total_output_tokens, total_thought_tokens}' "${interaction_file}")"
+        steps="$(jq -c '[.steps[]? | .type] | group_by(.) | map({(.[0]): length}) | add // {}' "${interaction_file}")"
+        echo "Agent ${MODE} on ${MODEL}: ${status} in ${seconds}s"
+        echo "Usage: ${usage}"
+        echo "Steps: ${steps}"
+        echo 'GitHub tool calls:'
+        jq -r '.steps[]? | select(.type == "mcp_server_tool_call") | "  \(.name) \(.arguments.method // "") \(.arguments.event // "") #\(.arguments.pullNumber // "")"' "${interaction_file}" || true
+        echo 'GitHub tool results:'
+        jq -r '.steps[]? | select(.type == "mcp_server_tool_result") | "  \(.name): \(.result.result // .result | tostring | .[0:140] | gsub("\n"; " "))"' "${interaction_file}" || true
+        {
+          echo "### Agent ${MODE} (\`${MODEL}\`)"
+          echo "- Status: \`${status}\` in ${seconds}s"
+          echo "- Usage: \`${usage}\`"
+          echo "- Steps: \`${steps}\`"
+        } >> "${GITHUB_STEP_SUMMARY}"
+
+        # The reply is the text of the last model output that has any.
+        jq -r '
+          [.steps[]? | select(.type == "model_output")
+            | [.content[]? | select(.type == "text") | .text] | join("")
+            | select(length > 0)] | last // ""
+        ' "${interaction_file}" > "${reply_file}"
+        {
+          echo "status=${status}"
+          echo "reply_file=${reply_file}"
+        } >> "${GITHUB_OUTPUT}"
+
+        if [[ "${status}" != 'completed' ]]; then
+          echo "::error::The agent run ended as '${status}'."
+          jq 'del(.steps)' "${interaction_file}"
+          exit 1
+        fi
+        echo '--- agent reply ---'
+        cat "${reply_file}"

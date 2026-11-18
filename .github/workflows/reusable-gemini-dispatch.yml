@@ -122,7 +122,7 @@ jobs:
   review:
     needs: 'dispatch'
     if: |-
-      ${{ needs.dispatch.outputs.command == 'review' || needs.dispatch.outputs.command == 'review-and-merge' }}
+      ${{ vars.GEMINI_ENGINE != 'agent' && (needs.dispatch.outputs.command == 'review' || needs.dispatch.outputs.command == 'review-and-merge') }}
     uses: './.github/workflows/gemini-review.yml'
     permissions:
       contents: 'read'
@@ -151,7 +151,7 @@ jobs:
       - 'dispatch'
       - 'review'
     if: |-
-      ${{ needs.dispatch.outputs.command == 'merge' || needs.review.outputs.command == 'review-and-merge' }}
+      ${{ vars.GEMINI_ENGINE != 'agent' && (needs.dispatch.outputs.command == 'merge' || needs.review.outputs.command == 'review-and-merge') }}
     uses: './.github/workflows/gemini-merge.yml'
     # Mirrors the permissions gemini-merge.yml's job actually requests —
     # anything listed here becomes part of the mandatory caller grant
@@ -174,11 +174,58 @@ jobs:
       GOOGLE_API_KEY: '${{ secrets.GOOGLE_API_KEY }}'
       APP_PRIVATE_KEY: '${{ secrets.APP_PRIVATE_KEY }}'
 
+  # EXPERIMENT: with the repository variable GEMINI_ENGINE set to 'agent', the review and merge
+  # run on the Gemini managed agent instead of gemini-cli. The guard, the dispatch step and the
+  # failure comment are shared.
+  agent-review:
+    needs: 'dispatch'
+    if: |-
+      ${{ vars.GEMINI_ENGINE == 'agent' && (needs.dispatch.outputs.command == 'review' || needs.dispatch.outputs.command == 'review-and-merge') }}
+    uses: './.github/workflows/gemini-agent-review.yml'
+    permissions:
+      contents: 'read'
+      issues: 'write'
+      pull-requests: 'write'
+    with:
+      additional_context: '${{ needs.dispatch.outputs.additional_context }}'
+      command: '${{ needs.dispatch.outputs.command }}'
+      issue_number: '${{ needs.dispatch.outputs.issue_number }}'
+      is_fork: '${{ needs.dispatch.outputs.is_fork }}'
+      projects: '${{ needs.dispatch.outputs.projects }}'
+      ref: ${{ needs.dispatch.outputs.resolved_ref }}
+    secrets:
+      GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
+      APP_PRIVATE_KEY: '${{ secrets.APP_PRIVATE_KEY }}'
+
+  agent-merge:
+    needs:
+      - 'dispatch'
+      - 'agent-review'
+    if: |-
+      ${{ vars.GEMINI_ENGINE == 'agent' && (needs.dispatch.outputs.command == 'merge' || needs.agent-review.outputs.command == 'review-and-merge') }}
+    uses: './.github/workflows/gemini-agent-merge.yml'
+    permissions:
+      contents: 'write'
+      issues: 'write'
+      pull-requests: 'write'
+    with:
+      additional_context: '${{ needs.dispatch.outputs.additional_context }}'
+      pull_request_number: '${{ needs.dispatch.outputs.issue_number }}'
+      is_fork: '${{ needs.dispatch.outputs.is_fork }}'
+      review_summary: '${{ needs.agent-review.outputs.review_summary }}'
+      projects: '${{ needs.dispatch.outputs.projects }}'
+      ref: ${{ needs.dispatch.outputs.resolved_ref }}
+    secrets:
+      GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
+      APP_PRIVATE_KEY: '${{ secrets.APP_PRIVATE_KEY }}'
+
   fallthrough:
     needs:
       - 'dispatch'
       - 'review'
       - 'merge'
+      - 'agent-review'
+      - 'agent-merge'
     if: |-
       ${{ always() && !cancelled() && (failure() || needs.dispatch.outputs.command == 'fallthrough') }}
     runs-on: 'ubuntu-latest'
