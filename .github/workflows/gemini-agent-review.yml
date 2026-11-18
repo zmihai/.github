@@ -7,13 +7,18 @@ name: '🧪 Gemini Agent Review (experiment)'
 # How it differs from gemini-review.yml:
 # - The agent runs in a sandbox hosted by Google, not on the runner. Google clones the repository
 #   into it; the runner never checks the code out.
-# - The agent gets no GitHub write access. The job token is attached by Google's egress proxy to
-#   requests going to github.com only (clone and fetch), it never enters the sandbox, and
-#   api.github.com is not on the sandbox's network allowlist. The runner posts the review text.
-# - Review only: one comment on the pull request, no approval, no merge.
+# - The agent submits its own review (inline comments plus APPROVE, COMMENT or REQUEST_CHANGES)
+#   through GitHub's hosted MCP server, limited by that server to three pull request tools. The
+#   job token goes to Google inside the request: as the MCP server's Authorization header, and as
+#   a header the egress proxy attaches to github.com requests (clone and fetch). It is never placed
+#   in the sandbox, and api.github.com is not on the sandbox's network allowlist.
+# - Review only: no merge.
+# - It submits reviews as github-actions[bot], the same identity gemini-review.yml uses, and a user
+#   can hold only one pending review per pull request. So this job first waits for every other
+#   workflow run on the same head commit to finish.
 #
-# Not a defence against a pull request whose content talks the model into a misleading review;
-# the comment it posts is advice, and nothing here acts on its verdict.
+# Not a defence against a pull request whose content talks the model into a misleading review or
+# into misusing the three review tools (they can also resolve review threads).
 
 on:
   workflow_call:
@@ -53,9 +58,13 @@ jobs:
     runs-on: 'ubuntu-latest'
     timeout-minutes: 30
     permissions:
+      actions: 'read'
       contents: 'read'
       pull-requests: 'write'
     env:
+      GITHUB_MCP_URL: 'https://api.githubcopilot.com/mcp/'
+      GITHUB_MCP_TOOLS: 'pull_request_read,pull_request_review_write,add_comment_to_pending_review'
+      REVIEW_MARKER: 'Experimental review by the Gemini managed agent'
       GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
       GH_TOKEN: '${{ github.token }}'
       REPOSITORY: '${{ github.repository }}'
@@ -102,10 +111,47 @@ jobs:
             echo "head=${head}"
           } >> "${GITHUB_OUTPUT}"
 
+      # Fails early, with the HTTP status in the log, if GitHub's hosted MCP server refuses the job
+      # token or the tool list.
+      - name: 'Check the GitHub MCP server accepts the job token'
+        run: |-
+          http_status="$(curl -sS -o "${RUNNER_TEMP}/mcp-init.txt" -w '%{http_code}' -X POST "${GITHUB_MCP_URL}" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-MCP-Tools: ${GITHUB_MCP_TOOLS}" \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"agent-review-preflight","version":"0"}}}')"
+          echo "GitHub MCP initialize: HTTP ${http_status}"
+          if [[ "${http_status}" != '200' ]]; then
+            head -c 600 "${RUNNER_TEMP}/mcp-init.txt"
+            echo
+            echo '::error::The GitHub MCP server did not accept the job token.'
+            exit 1
+          fi
+
+      # Both this job and the regular Gemini review submit as github-actions[bot]; see the header.
+      - name: 'Wait for other runs on this commit'
+        env:
+          HEAD_SHA: '${{ steps.pr.outputs.head }}'
+          RUN_ID: '${{ github.run_id }}'
+        run: |-
+          for ((i = 1; i <= 60; i++)); do
+            busy="$(gh api "repos/${REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&per_page=100" \
+              --jq "[.workflow_runs[] | select((.id | tostring) != \"${RUN_ID}\") | select(.status != \"completed\")] | length")"
+            echo "Check ${i}: ${busy} other run(s) still going"
+            if [[ "${busy}" == '0' ]]; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo '::error::Other runs on this commit did not finish in 20 minutes.'
+          exit 1
+
       # The request is built with jq so no value is ever spliced into JSON or a shell command.
       # max_total_tokens goes in as a string: the CLI models it as one, and a number makes it
       # read the body as a plain model request and reject the agent keys.
-      # Tools are limited to code execution: no web search, no URL fetching.
+      # Tools: code execution and the GitHub MCP server; no web search, no URL fetching. The tool
+      # list is enforced by GitHub's server through X-MCP-Tools, not by the agent API.
       - name: 'Build the agent request'
         env:
           MODEL: '${{ inputs.model }}'
@@ -138,10 +184,23 @@ jobs:
           4. Look for correctness bugs first, then security problems, then missing tests. Leave
              style alone.
 
-          Reply with the review only, in Markdown:
-          - One line per finding: path:line, what is wrong, and the fix. Order them most severe
-            first. Report a finding only if you opened the file and saw it.
-          - If you found nothing, say so in one line.
+          5. Submit ONE pull request review with the github MCP tools (owner "${REPOSITORY%%/*}",
+             repo "${REPOSITORY##*/}", pullNumber ${PULL_REQUEST_NUMBER}):
+             a. pull_request_review_write with method "create" and commitID ${HEAD_SHA}, without
+                an event, to open a pending review.
+             b. add_comment_to_pending_review once per finding, on the line of the changed file it
+                is about (subjectType "LINE", side "RIGHT"): what is wrong and the fix. Report a
+                finding only if you opened the file and saw it. Comment only on lines that are
+                part of the diff.
+             c. pull_request_review_write with method "submit_pending", an event of APPROVE (no
+                findings), REQUEST_CHANGES (any correctness or security finding) or COMMENT
+                (anything else), and a body whose first line is exactly
+                "**${REVIEW_MARKER}** (${MODEL}, head ${HEAD_SHA:0:7})" followed by a short
+                summary.
+             Never call these tools for anything else, and never on another pull request.
+
+          Then reply in Markdown with:
+          - The summary you submitted, and whether the review was submitted.
           - A short list of the commands you ran.
           - A last line that reads exactly one of: VERDICT: APPROVE, VERDICT: COMMENT,
             VERDICT: REQUEST_CHANGES
@@ -154,11 +213,22 @@ jobs:
             --arg budget "${MAX_TOTAL_TOKENS}" \
             --arg source "https://github.com/${REPOSITORY}" \
             --arg git_auth "Basic ${git_auth}" \
+            --arg mcp_url "${GITHUB_MCP_URL}" \
+            --arg mcp_tools "${GITHUB_MCP_TOOLS}" \
+            --arg mcp_auth "Bearer ${GH_TOKEN}" \
             '{
               input: $task,
               system_instruction: $system,
               agent_config: {type: "antigravity", model: $model, max_total_tokens: $budget},
-              tools: [{type: "code_execution"}],
+              tools: [
+                {type: "code_execution"},
+                {
+                  type: "mcp_server",
+                  name: "github",
+                  url: $mcp_url,
+                  headers: {Authorization: $mcp_auth, "X-MCP-Tools": $mcp_tools}
+                }
+              ],
               environment: {
                 type: "remote",
                 sources: [{type: "repository", source: $source, target: "/workspace/repo"}],
@@ -209,6 +279,8 @@ jobs:
           echo "status=${status}" >> "${GITHUB_OUTPUT}"
           echo "Usage: $(jq -c '.usage // {}' "${RUNNER_TEMP}/interaction.json")"
           echo "Steps: $(jq -c '[.steps[]? | .type] | group_by(.) | map({(.[0]): length}) | add // {}' "${RUNNER_TEMP}/interaction.json")"
+          echo 'MCP calls:'
+          jq -c '.steps[]? | select(.type | test("mcp")) | del(.signature) | tostring | .[0:400]' "${RUNNER_TEMP}/interaction.json" || true
           {
             echo "### Agent run"
             echo "- Status: \`${status}\`"
@@ -233,15 +305,27 @@ jobs:
             exit 1
           fi
 
-      - name: 'Post the review'
+      # The agent submits the review itself. This step only checks that it did, and falls back to
+      # posting the agent's reply as a comment (and failing) when it did not.
+      - name: 'Check the review was submitted'
         env:
           MODEL: '${{ inputs.model }}'
           HEAD_SHA: '${{ steps.pr.outputs.head }}'
         run: |-
+          gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate \
+            --jq ".[] | select(.commit_id == \"${HEAD_SHA}\") | select(.body | contains(\"${REVIEW_MARKER}\")) | \"\(.id) \(.state) \(.user.login) \(.submitted_at)\"" \
+            > "${RUNNER_TEMP}/submitted.txt"
+          cat "${RUNNER_TEMP}/submitted.txt"
+          if grep -q -E ' (APPROVED|CHANGES_REQUESTED|COMMENTED) ' "${RUNNER_TEMP}/submitted.txt"; then
+            echo 'The agent submitted its review.'
+            exit 0
+          fi
           {
-            echo "**Experimental review by the Gemini managed agent** (\`${MODEL}\`, head \`${HEAD_SHA:0:7}\`). Advice only: nothing acts on its verdict."
+            echo "**${REVIEW_MARKER}** (\`${MODEL}\`, head \`${HEAD_SHA:0:7}\`). The agent did not submit a review; this is its reply."
             echo
             cat "${RUNNER_TEMP}/review.md"
           } > "${RUNNER_TEMP}/comment.md"
           gh pr comment "${PULL_REQUEST_NUMBER}" -R "${REPOSITORY}" \
             --body-file "${RUNNER_TEMP}/comment.md"
+          echo '::error::The agent finished without submitting a review.'
+          exit 1
