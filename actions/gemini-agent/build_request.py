@@ -50,10 +50,17 @@ REVIEW_NOTES = """
 """
 
 MERGE_NOTES = """
-- The repository is cloned at /workspace/repo on its default branch. Before deciding, run in it:
-  `git fetch origin "pull/{pr}/head:agent-merge-head" "{base}"` then
-  `git checkout agent-merge-head`, and confirm that HEAD is {head}. Use the checkout to read the
-  surrounding code and, for Step 2.5, to diagnose, fix and verify.
+- The repository is cloned at /workspace/repo on its default branch. A merge that needs no
+  remediation does not use it: decide from the Input Data and `pull_request_read`, and run no
+  shell command. Only when you carry out Step 2.5, or cannot judge a change without the
+  surrounding code, run in it: `git fetch -q origin "pull/{pr}/head:agent-merge-head" "{base}"`
+  then `git checkout -q agent-merge-head`, and confirm that HEAD is {head}.
+- Keep command output short, because all of it stays in your context for the rest of the run.
+  Send the output of installs, builds and test runs to a file and print only the exit status and
+  the end of the file, like
+  `npm ci > /tmp/step.log 2>&1; echo "exit=$?"; tail -n 25 /tmp/step.log`. Judge success by
+  that exit status. Never pipe such a command into `tail` or `grep` directly: that hides its
+  exit status.
 - The sandbox has no `gh` and holds no GitHub token. `git` commands against `origin` are
   authenticated for you. The only way to merge is the `merge_pull_request` tool with
   merge_method "squash"; the `gh pr merge` fallback does not exist here.

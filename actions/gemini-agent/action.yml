@@ -197,6 +197,8 @@ runs:
         echo "Steps: ${steps}"
         echo 'Sandbox tool calls:'
         jq -r '.steps[]? | select(.type == "function_call") | "  \(.name // "?"): \(.arguments // {} | tostring | .[0:240])"' "${interaction_file}" || true
+        echo 'Sandbox commands:'
+        jq -r '.steps[]? | select(.type == "code_execution_call") | "  \(del(.type, .id, .signature) | tostring | .[0:300])"' "${interaction_file}" || true
         echo 'GitHub tool calls:'
         jq -r '.steps[]? | select(.type == "mcp_server_tool_call") | "  \(.name) \(.arguments.method // "") \(.arguments.event // "") #\(.arguments.pullNumber // "")"' "${interaction_file}" || true
         echo 'GitHub tool results:'
