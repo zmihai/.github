@@ -33,7 +33,7 @@ inputs:
     required: false
     default: ''
   timeout_seconds:
-    description: 'How long to wait for the agent before cancelling the run. Keep it below the job timeout, so the action can still cancel the run.'
+    description: 'How long to poll for the agent to finish. After that the action makes one last status request (at most 30 seconds) and then cancels the run. Keep the job timeout at least two minutes above this value, so the action can still cancel the run.'
     required: false
     default: '1500'
   context_file:
@@ -194,7 +194,13 @@ runs:
           if [[ -n "${child_pid}" ]]; then
             kill "${child_pid}" 2> /dev/null || true
           fi
-          rm -f "${request_file}" "${interaction_file}"
+          if [[ -z "${interaction_id}" && "${finished}" != 'yes' && -s "${start_file:-}" ]]; then
+            late_id="$(tr -d '"[:space:]' < "${start_file}")"
+            if [[ "${late_id}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+              interaction_id="${late_id}"
+            fi
+          fi
+          rm -f "${request_file}" "${interaction_file}" "${start_file:-}"
           if [[ -n "${interaction_id}" && "${finished}" != 'yes' ]]; then
             echo 'Cancelling the unfinished agent run.'
             timeout 8 gemini-api agent cancel "${interaction_id}" || true
@@ -226,25 +232,30 @@ runs:
         # Nothing after this point needs the GitHub tokens.
         unset GH_TOKEN GIT_TOKEN GIT_AUTH git_auth
 
-        # The limit is on elapsed time, start and status requests included: each request gets at
-        # most the time that is left, so none can run past the deadline.
+        # Lifecycle, kept deliberately simple:
+        # - Every wait (start request, sleep, status request) runs in the background and is
+        #   waited for, so a cancel signal ends the step at once and cleanup runs.
+        # - The step polls until timeout_seconds have passed, then makes one last status
+        #   request. Each request is capped at 30 seconds, so the step gives up at most about
+        #   30 seconds after timeout_seconds. The job timeout must leave room for that.
+        # - A run whose start request was interrupted before it returned an ID cannot be
+        #   cancelled from here; the token ceiling in the request still bounds it.
         started="$(date +%s)"
         deadline="$(( started + TIMEOUT_SECONDS ))"
-        # Prints the seconds a request may take: what is left until the deadline, capped at $1.
-        request_limit() {
-          local left="$(( deadline - $(date +%s) ))"
-          (( left < 1 )) && left=1
-          (( left > $1 )) && left="$1"
-          echo "${left}"
-        }
-        interaction_id="$(timeout "$(request_limit 120)" gemini-api agent run \
+        start_file="${RUNNER_TEMP}/agent-start-${MODE}.txt"
+        start_rc=0
+        timeout 120 gemini-api agent run \
           --agent "${AGENT}" \
           --body "@${request_file}" \
-          --background --stream=false --output-format json --jq '.id // empty')"
+          --background --stream=false --output-format json --jq '.id // empty' > "${start_file}" &
+        child_pid="$!"
+        wait "${child_pid}" || start_rc="$?"
+        child_pid=''
         rm -f "${request_file}"
-        interaction_id="${interaction_id//\"/}"
-        if [[ -z "${interaction_id}" ]]; then
-          echo '::error::The agent run returned no interaction ID.'
+        interaction_id="$(tr -d '"[:space:]' < "${start_file}")"
+        if (( start_rc != 0 )) || [[ ! "${interaction_id}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+          interaction_id=''
+          echo "::error::The agent run did not start (exit ${start_rc})."
           exit 1
         fi
         echo "Interaction: ${interaction_id}"
@@ -253,15 +264,11 @@ runs:
         # poll is retried, and no formatting of the result can fail a run that completed.
         status='in_progress'
         i=0
-        last_poll='no'
-        while [[ "${last_poll}" == 'no' ]]; do
+        while true; do
           i="$(( i + 1 ))"
-          # Sleep the poll interval, but keep the last 20 seconds for one final status request.
-          left="$(( deadline - $(date +%s) ))"
-          nap="${POLL_SECONDS}"
-          if (( left - nap < 20 )); then
-            nap="$(( left - 20 ))"
-            last_poll='yes'
+          nap="$(( deadline - $(date +%s) ))"
+          if (( nap > POLL_SECONDS )); then
+            nap="${POLL_SECONDS}"
           fi
           if (( nap > 0 )); then
             sleep "${nap}" &
@@ -273,23 +280,26 @@ runs:
           # failed or cancelled, so the exit status alone decides nothing: a readable status in
           # the output is used, and only an unreadable one is retried.
           poll_rc=0
-          timeout "$(request_limit 60)" gemini-api agent status "${interaction_id}" \
+          timeout 30 gemini-api agent status "${interaction_id}" \
             --stream=false --output-format json > "${interaction_file}" &
           child_pid="$!"
           wait "${child_pid}" || poll_rc="$?"
           child_pid=''
           polled="$(jq -r '.status | strings' "${interaction_file}" 2> /dev/null || true)"
-          if [[ ! "${polled}" =~ ^[a-z_]+$ ]]; then
-            echo "::warning::Status poll ${i} gave no readable status (exit ${poll_rc}); trying again."
+          if [[ "${polled}" =~ ^[a-z_]+$ ]]; then
+            status="${polled}"
+            echo "Poll ${i}: ${status}"
+          else
             status='unknown'
-            continue
+            echo "::warning::Status poll ${i} gave no readable status (exit ${poll_rc})."
           fi
-          status="${polled}"
-          echo "Poll ${i}: ${status}"
           case "${status}" in
-            in_progress | queued) ;;
+            in_progress | queued | unknown) ;;
             *) break ;;
           esac
+          if (( $(date +%s) >= deadline )); then
+            break
+          fi
         done
 
         case "${status}" in
