@@ -201,8 +201,12 @@ jobs:
     needs:
       - 'dispatch'
       - 'agent-review'
+    # A job whose `if` names no status function is skipped whenever a job it needs was skipped,
+    # and a merge-only command skips the review. The condition therefore states the results it
+    # accepts: a successful dispatch, plus either a skipped review on a merge-only command or a
+    # successful review on review-and-merge.
     if: |-
-      ${{ vars.GEMINI_ENGINE == 'agent' && (needs.dispatch.outputs.command == 'merge' || needs.agent-review.outputs.command == 'review-and-merge') }}
+      ${{ !cancelled() && vars.GEMINI_ENGINE == 'agent' && needs.dispatch.result == 'success' && ((needs.dispatch.outputs.command == 'merge' && needs.agent-review.result == 'skipped') || (needs.agent-review.result == 'success' && needs.agent-review.outputs.command == 'review-and-merge')) }}
     uses: './.github/workflows/gemini-agent-merge.yml'
     permissions:
       contents: 'write'

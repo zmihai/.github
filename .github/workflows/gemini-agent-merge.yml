@@ -45,7 +45,7 @@ on:
         default: '[]'
 
       ref:
-        description: 'The branch, tag or SHA to checkout'
+        description: 'The pull request head commit the dispatcher resolved. The run fails if the head has moved since.'
         required: false
         type: string
 
@@ -79,7 +79,8 @@ jobs:
       # `secrets` is not an allowed context in a step-level `if`, so the
       # mint gate below reads the key's presence through job env instead.
       APP_KEY_AVAILABLE: ${{ secrets.APP_PRIVATE_KEY != '' }}
-    timeout-minutes: 15
+    # Longer than the agent action's own 25-minute limit, so the action can cancel a slow run.
+    timeout-minutes: 30
     permissions:
       contents: 'write'
       issues: 'write'
@@ -232,6 +233,7 @@ jobs:
           model: "${{ vars.GEMINI_AGENT_MERGE_MODEL || 'gemini-3.8-flash' }}"
           max_total_tokens: '3000000'
           pull_request_number: '${{ inputs.pull_request_number }}'
+          expected_head_sha: '${{ inputs.ref }}'
           context_file: '${{ runner.temp }}/gemini-context.json'
           prompt_args: '--merge_strategy=squash --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }}'
           github_token: '${{ steps.mint_identity_token.outputs.token || github.token }}'

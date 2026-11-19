@@ -40,7 +40,7 @@ on:
         default: '[]'
 
       ref:
-        description: 'Unused; kept so the dispatcher can call either review workflow'
+        description: 'The pull request head commit the dispatcher resolved. The run fails if the head has moved since.'
         required: false
         type: string
 
@@ -117,8 +117,9 @@ jobs:
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
           PROJECTS: '${{ inputs.projects }}'
 
-      # The IDs of the reviews that exist before the agent runs, so the summary step can tell the
-      # review this run submits from older ones by identity.
+      # The IDs of the reviews already submitted before the agent runs, so the summary step can
+      # tell the review this run submits from older ones by identity. A pending review left by an
+      # earlier run is not listed: the prompt lets the agent reuse and submit it.
       - name: 'Snapshot existing reviews'
         if: ${{ inputs.is_fork != 'true' }}
         env:
@@ -127,7 +128,7 @@ jobs:
           PULL_REQUEST_NUMBER: '${{ inputs.issue_number }}'
         run: |-
           gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate \
-            --jq '.[].id' > "${RUNNER_TEMP}/reviews-before.txt"
+            --jq '.[] | select(.state != "PENDING") | .id' > "${RUNNER_TEMP}/reviews-before.txt"
           echo "Reviews before the run: $(wc -l < "${RUNNER_TEMP}/reviews-before.txt")"
 
       - name: 'Run the review agent'
@@ -138,6 +139,7 @@ jobs:
           mode: 'review'
           model: "${{ vars.GEMINI_AGENT_REVIEW_MODEL || 'gemini-3.5-flash-lite' }}"
           pull_request_number: '${{ inputs.issue_number }}'
+          expected_head_sha: '${{ inputs.ref }}'
           context_file: '${{ runner.temp }}/gemini-context.json'
           prompt_args: '--repository=${{ github.repository }} --pr=${{ inputs.issue_number }}'
           github_token: '${{ steps.mint_identity_token.outputs.token || github.token }}'
@@ -154,20 +156,23 @@ jobs:
           REPOSITORY: '${{ github.repository }}'
           PULL_REQUEST_NUMBER: '${{ inputs.issue_number }}'
           REPLY_FILE: '${{ steps.agent.outputs.reply_file }}'
+          HEAD_SHA: '${{ steps.agent.outputs.head_sha }}'
           # The account the agent's token submits reviews as. Another reviewer (Copilot, a human)
           # can submit a review while the agent runs; only this account's review is the agent's.
           REVIEWER_LOGIN: "${{ steps.mint_identity_token.outputs.app-slug && format('{0}[bot]', steps.mint_identity_token.outputs.app-slug) || 'github-actions[bot]' }}"
         run: |-
           touch "${RUNNER_TEMP}/reviews-before.txt"
           gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate \
-            --jq '.[] | select(.state != "PENDING") | [.id, .state, .user.login] | @tsv' > "${RUNNER_TEMP}/reviews-after.tsv"
+            --jq '.[] | select(.state != "PENDING") | [.id, .state, .user.login, .commit_id] | @tsv' > "${RUNNER_TEMP}/reviews-after.tsv"
           new_id=''
           new_state=''
-          while IFS=$'\t' read -r id state login; do
+          new_commit=''
+          while IFS=$'\t' read -r id state login commit; do
             if [[ "${login}" == "${REVIEWER_LOGIN}" ]] && ! grep -qx "${id}" "${RUNNER_TEMP}/reviews-before.txt"; then
               new_id="${id}"
               new_state="${state}"
-              echo "New review ${id}: ${state} by ${login}"
+              new_commit="${commit}"
+              echo "New review ${id}: ${state} by ${login} on ${commit}"
             fi
           done < "${RUNNER_TEMP}/reviews-after.tsv"
 
@@ -182,15 +187,32 @@ jobs:
           echo '--- REVIEW_SUMMARY ---'
           cat "${RUNNER_TEMP}/review-summary.md"
           echo '--- END REVIEW_SUMMARY ---'
+          # The summary travels to the merge job as a job output and then an environment variable,
+          # so it is capped. The cut is made on a character boundary and is announced; the merge
+          # agent reads the full review on the pull request either way.
+          python3 -I -c '
+          import sys
+          limit = 20000
+          text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          if len(text) > limit:
+              text = text[:limit] + "\n\n[Review summary cut at 20,000 characters. Read the full review on the pull request before deciding.]"
+          open(sys.argv[2], "w", encoding="utf-8").write(text)
+          ' "${RUNNER_TEMP}/review-summary.md" "${RUNNER_TEMP}/review-summary-capped.md"
+          # A delimiter the review body cannot contain by accident.
+          delimiter="GEMINI_SUMMARY_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
           {
-            echo 'summary<<GEMINI_SUMMARY_EOF'
+            echo "summary<<${delimiter}"
             echo "## Review (state: ${new_state:-NOT SUBMITTED})"
-            head -c 20000 "${RUNNER_TEMP}/review-summary.md"
+            cat "${RUNNER_TEMP}/review-summary-capped.md"
             echo
-            echo 'GEMINI_SUMMARY_EOF'
+            echo "${delimiter}"
           } >> "${GITHUB_OUTPUT}"
 
           if [[ -z "${new_id}" ]]; then
             echo '::error::The agent finished without submitting a review.'
+            exit 1
+          fi
+          if [[ -n "${HEAD_SHA}" && "${new_commit}" != "${HEAD_SHA}" ]]; then
+            echo "::error::The agent's review is on ${new_commit}, not on the head ${HEAD_SHA} this run resolved."
             exit 1
           fi
