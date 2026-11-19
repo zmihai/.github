@@ -80,11 +80,18 @@ MERGE_NOTES = """
 """
 
 
-def env(name: str) -> str:
+def env(name: str, allow_empty: bool = False) -> str:
     value = os.environ.get(name)
-    if value is None:
-        sys.exit(f"missing environment variable {name}")
+    if value is None or (value == "" and not allow_empty):
+        sys.exit(f"missing or empty environment variable {name}")
     return value
+
+
+def token_budget() -> str:
+    raw = env("MAX_TOTAL_TOKENS")
+    if not raw.isascii() or not raw.isdigit() or int(raw) < 1:
+        sys.exit(f"MAX_TOTAL_TOKENS must be a positive whole number, got {raw!r}")
+    return str(int(raw))
 
 
 def main() -> None:
@@ -105,7 +112,7 @@ def main() -> None:
         notes += REVIEW_NOTES.format(pr=env("PULL_REQUEST_NUMBER"), base=env("BASE_REF"), head=env("HEAD_SHA"))
     else:
         notes += MERGE_NOTES.format(pr=env("PULL_REQUEST_NUMBER"), base=env("BASE_REF"), head=env("HEAD_SHA"))
-    prompt = f"{prompt.rstrip()} {env('PROMPT_ARGS')}\n\n-----\n{notes}"
+    prompt = f"{prompt.rstrip()} {env('PROMPT_ARGS', allow_empty=True)}\n\n-----\n{notes}"
 
     token = env("GH_TOKEN")
     mcp = {
@@ -122,7 +129,7 @@ def main() -> None:
         "system_instruction": SYSTEM,
         # A string: the CLI models max_total_tokens as one, and a number makes it read the body
         # as a plain model request and reject the agent keys.
-        "agent_config": {"type": "antigravity", "model": env("MODEL"), "max_total_tokens": str(int(env("MAX_TOTAL_TOKENS")))},
+        "agent_config": {"type": "antigravity", "model": env("MODEL"), "max_total_tokens": token_budget()},
     }
     # The token is attached to github.com requests by the egress proxy and never enters the sandbox.
     git_auth = env("GIT_AUTH")

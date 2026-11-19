@@ -253,7 +253,7 @@ jobs:
           model: "${{ vars.GEMINI_AGENT_MERGE_MODEL || 'gemini-3.8-flash' }}"
           max_total_tokens: '3000000'
           pull_request_number: '${{ inputs.pull_request_number }}'
-          expected_head_sha: '${{ inputs.ref }}'
+          expected_head_sha: '${{ inputs.ref || github.event.pull_request.head.sha }}'
           context_file: '${{ runner.temp }}/gemini-context.json'
           prompt_args: '--merge_strategy=squash --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }}'
           github_token: '${{ steps.mint_identity_token.outputs.token || github.token }}'

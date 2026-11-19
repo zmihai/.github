@@ -78,7 +78,7 @@ runs:
       run: |-
         mkdir -p "${RUNNER_TEMP}/gemini-api"
         cd "${RUNNER_TEMP}/gemini-api"
-        curl -sSfL -o gemini-api.tar.gz \
+        curl -sSfL --connect-timeout 15 --max-time 180 -o gemini-api.tar.gz \
           "https://github.com/google-gemini/gemini-api-cli/releases/download/${VERSION}/gemini-api_Linux_x86_64.tar.gz"
         echo "${SHA256}  gemini-api.tar.gz" | sha256sum -c -
         tar xzf gemini-api.tar.gz
@@ -118,7 +118,7 @@ runs:
             echo "::error::expected_head_sha '${expected}' is not a usable ref."
             exit 1
           fi
-          # A failed lookup leaves the value empty, so the message below is what the log shows.
+          # A failed lookup yields no SHA, so the check below fails with its own message.
           expected="$(gh api "repos/${REPOSITORY}/commits/${expected}" --jq '.sha' || true)"
           if [[ ! "${expected}" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Could not resolve expected_head_sha '${EXPECTED_HEAD_SHA}' to a commit."
@@ -142,7 +142,7 @@ runs:
         GITHUB_MCP_URL: 'https://api.githubcopilot.com/mcp/'
       run: |-
         # The header comes from stdin, so the token is not on curl's command line.
-        http_status="$(curl -sS -o "${RUNNER_TEMP}/mcp-init.txt" -w '%{http_code}' -X POST "${GITHUB_MCP_URL}" \
+        http_status="$(curl -sS --connect-timeout 15 --max-time 60 -o "${RUNNER_TEMP}/mcp-init.txt" -w '%{http_code}' -X POST "${GITHUB_MCP_URL}" \
           -H @- \
           -H 'Content-Type: application/json' \
           -H 'Accept: application/json, text/event-stream' \
@@ -200,8 +200,9 @@ runs:
           echo '::error::gemini_api_key is empty. The agent engine needs a Gemini API key.'
           exit 1
         fi
-        if [[ ! "${TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
-          echo "::error::timeout_seconds must be a number, got '${TIMEOUT_SECONDS}'."
+        # No leading zero (bash would read it as octal) and long enough for more than one poll.
+        if [[ ! "${TIMEOUT_SECONDS}" =~ ^[1-9][0-9]{1,5}$ ]] || (( TIMEOUT_SECONDS < 60 )); then
+          echo "::error::timeout_seconds must be a whole number of seconds from 60 to 999999, got '${TIMEOUT_SECONDS}'."
           exit 1
         fi
 
@@ -211,6 +212,8 @@ runs:
         export COMMANDS_DIR="${ACTION_PATH}/../../.github/commands"
         export REQUEST_FILE="${request_file}"
         python3 -I "${ACTION_PATH}/build_request.py"
+        # Nothing after this point needs the GitHub tokens.
+        unset GH_TOKEN GIT_TOKEN GIT_AUTH git_auth
 
         # The limit is on elapsed time, start and status requests included: each request gets at
         # most the time that is left, so none can run past the deadline.
@@ -235,20 +238,30 @@ runs:
         fi
         echo "Interaction: ${interaction_id}"
 
+        # Everything read from the API below is treated as possibly malformed: an unreadable
+        # poll is retried, and no formatting of the result can fail a run that completed.
         status='in_progress'
         i=0
-        while (( $(date +%s) + POLL_SECONDS < deadline )); do
+        while (( $(date +%s) < deadline )); do
           i="$(( i + 1 ))"
-          sleep "${POLL_SECONDS}"
+          nap="$(( deadline - $(date +%s) ))"
+          (( nap > POLL_SECONDS )) && nap="${POLL_SECONDS}"
+          (( nap > 0 )) && sleep "${nap}"
           if ! timeout "$(request_limit 60)" gemini-api agent status "${interaction_id}" \
             --stream=false --output-format json > "${interaction_file}"; then
             echo "::warning::Status poll ${i} failed; trying again."
             continue
           fi
-          status="$(jq -r '.status // "unknown"' "${interaction_file}")"
+          polled="$(jq -r '.status | strings' "${interaction_file}" 2> /dev/null || true)"
+          if [[ ! "${polled}" =~ ^[a-z_]+$ ]]; then
+            echo "::warning::Status poll ${i} returned no readable status; trying again."
+            status='unknown'
+            continue
+          fi
+          status="${polled}"
           echo "Poll ${i}: ${status}"
           case "${status}" in
-            in_progress | queued | unknown) ;;
+            in_progress | queued) ;;
             *) break ;;
           esac
         done
@@ -264,8 +277,8 @@ runs:
         esac
 
         seconds="$(( $(date +%s) - started ))"
-        usage="$(jq -c '.usage // {} | {total_tokens, total_input_tokens, total_cached_tokens, total_output_tokens, total_thought_tokens}' "${interaction_file}")"
-        steps="$(jq -c '[.steps[]? | .type] | group_by(.) | map({(.[0]): length}) | add // {}' "${interaction_file}")"
+        usage="$(jq -c '.usage // {} | {total_tokens, total_input_tokens, total_cached_tokens, total_output_tokens, total_thought_tokens}' "${interaction_file}" 2> /dev/null || echo '{}')"
+        steps="$(jq -c '[.steps[]? | (.type // "unknown" | tostring)] | group_by(.) | map({(.[0]): length}) | add // {}' "${interaction_file}" 2> /dev/null || echo '{}')"
         echo "Agent ${MODE} on ${MODEL}: ${status} in ${seconds}s"
         echo "Usage: ${usage}"
         echo "Steps: ${steps}"
@@ -289,7 +302,7 @@ runs:
           [.steps[]? | select(.type == "model_output")
             | [.content[]? | select(.type == "text") | .text] | join("")
             | select(length > 0)] | last // ""
-        ' "${interaction_file}" > "${reply_file}"
+        ' "${interaction_file}" > "${reply_file}" || : > "${reply_file}"
         {
           echo "status=${status}"
           echo "reply_file=${reply_file}"
@@ -297,7 +310,7 @@ runs:
 
         if [[ "${status}" != 'completed' ]]; then
           echo "::error::The agent run ended as '${status}'."
-          jq '{id, status, error, usage}' "${interaction_file}"
+          jq '{id, status, error, usage}' "${interaction_file}" || true
           exit 1
         fi
         echo '--- agent reply ---'

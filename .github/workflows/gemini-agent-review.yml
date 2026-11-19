@@ -155,7 +155,7 @@ jobs:
           mode: 'review'
           model: "${{ vars.GEMINI_AGENT_REVIEW_MODEL || 'gemini-3.5-flash-lite' }}"
           pull_request_number: '${{ inputs.issue_number }}'
-          expected_head_sha: '${{ inputs.ref }}'
+          expected_head_sha: '${{ inputs.ref || github.event.pull_request.head.sha }}'
           context_file: '${{ runner.temp }}/gemini-context.json'
           prompt_args: '--repository=${{ github.repository }} --pr=${{ inputs.issue_number }}'
           github_token: '${{ steps.mint_identity_token.outputs.token || github.token }}'
@@ -166,7 +166,8 @@ jobs:
       # the command prompt requires a submitted review.
       - name: 'Collect the review summary'
         id: 'summary'
-        if: ${{ !cancelled() && inputs.is_fork != 'true' }}
+        # Skipped when the agent step never started: an earlier step already failed the job.
+        if: ${{ !cancelled() && inputs.is_fork != 'true' && steps.agent.outcome != 'skipped' }}
         env:
           GH_TOKEN: '${{ steps.mint_identity_token.outputs.token || github.token }}'
           REPOSITORY: '${{ github.repository }}'
@@ -194,8 +195,11 @@ jobs:
                 continue
               fi
               new_ids+=("${id}")
-              # Several reviews in one run: a request for changes decides the state.
-              if [[ "${new_state}" != 'CHANGES_REQUESTED' ]]; then
+              # Several reviews in one run: a request for changes outranks an approval, which
+              # outranks a comment.
+              if [[ "${state}" == 'CHANGES_REQUESTED' ]]; then
+                new_state="${state}"
+              elif [[ "${new_state}" != 'CHANGES_REQUESTED' && ( "${state}" == 'APPROVED' || "${new_state}" != 'APPROVED' ) ]]; then
                 new_state="${state}"
               fi
               echo "New review ${id}: ${state} by ${login} on ${commit}"
