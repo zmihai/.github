@@ -154,6 +154,9 @@ jobs:
           REPOSITORY: '${{ github.repository }}'
           PULL_REQUEST_NUMBER: '${{ inputs.issue_number }}'
           REPLY_FILE: '${{ steps.agent.outputs.reply_file }}'
+          # The account the agent's token submits reviews as. Another reviewer (Copilot, a human)
+          # can submit a review while the agent runs; only this account's review is the agent's.
+          REVIEWER_LOGIN: "${{ steps.mint_identity_token.outputs.app-slug && format('{0}[bot]', steps.mint_identity_token.outputs.app-slug) || 'github-actions[bot]' }}"
         run: |-
           touch "${RUNNER_TEMP}/reviews-before.txt"
           gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate \
@@ -161,7 +164,7 @@ jobs:
           new_id=''
           new_state=''
           while IFS=$'\t' read -r id state login; do
-            if ! grep -qx "${id}" "${RUNNER_TEMP}/reviews-before.txt"; then
+            if [[ "${login}" == "${REVIEWER_LOGIN}" ]] && ! grep -qx "${id}" "${RUNNER_TEMP}/reviews-before.txt"; then
               new_id="${id}"
               new_state="${state}"
               echo "New review ${id}: ${state} by ${login}"
