@@ -117,18 +117,34 @@ jobs:
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
           PROJECTS: '${{ inputs.projects }}'
 
-      # The IDs of the reviews already submitted before the agent runs, so the summary step can
-      # tell the review this run submits from older ones by identity. A pending review left by an
-      # earlier run is not listed: the prompt lets the agent reuse and submit it.
+      # A pending review left behind by an earlier run of this account is deleted first: it is
+      # anchored to that run's commit and carries its half-finished comments, and GitHub allows
+      # only one pending review per account, so the agent would otherwise submit it as its own.
+      # Then the IDs of the reviews already submitted are recorded, so the summary step can tell
+      # the review this run submits from older ones by identity.
       - name: 'Snapshot existing reviews'
         if: ${{ inputs.is_fork != 'true' }}
         env:
           GH_TOKEN: '${{ steps.mint_identity_token.outputs.token || github.token }}'
           REPOSITORY: '${{ github.repository }}'
           PULL_REQUEST_NUMBER: '${{ inputs.issue_number }}'
+          REVIEWER_LOGIN: "${{ steps.mint_identity_token.outputs.app-slug && format('{0}[bot]', steps.mint_identity_token.outputs.app-slug) || 'github-actions[bot]' }}"
         run: |-
           gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate \
-            --jq '.[] | select(.state != "PENDING") | .id' > "${RUNNER_TEMP}/reviews-before.txt"
+            --jq '.[] | [.id, .state, (.user.login // "-")] | @tsv' > "${RUNNER_TEMP}/reviews-all.tsv"
+          : > "${RUNNER_TEMP}/reviews-before.partial"
+          while IFS=$'\t' read -r id state login; do
+            if [[ "${state}" == 'PENDING' ]]; then
+              if [[ "${login}" == "${REVIEWER_LOGIN}" ]]; then
+                echo "Deleting the pending review ${id} left by an earlier run."
+                gh api --method DELETE "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews/${id}" > /dev/null
+              fi
+            else
+              echo "${id}" >> "${RUNNER_TEMP}/reviews-before.partial"
+            fi
+          done < "${RUNNER_TEMP}/reviews-all.tsv"
+          # The snapshot appears under its final name only when it is complete.
+          mv "${RUNNER_TEMP}/reviews-before.partial" "${RUNNER_TEMP}/reviews-before.txt"
           echo "Reviews before the run: $(wc -l < "${RUNNER_TEMP}/reviews-before.txt")"
 
       - name: 'Run the review agent'
@@ -161,27 +177,41 @@ jobs:
           # can submit a review while the agent runs; only this account's review is the agent's.
           REVIEWER_LOGIN: "${{ steps.mint_identity_token.outputs.app-slug && format('{0}[bot]', steps.mint_identity_token.outputs.app-slug) || 'github-actions[bot]' }}"
         run: |-
-          touch "${RUNNER_TEMP}/reviews-before.txt"
-          gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate \
-            --jq '.[] | select(.state != "PENDING") | [.id, .state, .user.login, .commit_id] | @tsv' > "${RUNNER_TEMP}/reviews-after.tsv"
+          # Without the snapshot or the head commit there is nothing to tell this run's review
+          # from an older one, so nothing is accepted.
           new_id=''
           new_state=''
-          new_commit=''
-          while IFS=$'\t' read -r id state login commit; do
-            if [[ "${login}" == "${REVIEWER_LOGIN}" ]] && ! grep -qx "${id}" "${RUNNER_TEMP}/reviews-before.txt"; then
+          off_head=''
+          if [[ -f "${RUNNER_TEMP}/reviews-before.txt" && -n "${HEAD_SHA}" ]]; then
+            gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate \
+              --jq '.[] | select(.state != "PENDING") | [.id, .state, (.user.login // "-"), (.commit_id // "-")] | @tsv' > "${RUNNER_TEMP}/reviews-after.tsv"
+            while IFS=$'\t' read -r id state login commit; do
+              if [[ "${login}" != "${REVIEWER_LOGIN}" ]] || grep -qx "${id}" "${RUNNER_TEMP}/reviews-before.txt"; then
+                continue
+              fi
+              if [[ "${commit}" != "${HEAD_SHA}" ]]; then
+                off_head="${id} on ${commit}"
+                continue
+              fi
               new_id="${id}"
               new_state="${state}"
-              new_commit="${commit}"
               echo "New review ${id}: ${state} by ${login} on ${commit}"
-            fi
-          done < "${RUNNER_TEMP}/reviews-after.tsv"
-
-          if [[ -n "${new_id}" ]]; then
-            gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews/${new_id}" --jq '.body' > "${RUNNER_TEMP}/review-summary.md"
-          elif [[ -n "${REPLY_FILE}" && -s "${REPLY_FILE}" ]]; then
-            cp "${REPLY_FILE}" "${RUNNER_TEMP}/review-summary.md"
+            done < "${RUNNER_TEMP}/reviews-after.tsv"
           else
-            echo '(no review summary produced)' > "${RUNNER_TEMP}/review-summary.md"
+            echo '::error::The pre-run review snapshot or the head commit is missing; no review can be attributed to this run.'
+          fi
+
+          : > "${RUNNER_TEMP}/review-summary.md"
+          if [[ -n "${new_id}" ]]; then
+            gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews/${new_id}" --jq '.body // ""' > "${RUNNER_TEMP}/review-summary.md"
+          fi
+          # A review without a body leaves the agent's final reply as the only summary there is.
+          if [[ -z "$(tr -d '[:space:]' < "${RUNNER_TEMP}/review-summary.md")" ]]; then
+            if [[ -n "${REPLY_FILE}" && -s "${REPLY_FILE}" ]]; then
+              cp "${REPLY_FILE}" "${RUNNER_TEMP}/review-summary.md"
+            else
+              echo '(no review summary produced)' > "${RUNNER_TEMP}/review-summary.md"
+            fi
           fi
 
           echo '--- REVIEW_SUMMARY ---'
@@ -209,10 +239,10 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
           if [[ -z "${new_id}" ]]; then
-            echo '::error::The agent finished without submitting a review.'
-            exit 1
-          fi
-          if [[ -n "${HEAD_SHA}" && "${new_commit}" != "${HEAD_SHA}" ]]; then
-            echo "::error::The agent's review is on ${new_commit}, not on the head ${HEAD_SHA} this run resolved."
+            if [[ -n "${off_head}" ]]; then
+              echo "::error::The agent's review (${off_head}) is not on the head ${HEAD_SHA} this run resolved."
+            else
+              echo '::error::The agent finished without submitting a review on the head commit.'
+            fi
             exit 1
           fi

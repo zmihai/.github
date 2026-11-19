@@ -6,7 +6,6 @@ pr-merge.toml), with the Input Data placeholder filled in and a short section ap
 describes what differs in this environment. Everything comes from environment variables and
 files; nothing is spliced into a shell command.
 """
-import base64
 import json
 import os
 import sys
@@ -42,9 +41,12 @@ REVIEW_NOTES = """
 - This single review also replaces the separate security analysis. Review every changed file
   for vulnerabilities (injection, cross-site scripting, authentication and access-control flaws,
   secrets exposure, unsafe deserialisation, path traversal, privacy leaks) and report each one
-  as an inline comment with its severity, like any other finding. In the summary, add a third
-  section after General Feedback, titled `## 🛡️ Security Analysis`, that lists every Critical or
-  High security finding in one line each, or says that none was found.
+  as an inline comment with its severity, like any other finding.
+- The summary is what the merge step reads, so it must carry every blocking finding itself.
+  After General Feedback add two sections, in this order. First `## 🛡️ Security Analysis`: the
+  security findings in one line each, or that none was found. Last `## 🚦 Blocking Findings`:
+  every Critical or High finding of any kind, code or security, in one line each with its file
+  and line, even though each also has an inline comment; write `None.` only when there is none.
 - After submitting the review, reply with the summary you submitted and one last line that reads
   exactly one of: VERDICT: APPROVE, VERDICT: COMMENT, VERDICT: REQUEST_CHANGES.
 """
@@ -64,6 +66,8 @@ MERGE_NOTES = """
 - The sandbox has no `gh` and holds no GitHub token. `git` commands against `origin` are
   authenticated for you. The only way to merge is the `merge_pull_request` tool with
   merge_method "squash"; the `gh pr merge` fallback does not exist here.
+- Always pass `expectedHeadSha` to `merge_pull_request`, so that a commit you have not seen is
+  never merged: "{head}" when you pushed nothing, or the commit you pushed in Step 2.5.
 - Step 2.5 (remediation) applies. Push a fix only with
   `git push origin HEAD:refs/heads/<head_ref>`, with the literal `head_ref` from the Input Data.
   Never force-push and never push to any other branch or tag. After the push, run
@@ -121,7 +125,7 @@ def main() -> None:
         "agent_config": {"type": "antigravity", "model": env("MODEL"), "max_total_tokens": str(int(env("MAX_TOTAL_TOKENS")))},
     }
     # The token is attached to github.com requests by the egress proxy and never enters the sandbox.
-    git_auth = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    git_auth = env("GIT_AUTH")
     allowlist = [{"domain": "github.com", "transform": {"Authorization": f"Basic {git_auth}"}}]
     if mode == "merge":
         # Remediation installs dependencies and runs the project's checks, as the runner did.
