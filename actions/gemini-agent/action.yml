@@ -29,7 +29,7 @@ inputs:
     description: 'The pull request number'
     required: true
   expected_head_sha:
-    description: 'The head commit the caller resolved earlier. When it is a full SHA and the pull request head has moved since, the action fails instead of working on a commit the caller did not resolve.'
+    description: 'The head commit the caller resolved earlier (a SHA, or a branch or tag that is resolved to one). When the pull request head is a different commit, the action fails instead of working on a commit the caller did not resolve.'
     required: false
     default: ''
   timeout_seconds:
@@ -111,12 +111,21 @@ runs:
           echo '::error::Could not read a usable head commit and base branch for the pull request.'
           exit 1
         fi
-        if [[ -n "${EXPECTED_HEAD_SHA}" && ! "${EXPECTED_HEAD_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
-          echo "::error::expected_head_sha must be a full commit SHA, got '${EXPECTED_HEAD_SHA}'."
-          exit 1
+        # The caller may pass a branch, a tag or a short SHA; GitHub resolves it to a commit.
+        expected="${EXPECTED_HEAD_SHA}"
+        if [[ -n "${expected}" && ! "${expected}" =~ ^[0-9a-f]{40}$ ]]; then
+          if [[ ! "${expected}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::expected_head_sha '${expected}' is not a usable ref."
+            exit 1
+          fi
+          expected="$(gh api "repos/${REPOSITORY}/commits/${expected}" --jq '.sha')"
+          if [[ ! "${expected}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not resolve expected_head_sha '${EXPECTED_HEAD_SHA}' to a commit."
+            exit 1
+          fi
         fi
-        if [[ -n "${EXPECTED_HEAD_SHA}" && "${EXPECTED_HEAD_SHA}" != "${head}" ]]; then
-          echo "::error::The pull request head moved from ${EXPECTED_HEAD_SHA} to ${head} since this run resolved it; not continuing on a commit this run did not resolve."
+        if [[ -n "${expected}" && "${expected}" != "${head}" ]]; then
+          echo "::error::The pull request head is ${head}, not the commit ${expected} this run resolved; not continuing on a commit this run did not resolve."
           exit 1
         fi
         {
@@ -181,7 +190,7 @@ runs:
           rm -f "${request_file}" "${interaction_file}"
           if [[ -n "${interaction_id}" && "${finished}" != 'yes' ]]; then
             echo 'Cancelling the unfinished agent run.'
-            gemini-api agent cancel "${interaction_id}" || true
+            timeout 30 gemini-api agent cancel "${interaction_id}" || true
           fi
         }
         trap cleanup EXIT
@@ -194,7 +203,6 @@ runs:
           echo "::error::timeout_seconds must be a number, got '${TIMEOUT_SECONDS}'."
           exit 1
         fi
-        max_polls="$(( TIMEOUT_SECONDS / POLL_SECONDS ))"
 
         git_auth="$(printf 'x-access-token:%s' "${GIT_TOKEN}" | base64 -w 0)"
         echo "::add-mask::${git_auth}"
@@ -203,8 +211,11 @@ runs:
         export REQUEST_FILE="${request_file}"
         python3 -I "${ACTION_PATH}/build_request.py"
 
+        # The limit is on elapsed time, start and status requests included; each request is
+        # bounded so that one hanging call cannot use up the job's own timeout.
         started="$(date +%s)"
-        interaction_id="$(gemini-api agent run \
+        deadline="$(( started + TIMEOUT_SECONDS ))"
+        interaction_id="$(timeout 120 gemini-api agent run \
           --agent "${AGENT}" \
           --body "@${request_file}" \
           --background --stream=false --output-format json --jq '.id // empty')"
@@ -217,9 +228,11 @@ runs:
         echo "Interaction: ${interaction_id}"
 
         status='in_progress'
-        for ((i = 1; i <= max_polls; i++)); do
+        i=0
+        while (( $(date +%s) + POLL_SECONDS < deadline )); do
+          i="$(( i + 1 ))"
           sleep "${POLL_SECONDS}"
-          if ! gemini-api agent status "${interaction_id}" \
+          if ! timeout 60 gemini-api agent status "${interaction_id}" \
             --stream=false --output-format json > "${interaction_file}"; then
             echo "::warning::Status poll ${i} failed; trying again."
             continue
