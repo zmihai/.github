@@ -212,11 +212,18 @@ runs:
         export REQUEST_FILE="${request_file}"
         python3 -I "${ACTION_PATH}/build_request.py"
 
-        # The limit is on elapsed time, start and status requests included; each request is
-        # bounded so that one hanging call cannot use up the job's own timeout.
+        # The limit is on elapsed time, start and status requests included: each request gets at
+        # most the time that is left, so none can run past the deadline.
         started="$(date +%s)"
         deadline="$(( started + TIMEOUT_SECONDS ))"
-        interaction_id="$(timeout 120 gemini-api agent run \
+        # Prints the seconds a request may take: what is left until the deadline, capped at $1.
+        request_limit() {
+          local left="$(( deadline - $(date +%s) ))"
+          (( left < 1 )) && left=1
+          (( left > $1 )) && left="$1"
+          echo "${left}"
+        }
+        interaction_id="$(timeout "$(request_limit 120)" gemini-api agent run \
           --agent "${AGENT}" \
           --body "@${request_file}" \
           --background --stream=false --output-format json --jq '.id // empty')"
@@ -233,7 +240,7 @@ runs:
         while (( $(date +%s) + POLL_SECONDS < deadline )); do
           i="$(( i + 1 ))"
           sleep "${POLL_SECONDS}"
-          if ! timeout 60 gemini-api agent status "${interaction_id}" \
+          if ! timeout "$(request_limit 60)" gemini-api agent status "${interaction_id}" \
             --stream=false --output-format json > "${interaction_file}"; then
             echo "::warning::Status poll ${i} failed; trying again."
             continue
