@@ -118,7 +118,8 @@ runs:
             echo "::error::expected_head_sha '${expected}' is not a usable ref."
             exit 1
           fi
-          expected="$(gh api "repos/${REPOSITORY}/commits/${expected}" --jq '.sha')"
+          # A failed lookup leaves the value empty, so the message below is what the log shows.
+          expected="$(gh api "repos/${REPOSITORY}/commits/${expected}" --jq '.sha' || true)"
           if [[ ! "${expected}" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Could not resolve expected_head_sha '${EXPECTED_HEAD_SHA}' to a commit."
             exit 1

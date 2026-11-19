@@ -179,7 +179,7 @@ jobs:
         run: |-
           # Without the snapshot or the head commit there is nothing to tell this run's review
           # from an older one, so nothing is accepted.
-          new_id=''
+          new_ids=()
           new_state=''
           off_head=''
           if [[ -f "${RUNNER_TEMP}/reviews-before.txt" && -n "${HEAD_SHA}" ]]; then
@@ -193,8 +193,11 @@ jobs:
                 off_head="${id} on ${commit}"
                 continue
               fi
-              new_id="${id}"
-              new_state="${state}"
+              new_ids+=("${id}")
+              # Several reviews in one run: a request for changes decides the state.
+              if [[ "${new_state}" != 'CHANGES_REQUESTED' ]]; then
+                new_state="${state}"
+              fi
               echo "New review ${id}: ${state} by ${login} on ${commit}"
             done < "${RUNNER_TEMP}/reviews-after.tsv"
           else
@@ -202,14 +205,17 @@ jobs:
           fi
 
           : > "${RUNNER_TEMP}/review-summary.md"
-          if [[ -n "${new_id}" ]]; then
-            gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews/${new_id}" --jq '.body // ""' > "${RUNNER_TEMP}/review-summary.md"
-          fi
+          for id in "${new_ids[@]}"; do
+            gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews/${id}" --jq '.body // ""' >> "${RUNNER_TEMP}/review-summary.md"
+            echo >> "${RUNNER_TEMP}/review-summary.md"
+          done
           # A review without a body leaves the agent's final reply as the only summary there is.
+          has_summary='yes'
           if [[ -z "$(tr -d '[:space:]' < "${RUNNER_TEMP}/review-summary.md")" ]]; then
-            if [[ -n "${REPLY_FILE}" && -s "${REPLY_FILE}" ]]; then
+            if [[ -n "${REPLY_FILE}" && -f "${REPLY_FILE}" && -n "$(tr -d '[:space:]' < "${REPLY_FILE}")" ]]; then
               cp "${REPLY_FILE}" "${RUNNER_TEMP}/review-summary.md"
             else
+              has_summary='no'
               echo '(no review summary produced)' > "${RUNNER_TEMP}/review-summary.md"
             fi
           fi
@@ -238,11 +244,15 @@ jobs:
             echo "${delimiter}"
           } >> "${GITHUB_OUTPUT}"
 
-          if [[ -z "${new_id}" ]]; then
+          if [[ "${#new_ids[@]}" -eq 0 ]]; then
             if [[ -n "${off_head}" ]]; then
               echo "::error::The agent's review (${off_head}) is not on the head ${HEAD_SHA} this run resolved."
             else
               echo '::error::The agent finished without submitting a review on the head commit.'
             fi
+            exit 1
+          fi
+          if [[ "${has_summary}" == 'no' ]]; then
+            echo '::error::The agent submitted a review without a summary and gave no final reply; the merge step would have nothing to read.'
             exit 1
           fi
