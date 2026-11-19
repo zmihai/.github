@@ -196,7 +196,7 @@ runs:
           fi
           if [[ -z "${interaction_id}" && "${finished}" != 'yes' && -s "${start_file:-}" ]]; then
             late_id="$(tr -d '"[:space:]' < "${start_file}")"
-            if [[ "${late_id}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            if [[ "${late_id}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
               interaction_id="${late_id}"
             fi
           fi
@@ -217,9 +217,10 @@ runs:
           echo '::error::gemini_api_key is empty. The agent engine needs a Gemini API key.'
           exit 1
         fi
-        # No leading zero (bash would read it as octal) and long enough for more than one poll.
-        if [[ ! "${TIMEOUT_SECONDS}" =~ ^[1-9][0-9]{1,5}$ ]] || (( TIMEOUT_SECONDS < 60 )); then
-          echo "::error::timeout_seconds must be a whole number of seconds from 60 to 999999, got '${TIMEOUT_SECONDS}'."
+        # No leading zero (bash would read it as octal), and no shorter than the 120 seconds the
+        # start request itself may take.
+        if [[ ! "${TIMEOUT_SECONDS}" =~ ^[1-9][0-9]{2,5}$ ]] || (( TIMEOUT_SECONDS < 120 )); then
+          echo "::error::timeout_seconds must be a whole number of seconds from 120 to 999999, got '${TIMEOUT_SECONDS}'."
           exit 1
         fi
 
@@ -253,7 +254,9 @@ runs:
         child_pid=''
         rm -f "${request_file}"
         interaction_id="$(tr -d '"[:space:]' < "${start_file}")"
-        if (( start_rc != 0 )) || [[ ! "${interaction_id}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        # Read once: from here on cleanup must not pick the file up again.
+        rm -f "${start_file}"
+        if (( start_rc != 0 )) || [[ ! "${interaction_id}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
           interaction_id=''
           echo "::error::The agent run did not start (exit ${start_rc})."
           exit 1

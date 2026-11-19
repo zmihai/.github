@@ -166,8 +166,9 @@ jobs:
       # the command prompt requires a submitted review.
       - name: 'Collect the review summary'
         id: 'summary'
-        # Skipped when the agent step never started: an earlier step already failed the job.
-        if: ${{ !cancelled() && inputs.is_fork != 'true' && steps.agent.outcome != 'skipped' }}
+        # Skipped when the agent step never got as far as reading the pull request: an earlier
+        # failure has already failed the job, and there is no head commit to attribute a review to.
+        if: ${{ !cancelled() && inputs.is_fork != 'true' && steps.agent.outputs.head_sha != '' }}
         env:
           GH_TOKEN: '${{ steps.mint_identity_token.outputs.token || github.token }}'
           REPOSITORY: '${{ github.repository }}'
