@@ -183,6 +183,14 @@ jobs:
           new_ids=()
           new_state=''
           off_head=''
+          state_rank() {
+            case "$1" in
+              CHANGES_REQUESTED) echo 3 ;;
+              APPROVED) echo 2 ;;
+              COMMENTED) echo 1 ;;
+              *) echo 0 ;;
+            esac
+          }
           if [[ -f "${RUNNER_TEMP}/reviews-before.txt" && -n "${HEAD_SHA}" ]]; then
             gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate \
               --jq '.[] | select(.state != "PENDING") | [.id, .state, (.user.login // "-"), (.commit_id // "-")] | @tsv' > "${RUNNER_TEMP}/reviews-after.tsv"
@@ -197,9 +205,8 @@ jobs:
               new_ids+=("${id}")
               # Several reviews in one run: a request for changes outranks an approval, which
               # outranks a comment.
-              if [[ "${state}" == 'CHANGES_REQUESTED' ]]; then
-                new_state="${state}"
-              elif [[ "${new_state}" != 'CHANGES_REQUESTED' && ( "${state}" == 'APPROVED' || "${new_state}" != 'APPROVED' ) ]]; then
+              # Any other state ranks below those.
+              if [[ -z "${new_state}" ]] || (( $(state_rank "${state}") >= $(state_rank "${new_state}") )); then
                 new_state="${state}"
               fi
               echo "New review ${id}: ${state} by ${login} on ${commit}"

@@ -184,17 +184,28 @@ runs:
         reply_file="${RUNNER_TEMP}/agent-reply-${MODE}.md"
         interaction_id=''
         finished='no'
-        # On every exit: delete the request file, which holds the tokens, and the raw interaction,
-        # and cancel a run that was started and has not reached a final status (error, timeout,
-        # cancelled job). The request file is written and deleted inside this one step.
+        child_pid=''
+        # On every exit: stop a child still running, delete the request file, which holds the
+        # tokens, and the raw interaction, and cancel a run that was started and has not reached
+        # a final status (error, timeout, cancelled job). The request file is written and
+        # deleted inside this one step. The cancel is kept short: a cancelled job gets about
+        # ten seconds from the runner before it is killed.
         cleanup() {
+          if [[ -n "${child_pid}" ]]; then
+            kill "${child_pid}" 2> /dev/null || true
+          fi
           rm -f "${request_file}" "${interaction_file}"
           if [[ -n "${interaction_id}" && "${finished}" != 'yes' ]]; then
             echo 'Cancelling the unfinished agent run.'
-            timeout 30 gemini-api agent cancel "${interaction_id}" || true
+            timeout 8 gemini-api agent cancel "${interaction_id}" || true
           fi
         }
         trap cleanup EXIT
+        # The runner cancels a step with SIGINT, then SIGTERM. Bash runs a trap only between
+        # commands, so the waits below run their command in the background and `wait` for it:
+        # the signal then ends the step at once and leaves the whole grace period to cleanup.
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
 
         if [[ -z "${GEMINI_API_KEY}" ]]; then
           echo '::error::gemini_api_key is empty. The agent engine needs a Gemini API key.'
@@ -242,19 +253,34 @@ runs:
         # poll is retried, and no formatting of the result can fail a run that completed.
         status='in_progress'
         i=0
-        while (( $(date +%s) < deadline )); do
+        last_poll='no'
+        while [[ "${last_poll}" == 'no' ]]; do
           i="$(( i + 1 ))"
-          nap="$(( deadline - $(date +%s) ))"
-          (( nap > POLL_SECONDS )) && nap="${POLL_SECONDS}"
-          (( nap > 0 )) && sleep "${nap}"
-          if ! timeout "$(request_limit 60)" gemini-api agent status "${interaction_id}" \
-            --stream=false --output-format json > "${interaction_file}"; then
-            echo "::warning::Status poll ${i} failed; trying again."
-            continue
+          # Sleep the poll interval, but keep the last 20 seconds for one final status request.
+          left="$(( deadline - $(date +%s) ))"
+          nap="${POLL_SECONDS}"
+          if (( left - nap < 20 )); then
+            nap="$(( left - 20 ))"
+            last_poll='yes'
           fi
+          if (( nap > 0 )); then
+            sleep "${nap}" &
+            child_pid="$!"
+            wait "${child_pid}" || true
+            child_pid=''
+          fi
+          # The CLI exits non-zero both when the request fails and when the run itself ended as
+          # failed or cancelled, so the exit status alone decides nothing: a readable status in
+          # the output is used, and only an unreadable one is retried.
+          poll_rc=0
+          timeout "$(request_limit 60)" gemini-api agent status "${interaction_id}" \
+            --stream=false --output-format json > "${interaction_file}" &
+          child_pid="$!"
+          wait "${child_pid}" || poll_rc="$?"
+          child_pid=''
           polled="$(jq -r '.status | strings' "${interaction_file}" 2> /dev/null || true)"
           if [[ ! "${polled}" =~ ^[a-z_]+$ ]]; then
-            echo "::warning::Status poll ${i} returned no readable status; trying again."
+            echo "::warning::Status poll ${i} gave no readable status (exit ${poll_rc}); trying again."
             status='unknown'
             continue
           fi
@@ -271,7 +297,7 @@ runs:
             echo "::error::The agent did not finish within ${TIMEOUT_SECONDS} seconds (last status: ${status})."
             exit 1
             ;;
-          completed | failed | cancelled) finished='yes' ;;
+          completed | failed | cancelled | incomplete | budget_exceeded) finished='yes' ;;
           # Any other status is treated as unfinished: the exit trap cancels the run.
           *) ;;
         esac
@@ -310,7 +336,7 @@ runs:
 
         if [[ "${status}" != 'completed' ]]; then
           echo "::error::The agent run ended as '${status}'."
-          jq '{id, status, error, usage}' "${interaction_file}" || true
+          jq '{id, status, errors, error, usage}' "${interaction_file}" || true
           exit 1
         fi
         echo '--- agent reply ---'
