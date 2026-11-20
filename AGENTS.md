@@ -30,6 +30,8 @@ builds — there is no app build.
     reusable-gemini-dispatch.yml   # entry point: guard, then fan out on the command
     gemini-review.yml              # code-review pass + security pass (2 Gemini calls)
     gemini-merge.yml               # classify failures, optionally remediate, squash-merge
+    gemini-agent-review.yml        # opt-in engine (vars.GEMINI_ENGINE == 'agent'): one review run
+    gemini-agent-merge.yml         # opt-in engine: merge run, same gates as gemini-merge.yml
     reusable-ci.yml                # language dispatcher → ci-{npm,python,php,java}.yml
     ci-npm.yml / ci-python.yml / ci-php.yml / ci-java.yml   # per-language CI
     reusable-security-scan.yml     # dependency audit + optional CodeQL
@@ -39,6 +41,7 @@ builds — there is no app build.
   copilot-instructions.md          # review guidance for AI reviewers of THIS repo
 actions/
   setup-node-env/ setup-python-env/ setup-php-env/ setup-java-env/   # composite actions
+  gemini-agent/                    # runs a prompt on the Gemini API managed agent (opt-in engine)
 workflow-templates/                # starter workflows (ci, security-scan) + *.properties.json
 tests/                             # pytest suite validating templates + language support
 docs/ARCHITECTURE.md               # deep-dive on every workflow/action (see below)
@@ -91,6 +94,16 @@ prompt, composite action, or template. The summary below is enough for orientati
   the PR's source branch, then squash-merges — subject to the merge policy below. A
   post-run gate verifies the run left a **durable** outcome (actually merged, or actually
   submitted a new decisive review), comparing against a pre-run snapshot of review IDs.
+- **Agent engine (opt-in, preview).** With the consumer variable `GEMINI_ENGINE` set to
+  `agent`, dispatch routes the same commands to `gemini-agent-review.yml` /
+  `gemini-agent-merge.yml`, which run the same prompt files on a Gemini API managed agent
+  through `actions/gemini-agent` (pinned `gemini-api` CLI, checksum-verified). Unset, every
+  job behaves as before — keep it that way: the engine predicate is the only edit the
+  agent path may make to the Gemini CLI jobs. One agent run replaces the two review
+  passes; the merge workflow keeps the pre-run snapshot, the blocking-review skip and the
+  durable-outcome gate. The run step owns the whole lifecycle (build request, start, poll,
+  cancel on timeout or job cancellation) — read its header comment before changing it.
+  Models: `GEMINI_AGENT_REVIEW_MODEL` / `GEMINI_AGENT_MERGE_MODEL`; needs `GEMINI_API_KEY`.
 - Repo-vars consulted: `APP_ID`/`APP_PRIVATE_KEY` (GitHub App identity),
   `GEMINI_*_MODEL`/`GEMINI_MODEL`, `GEMINI_CLI_VERSION`, `GEMINI_DEBUG`,
   `UPLOAD_ARTIFACTS`, and the GCP/Vertex vars (`GOOGLE_CLOUD_*`, `GCP_WIF_PROVIDER`,
@@ -275,6 +288,8 @@ before relying on them.
 - `.github/workflows/reusable-gemini-dispatch.yml` — entry point / command router.
 - `.github/workflows/gemini-review.yml` — code-review + security passes; builds `review_summary`.
 - `.github/workflows/gemini-merge.yml` — merge policy execution + durable-outcome gate.
+- `.github/workflows/gemini-agent-review.yml` / `gemini-agent-merge.yml` — the opt-in agent engine.
+- `actions/gemini-agent/action.yml` + `build_request.py` — agent run lifecycle and request builder.
 - `.github/commands/pr-merge.toml` — the prompt encoding the merge/remediation policy.
 - `.github/commands/pr-review.toml` — the review prompt (severity levels, comment format).
 - `.github/workflows/reusable-ci.yml` + `ci-{npm,python,php,java}.yml` — reusable CI.

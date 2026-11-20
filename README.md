@@ -217,6 +217,28 @@ Uses Gemini to analyze CI/Security results and merge the PR when the changes are
 - `review_summary` (string, optional): Summary from a previous review step.
 - `ref` (string, optional): The branch, tag or SHA to checkout. Inherited when called via `reusable-gemini-dispatch`. Defaults to the event's ref or PR head SHA for other invocations.
 
+### Gemini Agent Engine (opt-in, preview)
+
+**Paths:** `.github/workflows/gemini-agent-review.yml`, `.github/workflows/gemini-agent-merge.yml`, `actions/gemini-agent`
+
+An alternative engine for the same `@gemini-cli` commands. Instead of running the Gemini CLI on the runner, the dispatch workflow starts a Gemini API managed agent (through the pinned `gemini-api` CLI) that works in a sandbox hosted by Google. The trigger policy, the commands, the prompts in `.github/commands/`, the merge policy and the merge gates are the same.
+
+It is off unless the consumer repository sets the variable `GEMINI_ENGINE` to `agent`. Deleting the variable returns the repository to the Gemini CLI workflows; nothing else needs to change, and the caller workflow and its permissions are identical for both engines.
+
+- `GEMINI_ENGINE`: `agent` selects this engine. Any other value, or none, selects the Gemini CLI.
+- `GEMINI_AGENT_REVIEW_MODEL`: Review model. Defaults to `gemini-3.5-flash-lite`.
+- `GEMINI_AGENT_MERGE_MODEL`: Merge model. Defaults to `gemini-3.8-flash`.
+- `GEMINI_API_KEY` (secret): Required. This engine does not use Vertex AI or `GOOGLE_API_KEY`. For Dependabot pull requests the key must also exist as a Dependabot secret.
+
+What differs from the Gemini CLI engine:
+
+- **One review instead of two.** The code review and the security analysis are a single agent run that posts one pull request review. Its summary ends with a `Security Analysis` and a `Blocking Findings` section, which is what the merge step reads.
+- **Where the code runs.** The agent clones the repository in its sandbox. It reaches GitHub only through GitHub's hosted MCP server (limited to the pull request read and review tools, plus the merge tool in a merge run) and through git over `github.com`. Two tokens travel to Google inside the request: the one for the MCP server (the GitHub App token when an App identity is configured, otherwise the job token) and the job token for git, which the sandbox's egress proxy attaches to those git requests. Neither is placed in the sandbox.
+- **Network.** A review run can reach `github.com` only. A merge run has open network access, because a remediation installs dependencies and runs the project's checks.
+- **What stays a model instruction.** As with the Gemini CLI engine, the model itself calls the merge tool and, for a remediation, runs `git push` with a token that can write to the repository. The prompt tells it to merge only the commit it examined (`expectedHeadSha`) and to push only to the pull request's branch, but neither is enforced outside the model. The workflow checks the head before the run and, with the caller template's concurrency settings, a new push to the pull request cancels the run in flight. Protect the default branch and release tags with branch and tag rules, as for any workflow that holds `contents: write`.
+- **Preview dependencies.** The agent and the `gemini-api` CLI are preview software, and the hosted MCP server accepting the Actions job token is observed behaviour that GitHub does not document. A preflight step fails the job early when that stops working.
+- **Not available:** `GEMINI_DEBUG`, `UPLOAD_ARTIFACTS`, `GEMINI_CLI_VERSION`, `GEMINI_MODEL`, `GEMINI_REVIEW_MODEL`, `GEMINI_SECURITY_REVIEW_MODEL` and `GEMINI_MERGE_MODEL` have no effect on this engine.
+
 ---
 
 ## 🎬 Composite Actions

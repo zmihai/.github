@@ -1,0 +1,331 @@
+name: '🤖 Gemini Agent Merge (preview)'
+
+# Opt-in preview engine, used only when the consumer sets vars.GEMINI_ENGINE to 'agent'.
+# Same interface and the same deterministic gates
+# as gemini-merge.yml, but the merge decision runs on the Gemini API's managed agent (see
+# actions/gemini-agent) instead of gemini-cli.
+#
+# How it differs from gemini-merge.yml:
+# - The agent works in a sandbox hosted by Google, on its own clone; the runner checks out
+#   nothing. Remediation (Step 2.5) runs there: the agent fixes, verifies and pushes to the pull
+#   request's branch with git, authenticated by the sandbox's egress proxy.
+# - The agent merges only with the merge tool; there is no `gh` fallback.
+# - The same command prompt (.github/commands/pr-merge.toml), with a short section appended that
+#   describes this environment.
+
+on:
+  workflow_call:
+    inputs:
+      pull_request_number:
+        type: string
+        description: 'The pull request number'
+        required: true
+
+      is_fork:
+        type: string
+        description: 'Whether the pull request is from a fork'
+        required: false
+        default: 'false'
+
+      review_summary:
+        description: 'The summary of the review step'
+        required: false
+        type: string
+        default: ''
+
+      additional_context:
+        type: string
+        description: 'Any additional context from the request'
+        required: false
+        default: ''
+
+      projects:
+        description: 'JSON list of projects'
+        required: false
+        type: string
+        default: '[]'
+
+      ref:
+        description: 'The pull request head commit the dispatcher resolved. The run fails if the head has moved since.'
+        required: false
+        type: string
+
+    secrets:
+      GEMINI_API_KEY:
+        description: 'Gemini API key'
+        required: true
+      APP_PRIVATE_KEY:
+        description: 'Private key for the GitHub App identity. The App path activates only when vars.APP_ID and this key are both set; with either missing, this workflow falls back to the default token.'
+        required: false
+
+# Deliberately no `concurrency` block here. Per-PR serialization of the whole
+# guard -> dispatch -> review/merge pipeline comes from the caller workflow's
+# per-PR concurrency group (see workflow-templates/gemini.yml), so two runs for
+# the same PR never execute concurrently. A repo-wide merge group used to live
+# here, but GitHub Actions keeps at most ONE pending run per group and silently
+# cancels the rest, so simultaneous Dependabot PRs evicted each other's merge
+# jobs and were left fully reviewed yet unmerged, with nothing to retry them.
+# Cross-PR merge races are the accepted trade-off: a losing merge fails
+# visibly, and Dependabot auto-rebases when the base branch moves, which
+# triggers a fresh run.
+
+defaults:
+  run:
+    shell: 'bash'
+
+jobs:
+  merge:
+    runs-on: 'ubuntu-latest'
+    env:
+      # `secrets` is not an allowed context in a step-level `if`, so the
+      # mint gate below reads the key's presence through job env instead.
+      APP_KEY_AVAILABLE: ${{ secrets.APP_PRIVATE_KEY != '' }}
+    # Longer than the agent action's own 25-minute limit, so the action can cancel a slow run.
+    timeout-minutes: 30
+    permissions:
+      contents: 'write'
+      issues: 'write'
+      pull-requests: 'write'
+    steps:
+      - name: 'Mint identity token'
+        id: 'mint_identity_token'
+        if: |-
+          ${{ vars.APP_ID != '' && env.APP_KEY_AVAILABLE == 'true' }}
+        uses: 'actions/create-github-app-token@v2.1.1'
+        with:
+          app-id: '${{ vars.APP_ID }}'
+          private-key: '${{ secrets.APP_PRIVATE_KEY }}'
+          permission-contents: 'write'
+          permission-issues: 'write'
+          permission-pull-requests: 'write'
+
+      - name: 'Resolve PR head ref'
+        id: 'resolve_head_ref'
+        uses: 'actions/github-script@v8.0.0'
+        env:
+          INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
+        with:
+          result-encoding: string
+          script: |
+            let headRef;
+            // Prefer the head ref from the pull_request event payload when available.
+            if (context.payload.pull_request) {
+              headRef = context.payload.pull_request.head.ref;
+            } else {
+              // Fallback for issue_comment / pull_request_review_comment / etc. events,
+              // where context.payload.pull_request is absent. We look the PR up via API.
+              const prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
+              if (!prNumber) {
+                throw new Error('pull_request_number input is required to resolve head_ref outside of pull_request events');
+              }
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+              headRef = pr.head.ref;
+            }
+            // Safety: head_ref is later substituted into a shell command by the merge agent
+            // (`git push origin HEAD:refs/heads/<head_ref>`). Branch names are external input and git
+            // permits shell metacharacters (e.g. `$`, backtick, `;`, `&`) in them, so reject anything
+            // outside a conservative safe set before it can reach a shell that holds write credentials.
+            if (!/^[A-Za-z0-9._\/-]+$/.test(headRef)) {
+              throw new Error(`Refusing to proceed: PR head ref '${headRef}' contains characters outside [A-Za-z0-9._/-] and may be unsafe to use in a shell command.`);
+            }
+            return headRef;
+
+      - name: 'Prepare prompt context'
+        run: |-
+          jq -n \
+            --arg repo "${REPOSITORY}" \
+            --arg pr "${PULL_REQUEST_NUMBER}" \
+            --arg issue_title "${ISSUE_TITLE}" \
+            --arg issue_body "${ISSUE_BODY}" \
+            --arg context "${ADDITIONAL_CONTEXT}" \
+            --argjson projects "${PROJECTS:-[]}" \
+            --arg review_summary "${REVIEW_SUMMARY}" \
+            --arg head_ref "${HEAD_REF}" \
+            '{repository: $repo, pull_request_number: $pr, issue_title: $issue_title, issue_body: $issue_body, additional_context: $context, projects: $projects, review_summary: $review_summary, head_ref: $head_ref}' > "${RUNNER_TEMP}/gemini-context.json"
+        env:
+          REPOSITORY: '${{ github.repository }}'
+          PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
+          ISSUE_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
+          ISSUE_BODY: '${{ github.event.pull_request.body || github.event.issue.body }}'
+          ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
+          PROJECTS: '${{ inputs.projects }}'
+          REVIEW_SUMMARY: '${{ inputs.review_summary }}'
+          HEAD_REF: '${{ steps.resolve_head_ref.outputs.result }}'
+
+      # Snapshot the PR's decisive-review IDs and merged state just before the model runs, so the gate
+      # below can detect outcomes produced by THIS merge job by identity rather than by timestamp.
+      # Comparing IDs (not times) is immune to whole-second timestamp granularity and to clock skew
+      # between the runner and the GitHub API, and it correctly excludes pre-existing reviews/merges and
+      # the review submitted earlier in the same dispatch by the review job (which completes first).
+      #
+      # The step additionally computes `blocking_review`: whether the PR carries an ACTIVE
+      # CHANGES_REQUESTED review (a reviewer whose most recent decisive review is CHANGES_REQUESTED
+      # and has not been dismissed or superseded by their own later APPROVED). The merge prompt
+      # already forbids merging over such a review, but that gate lived only in model compliance —
+      # and the model has been observed merging past it. When `blocking_review` is true the merge
+      # model is not invoked at all (a deterministic skip): the blocking review IS the durable
+      # outcome, the author already has actionable feedback from the review job, and there is
+      # nothing useful for the merge agent to add. The job stays green — a red here would make the
+      # dispatch fallthrough post a spurious "failure" comment on every correctly-blocked PR.
+      - name: 'Snapshot PR review state'
+        id: 'pre_state'
+        if: ${{ inputs.is_fork != 'true' }}
+        uses: 'actions/github-script@v8.0.0'
+        env:
+          INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
+        with:
+          github-token: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
+          script: |
+            const prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
+            if (!prNumber) {
+              core.setFailed('pull_request_number input is required to snapshot PR state');
+              return;
+            }
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: prNumber, per_page: 100,
+            });
+            const decisiveIds = reviews
+              .filter(r => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED')
+              .map(r => r.id);
+            // Active CHANGES_REQUESTED detection. GitHub review semantics: per reviewer, a later
+            // APPROVED or CHANGES_REQUESTED supersedes their earlier one, and a dismissed review
+            // flips to state DISMISSED. COMMENTED reviews never supersede anything. So a reviewer
+            // blocks iff their LATEST review among {APPROVED, CHANGES_REQUESTED, DISMISSED} is
+            // CHANGES_REQUESTED. listReviews is observed to return submission order, but that
+            // ordering is not documented — sort by submitted_at (Array.prototype.sort is stable,
+            // so same-second reviews keep their API order) instead of relying on it.
+            const ordered = [...reviews].sort(
+              (a, b) => new Date(a.submitted_at ?? 0) - new Date(b.submitted_at ?? 0)
+            );
+            const latestDecisiveByUser = new Map();
+            for (const r of ordered) {
+              if (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED' || r.state === 'DISMISSED') {
+                // Ghost/deleted reviewers can lack a login (or a user object entirely). Never
+                // let unattributable reviews share one key — they must not supersede each other,
+                // so key those by review id instead (conservative: an orphaned CHANGES_REQUESTED
+                // keeps blocking until dismissed).
+                const key = r.user?.login ?? (r.user?.id != null ? `id:${r.user.id}` : `review:${r.id}`);
+                latestDecisiveByUser.set(key, r);
+              }
+            }
+            const blocking = [...latestDecisiveByUser.values()].filter(r => r.state === 'CHANGES_REQUESTED');
+            // Use merged_at (non-null when merged) as the merged indicator — reliably present on the
+            // single-PR GET response.
+            const isMerged = pr.merged_at != null;
+            core.setOutput('was_merged', String(isMerged));
+            core.setOutput('decisive_review_ids', JSON.stringify(decisiveIds));
+            core.setOutput('blocking_review', String(blocking.length > 0));
+            for (const r of blocking) {
+              core.notice(`PR #${prNumber} has an active CHANGES_REQUESTED review by ${r.user?.login ?? '<unknown user>'} (review ${r.id}) — the merge model will not be invoked.`);
+            }
+            core.info(`Pre-run snapshot: merged=${isMerged}, decisive reviews=${decisiveIds.length}, blocking reviews=${blocking.length}`);
+
+      # A pending review left behind by an earlier run of this account would be submitted by the
+      # agent as its own, with that run's half-finished comments: GitHub allows one pending
+      # review per account, and the prompt tells the agent to carry on when creating one fails.
+      - name: 'Delete a stale pending review'
+        if: ${{ inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
+        env:
+          GH_TOKEN: '${{ steps.mint_identity_token.outputs.token || github.token }}'
+          REPOSITORY: '${{ github.repository }}'
+          PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
+          REVIEWER_LOGIN: "${{ steps.mint_identity_token.outputs.app-slug && format('{0}[bot]', steps.mint_identity_token.outputs.app-slug) || 'github-actions[bot]' }}"
+        run: |-
+          gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate \
+            --jq '.[] | select(.state == "PENDING") | [.id, (.user.login // "-")] | @tsv' > "${RUNNER_TEMP}/reviews-pending.tsv"
+          while IFS=$'\t' read -r id login; do
+            if [[ "${login}" == "${REVIEWER_LOGIN}" ]]; then
+              echo "Deleting the pending review ${id} left by an earlier run."
+              gh api --method DELETE "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews/${id}" > /dev/null
+            fi
+          done < "${RUNNER_TEMP}/reviews-pending.tsv"
+
+      - name: 'Run the merge agent'
+        if: ${{ inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
+        uses: '$/actions/gemini-agent'
+        with:
+          mode: 'merge'
+          model: "${{ vars.GEMINI_AGENT_MERGE_MODEL || 'gemini-3.8-flash' }}"
+          max_total_tokens: '3000000'
+          pull_request_number: '${{ inputs.pull_request_number }}'
+          expected_head_sha: '${{ inputs.ref || github.event.pull_request.head.sha }}'
+          context_file: '${{ runner.temp }}/gemini-context.json'
+          prompt_args: '--merge_strategy=squash --repository=${{ github.repository }} --pr=${{ inputs.pull_request_number }}'
+          github_token: '${{ steps.mint_identity_token.outputs.token || github.token }}'
+          gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
+
+      # The agent step reports success whenever the run completes, which happens even when the
+      # model only narrates actions (e.g. "I merged the PR") without invoking the corresponding tools.
+      # This gate asserts that THIS merge job left a DURABLE outcome on the PR: either the PR became
+      # merged (and was not already merged before the run), or a NEW decisive review (APPROVED /
+      # CHANGES_REQUESTED) appeared that was not present in the pre-run snapshot. Comparing against the
+      # snapshot by review id excludes pre-existing reviews/merges and the review submitted earlier in
+      # the same dispatch by the review job. A run that ends with only pending/comment activity is
+      # treated as a failure so it surfaces red and triggers the dispatch fallthrough notification.
+      - name: 'Verify durable merge outcome'
+        if: ${{ success() && inputs.is_fork != 'true' && steps.pre_state.outputs.blocking_review != 'true' }}
+        uses: 'actions/github-script@v8.0.0'
+        env:
+          INPUT_PR_NUMBER: '${{ inputs.pull_request_number }}'
+          PRE_WAS_MERGED: '${{ steps.pre_state.outputs.was_merged }}'
+          PRE_DECISIVE_REVIEW_IDS: '${{ steps.pre_state.outputs.decisive_review_ids }}'
+        with:
+          github-token: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
+          script: |
+            const prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
+            if (!prNumber) {
+              core.setFailed('pull_request_number input is required to verify the merge outcome');
+              return;
+            }
+            const { owner, repo } = context.repo;
+
+            // Outcomes present BEFORE the model ran do not count as produced by THIS run. Fail CLOSED if
+            // the pre-run snapshot is missing or malformed: without a trustworthy snapshot we cannot tell
+            // a new decisive review from a pre-existing one, and silently assuming "none" would let a
+            // pre-existing review mask a no-op run (a false green) — the opposite of this gate's purpose.
+            const wasMerged = process.env.PRE_WAS_MERGED === 'true';
+            const rawPriorIds = process.env.PRE_DECISIVE_REVIEW_IDS;
+            let priorIds;
+            try {
+              priorIds = JSON.parse(rawPriorIds);
+            } catch (e) {
+              core.setFailed(`Could not parse the pre-run review snapshot (PRE_DECISIVE_REVIEW_IDS=${JSON.stringify(rawPriorIds)}): ${e.message}. Failing closed so a missing snapshot cannot mask a no-op run.`);
+              return;
+            }
+            if (!Array.isArray(priorIds)) {
+              core.setFailed(`Pre-run review snapshot was not an array (got ${typeof priorIds}). Failing closed.`);
+              return;
+            }
+            const priorDecisive = new Set(priorIds);
+
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const isMerged = pr.merged_at != null;
+            if (isMerged && !wasMerged) {
+              core.info(`PR #${prNumber} was merged by this run (merged_at=${pr.merged_at}). ✓`);
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: prNumber, per_page: 100,
+            });
+            const newDecisive = reviews.filter(r =>
+              (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED') && !priorDecisive.has(r.id)
+            );
+            if (newDecisive.length > 0) {
+              const latest = newDecisive[newDecisive.length - 1];
+              core.info(`PR #${prNumber} not merged, but this run submitted a new decisive review (state=${latest.state}, by=${latest.user?.login}). ✓`);
+              return;
+            }
+
+            core.setFailed(
+              `Merge job left no durable outcome for PR #${prNumber}: this run neither merged it nor added a ` +
+              `new APPROVED/CHANGES_REQUESTED review (only pending or comment-level activity was found). The ` +
+              `model likely reported success without invoking the merge/review tools. The "GitHub tool ` +
+              `calls" lines in the agent step's log show which calls actually fired.`
+            );

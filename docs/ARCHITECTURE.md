@@ -244,6 +244,50 @@ Resolved per task, each falling back to a shared var, then a literal default:
   because newer CLI releases tightened env/MCP permissions and need prompt/action updates
   before they can safely replace the pin.
 
+### 1.8 The agent engine (opt-in, preview)
+
+`vars.GEMINI_ENGINE == 'agent'` in the consumer repository switches dispatch from the
+Gemini CLI jobs to two agent jobs. Every Gemini CLI job carries the opposite predicate, so
+exactly one engine runs and an unset variable leaves the behaviour above untouched.
+
+```
+reusable-gemini-dispatch.yml
+   ├─> gemini-agent-review.yml  ── one agent run: code review + security analysis
+   └─> gemini-agent-merge.yml   ── one agent run: classify, optionally remediate, squash-merge
+          both use actions/gemini-agent (action.yml + build_request.py)
+```
+
+- **The action.** Installs the pinned `gemini-api` CLI (version and SHA-256 in the action),
+  reads the pull request, checks that its head is the commit the dispatcher resolved
+  (`expected_head_sha`), checks that GitHub's hosted MCP server accepts the token, then
+  builds the request, starts the run in the background and polls it. `build_request.py`
+  takes the prompt from the same `.github/commands/pr-<mode>.toml` file, fills in the Input
+  Data and appends a section describing what differs in the sandbox.
+- **Lifecycle.** One step builds the request file, submits it and deletes it. A run that is
+  still going at `timeout_seconds`, or when the job is cancelled, is cancelled at Google by
+  the step's exit trap. Only a terminal status counts as finished; an unreadable poll is
+  retried until the deadline.
+- **What the agent can reach.** The hosted MCP server, limited by the `X-MCP-Tools` header to
+  the pull request read/review tools (plus `merge_pull_request` in merge mode), and git over
+  `github.com` with the job token attached by the sandbox's egress proxy. Review mode has
+  no other network; merge mode has open network for remediation. Git always uses the job
+  token, also under a GitHub App identity: a push made with it starts no workflow run, so a
+  remediation push cannot cancel the run that made it.
+- **Review.** Before the run, a pending review left by the agent's account is deleted and
+  the existing review IDs are snapshotted. Afterwards only a new, submitted review by that
+  account on the resolved head counts; its body becomes `review_summary` (capped at 20,000
+  characters; several such reviews are joined, and an empty body falls back to the agent's
+  final reply). No such review is a failed job.
+- **Merge.** Same token minting, blocking-review skip and durable-outcome gate as
+  `gemini-merge.yml` (section 1.4). The agent has no other way to merge than
+  `merge_pull_request`, and its prompt tells it to pass `expectedHeadSha` so that a commit it
+  has not seen is not merged. That part is a prompt instruction, not a deterministic gate.
+- **Models.** `GEMINI_AGENT_REVIEW_MODEL` (default `gemini-3.5-flash-lite`) and
+  `GEMINI_AGENT_MERGE_MODEL` (default `gemini-3.8-flash`). The variables in 1.7 do not apply.
+- **Preview caveats.** The agent ID and the CLI are preview releases, and the hosted MCP
+  server accepting the Actions job token is observed, not documented. Untested so far:
+  GitHub App identity and very large pull requests.
+
 ---
 
 ## 2. Reusable CI (`reusable-ci.yml` + per-language sub-workflows)
