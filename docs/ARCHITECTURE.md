@@ -276,7 +276,8 @@ reusable-gemini-dispatch.yml
 - **Review.** Before the run, a pending review left by the agent's account is deleted and
   the existing review IDs are snapshotted. Afterwards only a new, submitted review by that
   account on the resolved head counts; its body becomes `review_summary` (capped at 20,000
-  characters). No such review is a failed job.
+  characters; several such reviews are joined, and an empty body falls back to the agent's
+  final reply). No such review is a failed job.
 - **Merge.** Same token minting, blocking-review skip and durable-outcome gate as
   `gemini-merge.yml` (section 1.4). The agent has no other way to merge than
   `merge_pull_request`, and its prompt tells it to pass `expectedHeadSha` so that a commit it

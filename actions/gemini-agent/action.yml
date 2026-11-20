@@ -240,7 +240,9 @@ runs:
         #   request. Each request is capped at 30 seconds, so the step gives up at most about
         #   30 seconds after timeout_seconds. The job timeout must leave room for that.
         # - A run whose start request was interrupted before it returned an ID cannot be
-        #   cancelled from here; the token ceiling in the request still bounds it.
+        #   cancelled from here. The token ceiling in the request bounds its cost, and it loses
+        #   GitHub once the job ends: the job token expires with the job, and an App token is
+        #   revoked by the post step of the action that minted it.
         started="$(date +%s)"
         deadline="$(( started + TIMEOUT_SECONDS ))"
         start_file="${RUNNER_TEMP}/agent-start-${MODE}.txt"
