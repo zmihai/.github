@@ -253,12 +253,12 @@ runs:
         wait "${child_pid}" || start_rc="$?"
         child_pid=''
         rm -f "${request_file}"
-        interaction_id="$(tr -d '"[:space:]' < "${start_file}")"
+        raw_id="$(tr -d '"[:space:]' < "${start_file}")"
+        if [[ "${raw_id}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+          interaction_id="${raw_id}"
+        fi
         # Read once: from here on cleanup must not pick the file up again.
         rm -f "${start_file}"
-        if [[ ! "${interaction_id}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
-          interaction_id=''
-        fi
         if (( start_rc != 0 )) || [[ -z "${interaction_id}" ]]; then
           # A start request that failed after returning an ID keeps it, so cleanup cancels the run.
           echo "::error::The agent run did not start cleanly (exit ${start_rc})."

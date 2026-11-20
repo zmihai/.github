@@ -278,8 +278,9 @@ reusable-gemini-dispatch.yml
   account on the resolved head counts; its body becomes `review_summary` (capped at 20,000
   characters). No such review is a failed job.
 - **Merge.** Same token minting, blocking-review skip and durable-outcome gate as
-  `gemini-merge.yml` (section 1.4). The agent merges only through `merge_pull_request` with
-  `expectedHeadSha`, so a commit it has not seen is never merged.
+  `gemini-merge.yml` (section 1.4). The agent has no other way to merge than
+  `merge_pull_request`, and its prompt tells it to pass `expectedHeadSha` so that a commit it
+  has not seen is not merged. That part is a prompt instruction, not a deterministic gate.
 - **Models.** `GEMINI_AGENT_REVIEW_MODEL` (default `gemini-3.5-flash-lite`) and
   `GEMINI_AGENT_MERGE_MODEL` (default `gemini-3.8-flash`). The variables in 1.7 do not apply.
 - **Preview caveats.** The agent ID and the CLI are preview releases, and the hosted MCP

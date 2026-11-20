@@ -83,8 +83,11 @@ def test_merge_can_merge_and_has_open_network(tmp_path):
     body = json.loads(request.read_text(encoding="utf-8"))
 
     assert "merge_pull_request" in tools_header(body)["X-MCP-Tools"].split(",")
-    domains = [entry["domain"] for entry in body["environment"]["network"]["allowlist"]]
-    assert domains == ["github.com", "*"]
+    # Compared whole: the open entry must not carry the git credentials.
+    assert body["environment"]["network"]["allowlist"] == [
+        {"domain": "github.com", "transform": {"Authorization": "Basic Z2l0LWF1dGg="}},
+        {"domain": "*"},
+    ]
     assert "expectedHeadSha" in body["input"]
 
 
