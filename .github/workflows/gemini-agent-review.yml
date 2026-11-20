@@ -1,6 +1,7 @@
-name: '🧪 Gemini Agent Review (experiment)'
+name: '🤖 Gemini Agent Review (preview)'
 
-# EXPERIMENT, not part of the released pipeline. Same interface as gemini-review.yml, but the
+# Opt-in preview engine, used only when the consumer sets vars.GEMINI_ENGINE to 'agent'.
+# Same interface as gemini-review.yml, but the
 # review runs on the Gemini API's managed agent (see actions/gemini-agent) instead of gemini-cli.
 #
 # How it differs from gemini-review.yml:

@@ -1,5 +1,5 @@
 name: 'Run the Gemini managed agent'
-description: 'EXPERIMENT. Runs the pr-review or pr-merge command prompt on the Gemini API managed agent (driven by the gemini-api CLI) instead of gemini-cli, and waits for it to finish.'
+description: 'Opt-in preview engine (vars.GEMINI_ENGINE == agent). Runs the pr-review or pr-merge command prompt on the Gemini API managed agent (driven by the gemini-api CLI) instead of gemini-cli, and waits for it to finish.'
 
 # The agent runs in a sandbox hosted by Google. It reaches GitHub in two ways only:
 # - GitHub's hosted MCP server, which limits it to the pull request tools named in

@@ -1,6 +1,7 @@
-name: '🧪 Gemini Agent Merge (experiment)'
+name: '🤖 Gemini Agent Merge (preview)'
 
-# EXPERIMENT, not part of the released pipeline. Same interface and the same deterministic gates
+# Opt-in preview engine, used only when the consumer sets vars.GEMINI_ENGINE to 'agent'.
+# Same interface and the same deterministic gates
 # as gemini-merge.yml, but the merge decision runs on the Gemini API's managed agent (see
 # actions/gemini-agent) instead of gemini-cli.
 #

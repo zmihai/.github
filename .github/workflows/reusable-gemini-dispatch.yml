@@ -174,7 +174,7 @@ jobs:
       GOOGLE_API_KEY: '${{ secrets.GOOGLE_API_KEY }}'
       APP_PRIVATE_KEY: '${{ secrets.APP_PRIVATE_KEY }}'
 
-  # EXPERIMENT: with the repository variable GEMINI_ENGINE set to 'agent', the review and merge
+  # Opt-in preview engine: with the repository variable GEMINI_ENGINE set to 'agent', the review and merge
   # run on the Gemini managed agent instead of gemini-cli. The guard, the dispatch step and the
   # failure comment are shared.
   agent-review:
