@@ -236,7 +236,7 @@ What differs from the Gemini CLI engine:
 - **Where the code runs.** The agent clones the repository in its sandbox. It reaches GitHub only through GitHub's hosted MCP server (limited to the pull request read, review and merge tools) and through git over `github.com`. The job token is sent to Google inside the request and attached to those git requests by the sandbox's egress proxy; it is not placed in the sandbox.
 - **Network.** A review run can reach `github.com` only. A merge run has open network access, because a remediation installs dependencies and runs the project's checks.
 - **Preview dependencies.** The agent and the `gemini-api` CLI are preview software, and the hosted MCP server accepting the Actions job token is observed behaviour that GitHub does not document. A preflight step fails the job early when that stops working.
-- **Not available:** `GEMINI_DEBUG`, `UPLOAD_ARTIFACTS`, `GEMINI_CLI_VERSION` and the `GEMINI_*_MODEL` variables have no effect on this engine.
+- **Not available:** `GEMINI_DEBUG`, `UPLOAD_ARTIFACTS`, `GEMINI_CLI_VERSION`, `GEMINI_MODEL`, `GEMINI_REVIEW_MODEL`, `GEMINI_SECURITY_REVIEW_MODEL` and `GEMINI_MERGE_MODEL` have no effect on this engine.
 
 ---
 

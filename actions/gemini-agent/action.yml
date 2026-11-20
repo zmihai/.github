@@ -256,9 +256,12 @@ runs:
         interaction_id="$(tr -d '"[:space:]' < "${start_file}")"
         # Read once: from here on cleanup must not pick the file up again.
         rm -f "${start_file}"
-        if (( start_rc != 0 )) || [[ ! "${interaction_id}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+        if [[ ! "${interaction_id}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
           interaction_id=''
-          echo "::error::The agent run did not start (exit ${start_rc})."
+        fi
+        if (( start_rc != 0 )) || [[ -z "${interaction_id}" ]]; then
+          # A start request that failed after returning an ID keeps it, so cleanup cancels the run.
+          echo "::error::The agent run did not start cleanly (exit ${start_rc})."
           exit 1
         fi
         echo "Interaction: ${interaction_id}"
