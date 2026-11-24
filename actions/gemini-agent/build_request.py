@@ -82,7 +82,7 @@ MERGE_NOTES = """
 # The direct merge path. It is chosen here, from the Input Data the runner wrote, and never by
 # the model. It saves tokens; it is not a safety gate: the merge call itself stays the model's.
 MERGE_PATHS = ("direct", "full")
-APPROVED_HEADER = "## Review (state: APPROVED)"
+APPROVED_HEADER = "## Review (state: APPROVED, head: {head})"
 SUMMARY_CUT_MARK = "[Review summary cut at"
 BODY_LIMIT = 2000
 
@@ -102,9 +102,10 @@ is therefore done, and its result is the Review Summary in the Input Data.
 - Otherwise call `merge_pull_request` now, with merge_method "squash" and expectedHeadSha
   "{head}". Do not create or submit a review first: the approval is already on the pull request.
 - A result that says `"merged": true` confirms the merge; do not read the pull request again.
-  When the call fails or its result does not say that, leave this path and carry out the
-  workflow above from Step 3, so that the pull request still ends with a review that states
-  what happened.
+- When the call fails or its result does not say that, do not call it again. Create a pending
+  review with commitID "{head}" and submit it with event "APPROVE" and a summary that says the
+  change was approved but the merge call failed, and quotes the reason the call gave. Then end
+  with OUTCOME: APPROVED_NOT_MERGED.
 - The pull request description in the Input Data may have been cut short for this path.
 """
 
@@ -116,7 +117,7 @@ def merge_path_setting() -> str:
     return path
 
 
-def direct_merge_refusal(context) -> str:
+def direct_merge_refusal(context, head: str) -> str:
     """Why this Input Data does not qualify for the direct merge path; empty when it does.
 
     Deliberately blunt: anything unexpected means the full path.
@@ -127,8 +128,9 @@ def direct_merge_refusal(context) -> str:
     if not isinstance(extra, str) or extra.strip():
         return "the request carries additional instructions"
     summary = context.get("review_summary")
-    if not isinstance(summary, str) or summary.split("\n", 1)[0].rstrip("\r") != APPROVED_HEADER:
-        return "the review job did not hand over an approval"
+    # The review job writes this line itself and names the commit it reviewed.
+    if not isinstance(summary, str) or summary.split("\n", 1)[0] != APPROVED_HEADER.format(head=head):
+        return "the review job did not hand over an approval of this head commit"
     if SUMMARY_CUT_MARK in summary:
         return "the review summary was cut"
     projects = context.get("projects")
@@ -138,7 +140,7 @@ def direct_merge_refusal(context) -> str:
     for project in projects:
         if not isinstance(project, dict):
             return "a project entry is not an object"
-        outcomes = [value for key, value in project.items() if isinstance(key, str) and key.endswith("outcome")]
+        outcomes = [value for key, value in project.items() if key.endswith("outcome")]
         if not outcomes:
             return "a project carries no outcome"
         # `skipped` is what a caller writes for a check a project does not have.
@@ -192,7 +194,7 @@ def main() -> None:
             print("::notice::GEMINI_AGENT_MERGE_PATH is 'full'. That setting is deprecated and will be removed; unset it to use the direct merge path.")
             print("Merge path: full (set by GEMINI_AGENT_MERGE_PATH)")
         else:
-            refusal = direct_merge_refusal(context)
+            refusal = direct_merge_refusal(context, env("HEAD_SHA"))
             direct = not refusal
             print("Merge path: direct" if direct else f"Merge path: full ({refusal})")
         if direct:

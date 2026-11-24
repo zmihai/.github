@@ -251,7 +251,9 @@ jobs:
           delimiter="GEMINI_SUMMARY_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
           {
             echo "summary<<${delimiter}"
-            echo "## Review (state: ${new_state:-NOT SUBMITTED})"
+            # The merge step's direct path matches this line whole, head commit included
+            # (actions/gemini-agent/build_request.py).
+            echo "## Review (state: ${new_state:-NOT SUBMITTED}, head: ${HEAD_SHA})"
             cat "${RUNNER_TEMP}/review-summary-capped.md"
             echo
             echo "${delimiter}"

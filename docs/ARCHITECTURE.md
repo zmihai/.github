@@ -285,13 +285,13 @@ reusable-gemini-dispatch.yml
 - **Direct merge path.** `build_request.py` appends a "Direct merge path" section to the merge
   prompt, and cuts `issue_body` to 2,000 characters, when all of these hold in the Input Data:
   `additional_context` is empty; the first line of `review_summary` is exactly
-  `## Review (state: APPROVED)` (written by the review job, so a merge-only command never
-  qualifies) and the summary was not cut; `projects` is a non-empty list of objects that each
+  `## Review (state: APPROVED, head: <the head commit this run resolved>)` (written by the
+  review job, so a merge-only command or a review of an earlier head never qualifies) and the summary was not cut; `projects` is a non-empty list of objects that each
   carry at least one key ending in `outcome`, every such value is `success` or `skipped`, and
   at least one is `success`. The section tells the
   agent to merge without re-reading the pull request and without a second review, and to
-  return to the whole workflow when the summary names a Critical or High issue, and to its
-  Step 3 (review, then merge) when the merge call fails. Anything else builds the previous prompt. The log line `Merge path: direct` or
+  return to the whole workflow when the summary names a Critical or High issue, and, when
+  the merge call fails, to submit an approving review of that head that states the failure. Anything else builds the previous prompt. The log line `Merge path: direct` or
   `Merge path: full (<reason>)` records the choice. The variable `GEMINI_AGENT_MERGE_PATH`
   set to `full` (deprecated) turns the direct path off; an unknown value fails the job. The
   path saves tokens; it is not a gate.

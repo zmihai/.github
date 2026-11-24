@@ -10,6 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "actions" / "gemini-agent" / "build_request.py"
 HEAD = "0123456789abcdef0123456789abcdef01234567"
+OTHER_HEAD = "89abcdef0123456789abcdef0123456789abcdef"
 
 
 def build(tmp_path, mode, context_data=None, **overrides):
@@ -127,7 +128,7 @@ def clean_context(**changes):
             {"name": "server", "ci-outcome": "success", "scan-outcome": "success"},
             {"name": "client", "ci-outcome": "success", "scan-outcome": "success"},
         ],
-        "review_summary": "## Review (state: APPROVED)\nLooks fine.\n\n## 🚦 Blocking Findings\n\nNone.\n",
+        "review_summary": f"## Review (state: APPROVED, head: {HEAD})\nLooks fine.\n\n## 🚦 Blocking Findings\n\nNone.\n",
         "head_ref": "dependabot/pip/x",
     }
     context.update(changes)
@@ -152,7 +153,9 @@ def test_clean_merge_takes_the_direct_path(tmp_path, setting):
     direct_notes = prompt[prompt.index(DIRECT_HEADING):]
     # Both ways back to the workflow are spelled out.
     assert "any Critical or High issue" in direct_notes and "carry out the whole workflow above" in direct_notes
-    assert "When the call fails" in direct_notes and "from Step 3" in direct_notes
+    assert "When the call fails" in direct_notes and "do not call it again" in direct_notes
+    assert f'commitID "{HEAD}"' in direct_notes and 'event "APPROVE"' in direct_notes
+    assert "OUTCOME: APPROVED_NOT_MERGED" in direct_notes
     # The long description is cut, and says so.
     assert LONG_BODY not in prompt
     assert LONG_BODY[:2000].rstrip() in prompt
@@ -171,12 +174,51 @@ def test_skipped_outcomes_beside_a_success_still_take_the_direct_path(tmp_path):
     assert DIRECT_HEADING in prompt
 
 
-@pytest.mark.parametrize("body", [None, 7, ["a" * 3000], {"text": "a" * 3000}])
+def input_data(prompt):
+    start = prompt.index("## Input Data")
+    return json.JSONDecoder().raw_decode(prompt, prompt.index("{", start))[0]
+
+
+@pytest.mark.parametrize("body", [None, 7, ["a"] * 2001, {"text": "a" * 3000}])
 def test_description_that_is_not_text_is_passed_through_on_the_direct_path(tmp_path, body):
     result, prompt = merge_input(tmp_path, clean_context(issue_body=body))
 
     assert "Merge path: direct" in result.stdout.splitlines()
-    assert "description cut at" not in prompt[: prompt.index(DIRECT_HEADING)]
+    assert input_data(prompt)["issue_body"] == body
+
+
+@pytest.mark.parametrize("extra", ["", "  \n\t ", ...])
+def test_blank_or_absent_instructions_do_not_leave_the_direct_path(tmp_path, extra):
+    context = clean_context(additional_context=extra)
+    if extra is ...:
+        del context["additional_context"]
+    result, _ = merge_input(tmp_path, context)
+
+    assert "Merge path: direct" in result.stdout.splitlines()
+
+
+def test_full_setting_is_reported_whatever_the_input_data(tmp_path):
+    result, prompt = merge_input(tmp_path, clean_context(projects=[]), MERGE_PATH="full")
+
+    assert DIRECT_HEADING not in prompt
+    assert "Merge path: full (set by GEMINI_AGENT_MERGE_PATH)" in result.stdout.splitlines()
+
+
+def test_the_repository_variable_reaches_the_builder():
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "gemini-agent-merge.yml").read_text(encoding="utf-8"))
+    steps = [step for job in workflow["jobs"].values() for step in job["steps"] if step.get("uses") == "$/actions/gemini-agent"]
+    assert len(steps) == 1
+    assert steps[0]["with"]["merge_path"] == "${{ vars.GEMINI_AGENT_MERGE_PATH }}"
+
+    action = yaml.safe_load((ROOT / "actions" / "gemini-agent" / "action.yml").read_text(encoding="utf-8"))
+    assert action["inputs"]["merge_path"]["default"] == ""
+    envs = [step["env"]["MERGE_PATH"] for step in action["runs"]["steps"] if "MERGE_PATH" in step.get("env", {})]
+    assert envs == ["${{ inputs.merge_path }}"]
+
+    review = (ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8")
+    assert 'echo "## Review (state: ${new_state:-NOT SUBMITTED}, head: ${HEAD_SHA})"' in review
 
 
 def test_description_at_the_limit_is_not_cut(tmp_path):
@@ -210,12 +252,18 @@ def test_short_description_is_left_alone_on_the_direct_path(tmp_path):
         ({"additional_context": None}, "additional instructions"),
         ({"review_summary": ""}, "did not hand over an approval"),
         ({"review_summary": None}, "did not hand over an approval"),
-        ({"review_summary": "## Review (state: COMMENTED)\nfine"}, "did not hand over an approval"),
-        ({"review_summary": "## Review (state: CHANGES_REQUESTED)\nno"}, "did not hand over an approval"),
-        ({"review_summary": "## Review (state: NOT SUBMITTED)\n"}, "did not hand over an approval"),
-        ({"review_summary": "## Review (state: APPROVED) and more\n"}, "did not hand over an approval"),
-        ({"review_summary": "intro\n## Review (state: APPROVED)\n"}, "did not hand over an approval"),
-        ({"review_summary": "## Review (state: APPROVED)\nx\n\n[Review summary cut at 20,000 characters. Read the full review on the pull request before deciding.]"}, "summary was cut"),
+        ({"review_summary": f"## Review (state: COMMENTED, head: {HEAD})\nfine"}, "did not hand over an approval"),
+        ({"review_summary": f"## Review (state: CHANGES_REQUESTED, head: {HEAD})\nno"}, "did not hand over an approval"),
+        ({"review_summary": f"## Review (state: NOT SUBMITTED, head: {HEAD})\n"}, "did not hand over an approval"),
+        ({"review_summary": f"## Review (state: APPROVED, head: {HEAD}) and more\n"}, "did not hand over an approval"),
+        ({"review_summary": f"## Review (state: APPROVED, head: {HEAD})\r\nfine"}, "did not hand over an approval"),
+        ({"review_summary": f"intro\n## Review (state: APPROVED, head: {HEAD})\n"}, "did not hand over an approval"),
+        # An approval of another commit, or one that names no commit, is not an approval of this head.
+        ({"review_summary": f"## Review (state: APPROVED, head: {OTHER_HEAD})\nfine"}, "did not hand over an approval"),
+        ({"review_summary": "## Review (state: APPROVED)\nfine"}, "did not hand over an approval"),
+        ({"additional_context": " \n\t x"}, "additional instructions"),
+        ({"projects": [{"name": "s", "ci-outcome": "success"}, {"name": "docs"}]}, "carries no outcome"),
+        ({"review_summary": f"## Review (state: APPROVED, head: {HEAD})\nx\n\n[Review summary cut at 20,000 characters. Read the full review on the pull request before deciding.]"}, "summary was cut"),
         ({"projects": []}, "no project outcomes"),
         ({"projects": None}, "no project outcomes"),
         ({"projects": {"ci-outcome": "success"}}, "no project outcomes"),
