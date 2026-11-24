@@ -287,8 +287,9 @@ reusable-gemini-dispatch.yml
   `additional_context` is empty; the first line of `review_summary` is exactly
   `## Review (state: APPROVED, head: <the head commit this run resolved>)` (written by the
   review job, so a merge-only command or a review of an earlier head never qualifies),
-  the summary was not cut, and it holds exactly one `Blocking Findings` heading with nothing
-  but `None.` after it; `projects` is a non-empty list of objects that each
+  the summary was not cut, and the words "Blocking Findings" appear on one line only, a heading
+  that holds nothing else (`## 🚦 Blocking Findings`, any heading level, emoji optional), with
+  nothing but `None.` after it; `projects` is a non-empty list of objects that each
   carry at least one key ending in `outcome`, every such value is `success` or `skipped`, and
   at least one is `success`. The section tells the
   agent to merge without re-reading the pull request and without a second review, and to

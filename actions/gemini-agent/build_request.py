@@ -8,6 +8,7 @@ files; nothing is spliced into a shell command.
 """
 import json
 import os
+import re
 import sys
 import tomllib
 
@@ -84,7 +85,8 @@ MERGE_NOTES = """
 MERGE_PATHS = ("direct", "full")
 APPROVED_HEADER = "## Review (state: APPROVED, head: {head})"
 SUMMARY_CUT_MARK = "[Review summary cut at"
-BLOCKING_HEADING = "Blocking Findings"
+BLOCKING_WORDS = "blocking findings"
+BLOCKING_HEADING = re.compile(r"#{1,6} (?:🚦 )?Blocking Findings")
 BODY_LIMIT = 2000
 
 DIRECT_NOTES = """
@@ -136,10 +138,16 @@ def direct_merge_refusal(context, head: str) -> str:
     if SUMMARY_CUT_MARK in summary:
         return "the review summary was cut"
     # The review prompt asks for one last section that lists every Critical or High finding, or
-    # reads `None.`. Anything else under that heading, or no such heading, means the full path.
-    lines = summary.split("\n")
-    headings = [number for number, line in enumerate(lines) if line.startswith("#") and BLOCKING_HEADING in line]
-    if len(headings) != 1 or "\n".join(lines[headings[0] + 1 :]).strip() != "None.":
+    # reads `None.`. One strict shape qualifies: the words appear on one line only, that line is
+    # the heading and nothing else, and only `None.` follows it. This reads what the review model
+    # wrote; it is not a defence against a review written to mislead.
+    lines = [line.strip() for line in summary.split("\n")]
+    mentions = [number for number, line in enumerate(lines) if BLOCKING_WORDS in line.lower()]
+    if (
+        len(mentions) != 1
+        or not BLOCKING_HEADING.fullmatch(lines[mentions[0]])
+        or [line for line in lines[mentions[0] + 1 :] if line] != ["None."]
+    ):
         return "the review summary does not end with an empty Blocking Findings section"
     projects = context.get("projects")
     if not isinstance(projects, list) or not projects:
