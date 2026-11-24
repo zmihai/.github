@@ -114,6 +114,7 @@ def test_bad_input_is_refused_without_writing_a_request(tmp_path, overrides):
 
 
 DIRECT_HEADING = "## Direct merge path"
+APPROVED = f"## Review (state: APPROVED, head: {HEAD})\n"
 LONG_BODY = "release notes " * 400
 
 
@@ -153,7 +154,7 @@ def test_clean_merge_takes_the_direct_path(tmp_path, setting):
     assert f'expectedHeadSha\n  "{HEAD}"' in prompt[prompt.index(DIRECT_HEADING):]
     direct_notes = prompt[prompt.index(DIRECT_HEADING):]
     # Both ways back to the workflow are spelled out.
-    assert "any Critical or High issue" in direct_notes and "carry out the whole workflow above" in direct_notes
+    assert "describes a Critical or High issue" in direct_notes and "carry out the whole workflow above" in direct_notes
     assert "When the call fails" in direct_notes and "do not call it again" in direct_notes
     assert f'commitID "{HEAD}"' in direct_notes and 'event "APPROVE"' in direct_notes
     assert "OUTCOME: APPROVED_NOT_MERGED" in direct_notes
@@ -231,6 +232,13 @@ def test_description_at_the_limit_is_not_cut(tmp_path):
     assert '"issue_body": "' + "a" * 2000 + '\\n\\n[Pull request description cut' in prompt
 
 
+@pytest.mark.parametrize("tail", ["## 🚦 Blocking Findings\nNone.", "### Blocking Findings\n\n  None.  \n\n\n"])
+def test_an_empty_blocking_section_in_other_spellings_still_qualifies(tmp_path, tail):
+    result, _ = merge_input(tmp_path, clean_context(review_summary=APPROVED + "fine\n\n" + tail))
+
+    assert "Merge path: direct" in result.stdout.splitlines()
+
+
 def test_full_setting_keeps_the_previous_request(tmp_path):
     result, prompt = merge_input(tmp_path, clean_context(), MERGE_PATH="full")
 
@@ -265,6 +273,13 @@ def test_short_description_is_left_alone_on_the_direct_path(tmp_path):
         ({"review_summary": f"## Review (state: APPROVED, head: {OTHER_HEAD})\nfine"}, "did not hand over an approval"),
         ({"review_summary": "## Review (state: APPROVED)\nfine"}, "did not hand over an approval"),
         ({"additional_context": " \n\t x"}, "additional instructions"),
+        ({"review_summary": APPROVED + "Looks fine.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- 🔴 Critical: SQL injection in a.py:3\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\nNone.\n\n- 🟠 High: b.py:9\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\nNone.\n\n## More\n\ntext\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n- High: a\n\n## 🚦 Blocking Findings\n\nNone.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\nBlocking Findings\n\nNone.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\nnone\n"}, "Blocking Findings"),
         ({"projects": [{"name": "s", "ci-outcome": "success"}, {"name": "docs"}]}, "carries no outcome"),
         ({"review_summary": f"## Review (state: APPROVED, head: {HEAD})\nx\n\n[Review summary cut at 20,000 characters. Read the full review on the pull request before deciding.]"}, "summary was cut"),
         ({"projects": []}, "no project outcomes"),
