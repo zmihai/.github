@@ -44,7 +44,7 @@ inputs:
     required: false
     default: ''
   merge_path:
-    description: "Merge runs only. Empty or 'direct': when the review job approved the head and no project outcome failed, the agent is told to merge without repeating the review. 'full' (deprecated): the agent always repeats the review before merging."
+    description: "Merge runs only. 'direct': when the review job approved the head and no project outcome failed, the agent is told to merge without repeating the review. 'full': the agent always repeats the review before merging. Empty: the same as 'full' for now, with a notice that a later release changes the default to 'direct'."
     required: false
     default: ''
   github_token:

@@ -115,8 +115,9 @@ is therefore done, and its result is the Review Summary in the Input Data.
 
 
 def merge_path_setting() -> str:
-    path = os.environ.get("MERGE_PATH", "") or "direct"
-    if path not in MERGE_PATHS:
+    """Returns 'direct', 'full', or '' when the variable is not set (the full path, for now)."""
+    path = os.environ.get("MERGE_PATH", "")
+    if path and path not in MERGE_PATHS:
         sys.exit(f"MERGE_PATH must be one of {', '.join(MERGE_PATHS)} (or empty), got {path!r}")
     return path
 
@@ -206,9 +207,12 @@ def main() -> None:
     if mode == "merge":
         setting = merge_path_setting()
         if setting == "full":
-            # Deprecated: kept so that a consumer can return to the previous behaviour.
-            print("::notice::GEMINI_AGENT_MERGE_PATH is 'full'. That setting is deprecated and will be removed; unset it to use the direct merge path.")
             print("Merge path: full (set by GEMINI_AGENT_MERGE_PATH)")
+        elif not setting:
+            # The direct path is opt-in, so that a version bump alone changes nothing. Repeating
+            # the review is deprecated as the default; a later release makes 'direct' the default.
+            print("::notice::GEMINI_AGENT_MERGE_PATH is not set, so merge runs repeat the review. That default is deprecated: a later release will merge a clean pull request directly. Set the variable to 'direct' to adopt that now, or to 'full' to keep repeating the review.")
+            print("Merge path: full (GEMINI_AGENT_MERGE_PATH is not set)")
         else:
             refusal = direct_merge_refusal(context, env("HEAD_SHA"))
             direct = not refusal

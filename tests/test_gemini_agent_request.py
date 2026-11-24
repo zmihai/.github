@@ -137,14 +137,15 @@ def clean_context(**changes):
 
 
 def merge_input(tmp_path, context_data, **overrides):
+    """A merge request with the direct path opted in, unless the test sets MERGE_PATH itself."""
+    overrides.setdefault("MERGE_PATH", "direct")
     result, request = build(tmp_path, "merge", context_data=context_data, **overrides)
     assert result.returncode == 0, result.stderr
     return result, json.loads(request.read_text(encoding="utf-8"))["input"]
 
 
-@pytest.mark.parametrize("setting", [{}, {"MERGE_PATH": ""}, {"MERGE_PATH": "direct"}])
-def test_clean_merge_takes_the_direct_path(tmp_path, setting):
-    result, prompt = merge_input(tmp_path, clean_context(), **setting)
+def test_clean_merge_takes_the_direct_path(tmp_path):
+    result, prompt = merge_input(tmp_path, clean_context(), MERGE_PATH="direct")
 
     assert "Merge path: direct" in result.stdout.splitlines()
     assert "::notice::" not in result.stdout and "deprecated" not in result.stdout
@@ -245,7 +246,23 @@ def test_full_setting_keeps_the_previous_request(tmp_path):
     assert DIRECT_HEADING not in prompt
     assert json.dumps(LONG_BODY)[1:-1] in prompt
     assert "Merge path: full (set by GEMINI_AGENT_MERGE_PATH)" in result.stdout.splitlines()
-    assert any(line.startswith("::notice::") and "deprecated" in line for line in result.stdout.splitlines())
+    assert "::notice::" not in result.stdout
+
+
+@pytest.mark.parametrize("setting", [None, ""])
+def test_unset_keeps_the_previous_request_and_announces_the_change(tmp_path, setting):
+    # A version bump alone must not change how a consumer merges: the direct path is opt-in.
+    overrides = {} if setting is None else {"MERGE_PATH": setting}
+    result, request = build(tmp_path, "merge", context_data=clean_context(), **overrides)
+
+    assert result.returncode == 0, result.stderr
+    prompt = json.loads(request.read_text(encoding="utf-8"))["input"]
+    assert DIRECT_HEADING not in prompt
+    assert json.dumps(LONG_BODY)[1:-1] in prompt
+    lines = result.stdout.splitlines()
+    assert [line for line in lines if line.startswith("Merge path: ")] == ["Merge path: full (GEMINI_AGENT_MERGE_PATH is not set)"]
+    notices = [line for line in lines if line.startswith("::notice::")]
+    assert len(notices) == 1 and "deprecated" in notices[0] and "'direct'" in notices[0]
 
 
 def test_short_description_is_left_alone_on_the_direct_path(tmp_path):
@@ -327,11 +344,13 @@ def test_unknown_merge_path_is_refused(tmp_path):
     assert not request.exists()
 
 
-def test_review_ignores_the_merge_path(tmp_path):
-    result, request = build(tmp_path, "review", context_data=clean_context(), MERGE_PATH="fast")
+@pytest.mark.parametrize("setting", [None, "", "direct", "full", "fast"])
+def test_review_ignores_the_merge_path(tmp_path, setting):
+    overrides = {} if setting is None else {"MERGE_PATH": setting}
+    result, request = build(tmp_path, "review", context_data=clean_context(), **overrides)
 
     assert result.returncode == 0, result.stderr
+    assert "::notice::" not in result.stdout and "Merge path" not in result.stdout
     prompt = json.loads(request.read_text(encoding="utf-8"))["input"]
     assert DIRECT_HEADING not in prompt
     assert json.dumps(LONG_BODY)[1:-1] in prompt
-    assert "Merge path" not in result.stdout

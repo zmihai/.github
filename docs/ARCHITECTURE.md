@@ -295,8 +295,10 @@ reusable-gemini-dispatch.yml
   agent to merge without re-reading the pull request and without a second review, and to
   return to the whole workflow when the summary names a Critical or High issue, and, when
   the merge call fails, to submit an approving review of that head that states the failure. Anything else builds the previous prompt. The log line `Merge path: direct` or
-  `Merge path: full (<reason>)` records the choice. The variable `GEMINI_AGENT_MERGE_PATH`
-  set to `full` (deprecated) turns the direct path off; an unknown value fails the job. The
+  `Merge path: full (<reason>)` records the choice. The direct path is
+  opt-in: the variable `GEMINI_AGENT_MERGE_PATH` must be `direct`. Unset or `full`, every
+  merge builds the previous prompt (unset also logs a notice that a later release changes the
+  default to `direct`); an unknown value fails the job. The
   path saves tokens; it is not a gate. A blocking review submitted after the pre-run snapshot is
   not seen on this path; the merge call is the agent's first tool call, so that window is
   shorter than the one the full path leaves between its read of the reviews and its merge call.
