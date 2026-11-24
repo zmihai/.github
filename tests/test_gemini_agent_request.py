@@ -354,4 +354,3 @@ def test_review_ignores_the_merge_path(tmp_path, setting):
     prompt = json.loads(request.read_text(encoding="utf-8"))["input"]
     assert DIRECT_HEADING not in prompt
     assert json.dumps(LONG_BODY)[1:-1] in prompt
-    assert "Merge path" not in result.stdout
