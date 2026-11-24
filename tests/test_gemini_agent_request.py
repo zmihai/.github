@@ -146,6 +146,7 @@ def test_clean_merge_takes_the_direct_path(tmp_path, setting):
     result, prompt = merge_input(tmp_path, clean_context(), **setting)
 
     assert "Merge path: direct" in result.stdout.splitlines()
+    assert "::notice::" not in result.stdout and "deprecated" not in result.stdout
     assert prompt.count(DIRECT_HEADING) == 1
     # The direct notes come after the general merge notes, and name the head commit to merge.
     assert prompt.index(DIRECT_HEADING) > prompt.index("Step 2.5 (remediation) applies")
@@ -214,8 +215,10 @@ def test_the_repository_variable_reaches_the_builder():
 
     action = yaml.safe_load((ROOT / "actions" / "gemini-agent" / "action.yml").read_text(encoding="utf-8"))
     assert action["inputs"]["merge_path"]["default"] == ""
-    envs = [step["env"]["MERGE_PATH"] for step in action["runs"]["steps"] if "MERGE_PATH" in step.get("env", {})]
-    assert envs == ["${{ inputs.merge_path }}"]
+    steps = [step for step in action["runs"]["steps"] if "MERGE_PATH" in step.get("env", {})]
+    assert [step["env"]["MERGE_PATH"] for step in steps] == ["${{ inputs.merge_path }}"]
+    # The same step is the one that runs the builder.
+    assert 'python3 -I "${ACTION_PATH}/build_request.py"' in steps[0]["run"]
 
     review = (ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8")
     assert 'echo "## Review (state: ${new_state:-NOT SUBMITTED}, head: ${HEAD_SHA})"' in review
