@@ -344,10 +344,13 @@ def test_unknown_merge_path_is_refused(tmp_path):
     assert not request.exists()
 
 
-def test_review_ignores_the_merge_path(tmp_path):
-    result, request = build(tmp_path, "review", context_data=clean_context(), MERGE_PATH="fast")
+@pytest.mark.parametrize("setting", [None, "", "direct", "full", "fast"])
+def test_review_ignores_the_merge_path(tmp_path, setting):
+    overrides = {} if setting is None else {"MERGE_PATH": setting}
+    result, request = build(tmp_path, "review", context_data=clean_context(), **overrides)
 
     assert result.returncode == 0, result.stderr
+    assert "::notice::" not in result.stdout and "Merge path" not in result.stdout
     prompt = json.loads(request.read_text(encoding="utf-8"))["input"]
     assert DIRECT_HEADING not in prompt
     assert json.dumps(LONG_BODY)[1:-1] in prompt

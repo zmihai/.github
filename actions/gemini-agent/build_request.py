@@ -211,7 +211,7 @@ def main() -> None:
         elif not setting:
             # The direct path is opt-in, so that a version bump alone changes nothing. Repeating
             # the review is deprecated as the default; a later release makes 'direct' the default.
-            print("::notice::GEMINI_AGENT_MERGE_PATH is not set, so this merge repeats the review. That default is deprecated: a later release will merge a clean pull request directly. Set the variable to 'direct' to adopt that now, or to 'full' to keep repeating the review.")
+            print("::notice::GEMINI_AGENT_MERGE_PATH is not set, so merge runs repeat the review. That default is deprecated: a later release will merge a clean pull request directly. Set the variable to 'direct' to adopt that now, or to 'full' to keep repeating the review.")
             print("Merge path: full (GEMINI_AGENT_MERGE_PATH is not set)")
         else:
             refusal = direct_merge_refusal(context, env("HEAD_SHA"))
