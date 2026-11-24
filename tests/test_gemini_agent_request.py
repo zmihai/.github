@@ -149,6 +149,10 @@ def test_clean_merge_takes_the_direct_path(tmp_path, setting):
     # The direct notes come after the general merge notes, and name the head commit to merge.
     assert prompt.index(DIRECT_HEADING) > prompt.index("Step 2.5 (remediation) applies")
     assert f'expectedHeadSha\n  "{HEAD}"' in prompt[prompt.index(DIRECT_HEADING):]
+    direct_notes = prompt[prompt.index(DIRECT_HEADING):]
+    # Both ways back to the workflow are spelled out.
+    assert "any Critical or High issue" in direct_notes and "carry out the whole workflow above" in direct_notes
+    assert "When the call fails" in direct_notes and "from Step 3" in direct_notes
     # The long description is cut, and says so.
     assert LONG_BODY not in prompt
     assert LONG_BODY[:2000].rstrip() in prompt
@@ -165,6 +169,21 @@ def test_skipped_outcomes_beside_a_success_still_take_the_direct_path(tmp_path):
 
     assert "Merge path: direct" in result.stdout.splitlines()
     assert DIRECT_HEADING in prompt
+
+
+@pytest.mark.parametrize("body", [None, 7, ["a" * 3000], {"text": "a" * 3000}])
+def test_description_that_is_not_text_is_passed_through_on_the_direct_path(tmp_path, body):
+    result, prompt = merge_input(tmp_path, clean_context(issue_body=body))
+
+    assert "Merge path: direct" in result.stdout.splitlines()
+    assert "description cut at" not in prompt[: prompt.index(DIRECT_HEADING)]
+
+
+def test_description_at_the_limit_is_not_cut(tmp_path):
+    _, prompt = merge_input(tmp_path, clean_context(issue_body="a" * 2000))
+    assert '"issue_body": "' + "a" * 2000 + '"' in prompt
+    _, prompt = merge_input(tmp_path, clean_context(issue_body="a" * 2001))
+    assert '"issue_body": "' + "a" * 2000 + '\\n\\n[Pull request description cut' in prompt
 
 
 def test_full_setting_keeps_the_previous_request(tmp_path):
@@ -208,6 +227,8 @@ def test_short_description_is_left_alone_on_the_direct_path(tmp_path):
         ({"projects": [{"name": "s", "ci-outcome": "Success"}]}, "neither success nor skipped"),
         ({"projects": [{"name": "s", "ci-outcome": True}]}, "neither success nor skipped"),
         ({"projects": [{"name": "s", "ci-outcome": "skipped", "scan-outcome": "skipped"}]}, "no project outcome is success"),
+        # Any key that ends in "outcome" counts, not only the two documented ones.
+        ({"projects": [{"name": "s", "ci-outcome": "success", "lint-outcome": "failure"}]}, "neither success nor skipped"),
     ],
 )
 def test_anything_unexpected_takes_the_full_path(tmp_path, changes, reason):

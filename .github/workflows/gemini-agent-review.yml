@@ -237,8 +237,8 @@ jobs:
           cat "${RUNNER_TEMP}/review-summary.md"
           echo '--- END REVIEW_SUMMARY ---'
           # The summary travels to the merge job as a job output and then an environment variable,
-          # so it is capped. The cut is made on a character boundary and is announced; the merge
-          # agent reads the full review on the pull request either way.
+          # so it is capped. The cut is made on a character boundary and is announced; a cut
+          # summary sends the merge agent down the full path, where it reads the review itself.
           python3 -I -c '
           import sys
           limit = 20000

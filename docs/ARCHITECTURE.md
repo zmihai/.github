@@ -290,8 +290,8 @@ reusable-gemini-dispatch.yml
   carry at least one key ending in `outcome`, every such value is `success` or `skipped`, and
   at least one is `success`. The section tells the
   agent to merge without re-reading the pull request and without a second review, and to
-  return to the whole workflow when the summary names a Critical or High issue or the merge
-  call fails. Anything else builds the previous prompt. The log line `Merge path: direct` or
+  return to the whole workflow when the summary names a Critical or High issue, and to its
+  Step 3 (review, then merge) when the merge call fails. Anything else builds the previous prompt. The log line `Merge path: direct` or
   `Merge path: full (<reason>)` records the choice. The variable `GEMINI_AGENT_MERGE_PATH`
   set to `full` (deprecated) turns the direct path off; an unknown value fails the job. The
   path saves tokens; it is not a gate.
