@@ -43,6 +43,10 @@ inputs:
     description: 'Arguments appended to the command prompt'
     required: false
     default: ''
+  merge_path:
+    description: "Merge runs only. Empty or 'direct': when the review job approved the head and no project outcome failed, the agent is told to merge without repeating the review. 'full' (deprecated): the agent always repeats the review before merging."
+    required: false
+    default: ''
   github_token:
     description: 'Token the agent uses on GitHub'
     required: true
@@ -167,6 +171,7 @@ runs:
         PULL_REQUEST_NUMBER: '${{ inputs.pull_request_number }}'
         CONTEXT_FILE: '${{ inputs.context_file }}'
         PROMPT_ARGS: '${{ inputs.prompt_args }}'
+        MERGE_PATH: '${{ inputs.merge_path }}'
         GH_TOKEN: '${{ inputs.github_token }}'
         GIT_TOKEN: '${{ inputs.git_token }}'
         GITHUB_MCP_URL: 'https://api.githubcopilot.com/mcp/'

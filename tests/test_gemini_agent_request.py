@@ -12,9 +12,11 @@ SCRIPT = ROOT / "actions" / "gemini-agent" / "build_request.py"
 HEAD = "0123456789abcdef0123456789abcdef01234567"
 
 
-def build(tmp_path, mode, **overrides):
+def build(tmp_path, mode, context_data=None, **overrides):
     context = tmp_path / "context.json"
-    context.write_text(json.dumps({"repository": "octo/demo", "pull_request_number": "7"}), encoding="utf-8")
+    if context_data is None:
+        context_data = {"repository": "octo/demo", "pull_request_number": "7"}
+    context.write_text(json.dumps(context_data), encoding="utf-8")
     request = tmp_path / "request.json"
     env = {
         "PATH": os.environ["PATH"],
@@ -108,3 +110,135 @@ def test_bad_input_is_refused_without_writing_a_request(tmp_path, overrides):
     result, request = build(tmp_path, overrides.get("MODE", "review"), **overrides)
     assert result.returncode != 0
     assert not request.exists()
+
+
+DIRECT_HEADING = "## Direct merge path"
+LONG_BODY = "release notes " * 400
+
+
+def clean_context(**changes):
+    context = {
+        "repository": "octo/demo",
+        "pull_request_number": "7",
+        "issue_title": "bump a dependency",
+        "issue_body": LONG_BODY,
+        "additional_context": "",
+        "projects": [
+            {"name": "server", "ci-outcome": "success", "scan-outcome": "success"},
+            {"name": "client", "ci-outcome": "success", "scan-outcome": "success"},
+        ],
+        "review_summary": "## Review (state: APPROVED)\nLooks fine.\n\n## 🚦 Blocking Findings\n\nNone.\n",
+        "head_ref": "dependabot/pip/x",
+    }
+    context.update(changes)
+    return context
+
+
+def merge_input(tmp_path, context_data, **overrides):
+    result, request = build(tmp_path, "merge", context_data=context_data, **overrides)
+    assert result.returncode == 0, result.stderr
+    return result, json.loads(request.read_text(encoding="utf-8"))["input"]
+
+
+@pytest.mark.parametrize("setting", [{}, {"MERGE_PATH": ""}, {"MERGE_PATH": "direct"}])
+def test_clean_merge_takes_the_direct_path(tmp_path, setting):
+    result, prompt = merge_input(tmp_path, clean_context(), **setting)
+
+    assert "Merge path: direct" in result.stdout.splitlines()
+    assert prompt.count(DIRECT_HEADING) == 1
+    # The direct notes come after the general merge notes, and name the head commit to merge.
+    assert prompt.index(DIRECT_HEADING) > prompt.index("Step 2.5 (remediation) applies")
+    assert f'expectedHeadSha\n  "{HEAD}"' in prompt[prompt.index(DIRECT_HEADING):]
+    # The long description is cut, and says so.
+    assert LONG_BODY not in prompt
+    assert LONG_BODY[:2000].rstrip() in prompt
+    assert "[Pull request description cut at 2,000 characters for the direct merge path.]" in prompt
+
+
+def test_skipped_outcomes_beside_a_success_still_take_the_direct_path(tmp_path):
+    projects = [
+        {"name": "server", "ci-outcome": "success", "scan-outcome": "success"},
+        {"name": "ops", "ci-outcome": "success", "scan-outcome": "skipped"},
+        {"name": "docs", "ci-outcome": "skipped", "scan-outcome": "skipped"},
+    ]
+    result, prompt = merge_input(tmp_path, clean_context(projects=projects))
+
+    assert "Merge path: direct" in result.stdout.splitlines()
+    assert DIRECT_HEADING in prompt
+
+
+def test_full_setting_keeps_the_previous_request(tmp_path):
+    result, prompt = merge_input(tmp_path, clean_context(), MERGE_PATH="full")
+
+    assert DIRECT_HEADING not in prompt
+    assert json.dumps(LONG_BODY)[1:-1] in prompt
+    assert "Merge path: full (set by GEMINI_AGENT_MERGE_PATH)" in result.stdout.splitlines()
+    assert any(line.startswith("::notice::") and "deprecated" in line for line in result.stdout.splitlines())
+
+
+def test_short_description_is_left_alone_on_the_direct_path(tmp_path):
+    _, prompt = merge_input(tmp_path, clean_context(issue_body="short"))
+
+    assert DIRECT_HEADING in prompt
+    assert '"issue_body": "short"' in prompt
+    assert "description cut at" not in prompt[: prompt.index(DIRECT_HEADING)]
+
+
+@pytest.mark.parametrize(
+    "changes, reason",
+    [
+        ({"additional_context": "focus on security"}, "additional instructions"),
+        ({"additional_context": None}, "additional instructions"),
+        ({"review_summary": ""}, "did not hand over an approval"),
+        ({"review_summary": None}, "did not hand over an approval"),
+        ({"review_summary": "## Review (state: COMMENTED)\nfine"}, "did not hand over an approval"),
+        ({"review_summary": "## Review (state: CHANGES_REQUESTED)\nno"}, "did not hand over an approval"),
+        ({"review_summary": "## Review (state: NOT SUBMITTED)\n"}, "did not hand over an approval"),
+        ({"review_summary": "## Review (state: APPROVED) and more\n"}, "did not hand over an approval"),
+        ({"review_summary": "intro\n## Review (state: APPROVED)\n"}, "did not hand over an approval"),
+        ({"review_summary": "## Review (state: APPROVED)\nx\n\n[Review summary cut at 20,000 characters. Read the full review on the pull request before deciding.]"}, "summary was cut"),
+        ({"projects": []}, "no project outcomes"),
+        ({"projects": None}, "no project outcomes"),
+        ({"projects": {"ci-outcome": "success"}}, "no project outcomes"),
+        ({"projects": ["server"]}, "not an object"),
+        ({"projects": [{"name": "server"}]}, "carries no outcome"),
+        ({"projects": [{"name": "s", "ci-outcome": "success", "scan-outcome": "failure"}]}, "neither success nor skipped"),
+        ({"projects": [{"name": "s", "ci-outcome": "success"}, {"name": "c", "ci-outcome": "cancelled"}]}, "neither success nor skipped"),
+        ({"projects": [{"name": "s", "ci-outcome": ""}]}, "neither success nor skipped"),
+        ({"projects": [{"name": "s", "ci-outcome": "Success"}]}, "neither success nor skipped"),
+        ({"projects": [{"name": "s", "ci-outcome": True}]}, "neither success nor skipped"),
+        ({"projects": [{"name": "s", "ci-outcome": "skipped", "scan-outcome": "skipped"}]}, "no project outcome is success"),
+    ],
+)
+def test_anything_unexpected_takes_the_full_path(tmp_path, changes, reason):
+    result, prompt = merge_input(tmp_path, clean_context(**changes))
+
+    assert DIRECT_HEADING not in prompt
+    assert json.dumps(LONG_BODY)[1:-1] in prompt
+    lines = [line for line in result.stdout.splitlines() if line.startswith("Merge path: ")]
+    assert len(lines) == 1 and lines[0].startswith("Merge path: full (") and reason in lines[0]
+
+
+def test_input_data_that_is_not_an_object_takes_the_full_path(tmp_path):
+    result, prompt = merge_input(tmp_path, ["not", "an", "object"])
+
+    assert DIRECT_HEADING not in prompt
+    assert "Merge path: full (the Input Data is not an object)" in result.stdout.splitlines()
+
+
+def test_unknown_merge_path_is_refused(tmp_path):
+    result, request = build(tmp_path, "merge", context_data=clean_context(), MERGE_PATH="fast")
+
+    assert result.returncode != 0
+    assert "MERGE_PATH" in result.stderr
+    assert not request.exists()
+
+
+def test_review_ignores_the_merge_path(tmp_path):
+    result, request = build(tmp_path, "review", context_data=clean_context(), MERGE_PATH="fast")
+
+    assert result.returncode == 0, result.stderr
+    prompt = json.loads(request.read_text(encoding="utf-8"))["input"]
+    assert DIRECT_HEADING not in prompt
+    assert json.dumps(LONG_BODY)[1:-1] in prompt
+    assert "Merge path" not in result.stdout
