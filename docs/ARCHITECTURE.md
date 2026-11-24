@@ -294,7 +294,9 @@ reusable-gemini-dispatch.yml
   the merge call fails, to submit an approving review of that head that states the failure. Anything else builds the previous prompt. The log line `Merge path: direct` or
   `Merge path: full (<reason>)` records the choice. The variable `GEMINI_AGENT_MERGE_PATH`
   set to `full` (deprecated) turns the direct path off; an unknown value fails the job. The
-  path saves tokens; it is not a gate.
+  path saves tokens; it is not a gate. A blocking review submitted after the pre-run snapshot is
+  not seen on this path; the merge call is the agent's first tool call, so that window is
+  shorter than the one the full path leaves between its read of the reviews and its merge call.
 - **Models.** `GEMINI_AGENT_REVIEW_MODEL` (default `gemini-3.5-flash-lite`) and
   `GEMINI_AGENT_MERGE_MODEL` (default `gemini-3.8-flash`). The variables in 1.7 do not apply.
 - **Preview caveats.** The agent ID and the CLI are preview releases, and the hosted MCP
