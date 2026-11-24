@@ -12,6 +12,10 @@ name: '🤖 Gemini Agent Merge (preview)'
 # - The agent merges only with the merge tool; there is no `gh` fallback.
 # - The same command prompt (.github/commands/pr-merge.toml), with a short section appended that
 #   describes this environment.
+# - A clean merge (the review job approved the head, no project outcome failed, no extra
+#   instructions) gets one more prompt section, the direct merge path: merge without repeating
+#   the review. build_request.py makes that choice from the Input Data; it saves tokens and is
+#   not a gate. vars.GEMINI_AGENT_MERGE_PATH set to 'full' (deprecated) turns it off.
 
 on:
   workflow_call:
@@ -252,6 +256,7 @@ jobs:
         with:
           mode: 'merge'
           model: "${{ vars.GEMINI_AGENT_MERGE_MODEL || 'gemini-3.8-flash' }}"
+          merge_path: '${{ vars.GEMINI_AGENT_MERGE_PATH }}'
           max_total_tokens: '3000000'
           pull_request_number: '${{ inputs.pull_request_number }}'
           expected_head_sha: '${{ inputs.ref || github.event.pull_request.head.sha }}'

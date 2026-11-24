@@ -104,6 +104,10 @@ prompt, composite action, or template. The summary below is enough for orientati
   durable-outcome gate. The run step owns the whole lifecycle (build request, start, poll,
   cancel on timeout or job cancellation) — read its header comment before changing it.
   Models: `GEMINI_AGENT_REVIEW_MODEL` / `GEMINI_AGENT_MERGE_MODEL`; needs `GEMINI_API_KEY`.
+  A clean merge (approving review of the head, no failed project outcome, no extra
+  instructions) gets a "direct merge path" prompt section that skips the second review; the
+  choice is made in `build_request.py`, never by the model, and
+  `GEMINI_AGENT_MERGE_PATH=full` (deprecated) turns it off.
 - Repo-vars consulted: `APP_ID`/`APP_PRIVATE_KEY` (GitHub App identity),
   `GEMINI_*_MODEL`/`GEMINI_MODEL`, `GEMINI_CLI_VERSION`, `GEMINI_DEBUG`,
   `UPLOAD_ARTIFACTS`, and the GCP/Vertex vars (`GOOGLE_CLOUD_*`, `GCP_WIF_PROVIDER`,

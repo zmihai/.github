@@ -282,6 +282,24 @@ reusable-gemini-dispatch.yml
   `gemini-merge.yml` (section 1.4). The agent has no other way to merge than
   `merge_pull_request`, and its prompt tells it to pass `expectedHeadSha` so that a commit it
   has not seen is not merged. That part is a prompt instruction, not a deterministic gate.
+- **Direct merge path.** `build_request.py` appends a "Direct merge path" section to the merge
+  prompt, and cuts `issue_body` to 2,000 characters, when all of these hold in the Input Data:
+  `additional_context` is empty; the first line of `review_summary` is exactly
+  `## Review (state: APPROVED, head: <the head commit this run resolved>)` (written by the
+  review job, so a merge-only command or a review of an earlier head never qualifies),
+  the summary was not cut, and the words "Blocking Findings" appear on one line only, a heading
+  that holds nothing else (`## 🚦 Blocking Findings`, any heading level, emoji optional), with
+  nothing but `None.` after it; `projects` is a non-empty list of objects that each
+  carry at least one key ending in `outcome`, every such value is `success` or `skipped`, and
+  at least one is `success`. The section tells the
+  agent to merge without re-reading the pull request and without a second review, and to
+  return to the whole workflow when the summary names a Critical or High issue, and, when
+  the merge call fails, to submit an approving review of that head that states the failure. Anything else builds the previous prompt. The log line `Merge path: direct` or
+  `Merge path: full (<reason>)` records the choice. The variable `GEMINI_AGENT_MERGE_PATH`
+  set to `full` (deprecated) turns the direct path off; an unknown value fails the job. The
+  path saves tokens; it is not a gate. A blocking review submitted after the pre-run snapshot is
+  not seen on this path; the merge call is the agent's first tool call, so that window is
+  shorter than the one the full path leaves between its read of the reviews and its merge call.
 - **Models.** `GEMINI_AGENT_REVIEW_MODEL` (default `gemini-3.5-flash-lite`) and
   `GEMINI_AGENT_MERGE_MODEL` (default `gemini-3.8-flash`). The variables in 1.7 do not apply.
 - **Preview caveats.** The agent ID and the CLI are preview releases, and the hosted MCP
