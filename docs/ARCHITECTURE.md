@@ -310,7 +310,8 @@ reusable-gemini-dispatch.yml
   `APPROVED` on the head commit with a body (account names are compared without regard to
   case). A review of that account in an unknown state, a timestamp on one of those three
   kinds of review in any other shape than GitHub's whole-second UTC one, or any entry in the listing
-  that does not name its author (other than a deleted account's, listed without a user) means
+  that does not name its author in the shape of a GitHub account name (other than a deleted
+  account's, listed without a user) means
   there is none. The
   summary is rebuilt from the body exactly as the review job writes it (same first line, same
   20,000-character cut) and then has to pass every condition above; when it does not, or the

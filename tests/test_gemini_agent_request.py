@@ -300,7 +300,7 @@ def listing_command(tmp_path, summary, gh_exit=0, gh_sleep=0, **overrides):
     bin_dir.mkdir()
     calls = tmp_path / "gh-calls.txt"
     (bin_dir / "gh").write_text(
-        f'#!/bin/bash\necho "$*" >> "{calls}"\necho "$$" > "{tmp_path}/gh-pid.txt"\nsleep {gh_sleep}\necho \'[["listed"]]\'\nexit {gh_exit}\n', encoding="utf-8"
+        f'#!/bin/bash\necho "$$" > "{tmp_path}/gh-pid.txt"\necho "$*" >> "{calls}"\nsleep {gh_sleep}\necho \'[["listed"]]\'\nexit {gh_exit}\n', encoding="utf-8"
     )
     (bin_dir / "gh").chmod(0o755)
     context = tmp_path / "context.json"
@@ -409,6 +409,16 @@ def test_the_shell_and_the_builder_agree_on_what_a_blank_summary_is(tmp_path, bl
     (tmp_path / "builder").mkdir()
     result, _ = merge_only(tmp_path / "builder", [review(41, "APPROVED", 5)], context_changes={"review_summary": blank})
     assert merge_path_line(result).startswith("Merge path: direct (review 41 ")
+
+
+def test_the_listing_replaces_whatever_holds_its_name(tmp_path):
+    (tmp_path / "agent-reviews-merge.json").mkdir()
+    (tmp_path / "agent-reviews-merge.json" / "left-behind").write_text("x", encoding="utf-8")
+    stdout, calls = listing_step(tmp_path, context_text(review_summary=""))
+
+    assert len(calls) == 1
+    assert stdout.splitlines() == [f"REVIEWS_FILE={tmp_path / 'agent-reviews-merge.json'}"]
+    assert json.loads((tmp_path / "agent-reviews-merge.json").read_text(encoding="utf-8")) == [["listed"]]
 
 
 def test_a_failed_listing_leaves_no_listing_for_the_builder(tmp_path):
@@ -692,6 +702,12 @@ NO_STANDING = "no review job ran, and the review account has no standing approva
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user={"login": None})],
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user={"id": 7})],
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, login="")],
+        # Nor does a name in any other shape than GitHub's.
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, login=" ")],
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, login=BOT + "\n")],
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, login="some one")],
+        # A Kelvin sign lowercases to the letter k.
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, login="github-actions[bot]".replace("b", "\u212a", 1))],
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user=7)],
         ["not a review", review(41, "APPROVED", 5)],
         [review(41, "APPROVED", 5), None],
@@ -803,6 +819,8 @@ def test_a_blank_summary_counts_as_nothing_handed_over(tmp_path, blank):
         ({"REVIEWS_FILE": ""}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
         ({"REVIEWER_LOGIN": None}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
         ({"REVIEWER_LOGIN": ""}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
+        ({"REVIEWER_LOGIN": " "}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
+        ({"REVIEWER_LOGIN": BOT + " "}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
         ({"REVIEWER_LOGIN": "someone-else[bot]"}, f"Merge path: full ({NO_STANDING})"),
         ({"REVIEWS_FILE": "/nonexistent/reviews.json"}, f"Merge path: full ({NO_STANDING})"),
         # The direct path is opt-in; the other settings never look.

@@ -100,6 +100,10 @@ REVIEW_STATES = DECISIVE_STATES + ("COMMENTED", "PENDING")
 # How GitHub writes `submitted_at`: UTC, whole seconds, one fixed width, so the values sort as text.
 SUBMITTED_AT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 
+# One strict shape for an account name, as GitHub writes them: ASCII letters, digits, hyphens
+# and underscores, and `[bot]` after an App's. Anything else is not a name this code compares.
+LOGIN = re.compile(r"[A-Za-z0-9_-]+(\[[Bb][Oo][Tt]\])?")
+
 DIRECT_NOTES = """
 ## Direct merge path (this overrides the workflow and the notes above where they conflict)
 
@@ -192,7 +196,7 @@ def wants_standing_approval(context) -> bool:
     in the Input Data rules the direct path out. The action's shell asks this before it lists
     the reviews (`--wants-reviews`), and the builder asks it again before it reads the listing.
     """
-    if not isinstance(context, dict) or not os.environ.get("REVIEWER_LOGIN", ""):
+    if not isinstance(context, dict) or not LOGIN.fullmatch(os.environ.get("REVIEWER_LOGIN", "")):
         return False
     extra = context.get("additional_context", "")
     summary = context.get("review_summary")
@@ -232,9 +236,9 @@ def standing_approval(reviews: list, login: str, head: str):
         # GitHub lists the review of a deleted account without a user; that is nobody's review.
         if user is None:
             continue
-        # Any other record that does not say whose it is could be this account's. No entry has an
-        # empty name, so an account without a name matches none.
-        if not isinstance(user, dict) or not isinstance(user.get("login"), str) or not user["login"]:
+        # Any other record that does not say whose it is, in the one shape a name has, could be
+        # this account's. No entry has an empty name, so an account without a name matches none.
+        if not isinstance(user, dict) or not isinstance(user.get("login"), str) or not LOGIN.fullmatch(user["login"]):
             return None
         # GitHub account names do not differ by case alone.
         if user["login"].lower() == login.lower():
