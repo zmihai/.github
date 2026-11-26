@@ -166,6 +166,9 @@ jobs:
               }
             } else if (isPr && authorizedAuthor && request.startsWith("@gemini-cli /merge")) {
               command = 'merge';
+              // Text after the command is kept, as for the review commands. The dispatcher
+              // hands it to the agent engine only: there it rules out the direct merge path.
+              additionalContext = request.replace(/^@gemini-cli \/merge/, '').trim();
             }
             core.setOutput('additional_context', additionalContext);
 

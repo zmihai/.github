@@ -242,13 +242,14 @@ runs:
         # A merge-only command hands over no review summary. On the direct merge path the builder
         # then looks in this listing for the review account's standing approval of the head
         # commit. The builder itself says whether it would read the listing, so only that case
-        # lists the reviews, and a listing that fails or takes too long costs only the direct
+        # lists the reviews, and a listing that fails or takes too long (60 seconds, then 5 more
+        # before it is killed) costs only the direct
         # path. The variable is set here and nowhere else. The listing runs in the background
         # and is waited for, so that a cancel signal ends the step at once.
         export REVIEWS_FILE=''
         if python3 -I "${ACTION_PATH}/build_request.py" --wants-reviews 2> /dev/null; then
           reviews_file="${RUNNER_TEMP}/agent-reviews-${MODE}.json"
-          timeout 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}" &
+          timeout --kill-after=5 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}" &
           child_pid="$!"
           if wait "${child_pid}"; then
             export REVIEWS_FILE="${reviews_file}"

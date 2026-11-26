@@ -45,7 +45,9 @@ out code and receive secrets). A single `github-script` job:
 - Resolves a **command**: `pull_request` events → `review` (or `review-and-merge` when
   the actor is `dependabot[bot]`); `@gemini-cli /review` → `review`,
   `@gemini-cli /review-and-merge` → `review-and-merge`, `@gemini-cli /merge` → `merge`;
-  otherwise `fallthrough`. `@gemini-cli` commands are honored **only from authorized
+  otherwise `fallthrough`. Text after a command becomes `additional_context`; after
+  `/merge` only the agent engine receives it (the dispatcher hands the Gemini CLI merge
+  job an empty one, as before), and there it rules out the direct merge path. `@gemini-cli` commands are honored **only from authorized
   human authors and only in PR context** — a command on a plain issue stays
   `fallthrough`, since review/merge would otherwise run against the default branch with
   an issue number passed off as a PR number. (The old dispatch gate checked association
@@ -300,12 +302,14 @@ reusable-gemini-dispatch.yml
   no review job ran; only then does the merge workflow pass `reviewer_login`, the account the
   review job submits as. For that case only, and only when nothing else in the Input Data
   rules the direct path out (`build_request.py --wants-reviews` answers that for the shell),
-  the action lists the pull request's reviews (the call is given 60 seconds) and
+  the action lists the pull request's reviews (the call is asked to stop after 60 seconds
+  and killed 5 seconds later) and
   `build_request.py` looks in that
   listing for a standing approval. Among that account's `APPROVED`, `CHANGES_REQUESTED` and
   `DISMISSED` reviews, exactly one must carry the latest `submitted_at`, and it must be
-  `APPROVED` on the head commit with a body. A review of that account in an unknown state, a
-  timestamp in any other shape than GitHub's whole-second UTC one, or any entry in the listing
+  `APPROVED` on the head commit with a body (account names are compared without regard to
+  case). A review of that account in an unknown state, a timestamp on one of those three
+  kinds of review in any other shape than GitHub's whole-second UTC one, or any entry in the listing
   that does not name its author (other than a deleted account's, listed without a user) means
   there is none. The
   summary is rebuilt from the body exactly as the review job writes it (same first line, same

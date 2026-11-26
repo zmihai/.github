@@ -259,10 +259,29 @@ def test_the_review_account_reaches_the_builder():
     steps = [step for step in action["runs"]["steps"] if "REVIEWER_LOGIN" in step.get("env", {})]
     assert [step["env"]["REVIEWER_LOGIN"] for step in steps] == ["${{ inputs.reviewer_login }}"]
     run = steps[0]["run"]
-    listing = run.index('timeout 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}" &\n')
+    listing = run.index('timeout --kill-after=5 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}" &\n')
     # Listed before the builder runs and while the token is still set, and only when the builder asks.
     assert run.index("export REVIEWS_FILE=''") < run.index('if python3 -I "${ACTION_PATH}/build_request.py" --wants-reviews 2> /dev/null; then') < listing
     assert listing < run.index('export REVIEWS_FILE="${reviews_file}"') < run.index('python3 -I "${ACTION_PATH}/build_request.py"\n') < run.index("unset GH_TOKEN")
+
+
+def test_text_after_a_merge_only_command_reaches_the_agent_engine_only():
+    import yaml
+
+    guard = (ROOT / ".github" / "workflows" / "reusable-gemini-guard.yml").read_text(encoding="utf-8")
+    # Kept as instructions, which rule the direct merge path out.
+    assert """command = 'merge';""" in guard
+    assert """additionalContext = request.replace(/^@gemini-cli \\/merge/, '').trim();""" in guard
+    dispatch = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-dispatch.yml").read_text(encoding="utf-8"))
+    handed = {job["uses"]: job["with"]["additional_context"] for job in dispatch["jobs"].values() if "additional_context" in job.get("with", {})}
+    passed_on = "${{ needs.dispatch.outputs.additional_context }}"
+    assert handed == {
+        "./.github/workflows/gemini-review.yml": passed_on,
+        "./.github/workflows/gemini-agent-review.yml": passed_on,
+        "./.github/workflows/gemini-agent-merge.yml": passed_on,
+        # The Gemini CLI merge job gets what it always got on a merge-only command: nothing.
+        "./.github/workflows/gemini-merge.yml": "${{ needs.dispatch.outputs.command != 'merge' && needs.dispatch.outputs.additional_context || '' }}",
+    }
 
 
 def listing_command(tmp_path, summary, gh_exit=0, gh_sleep=0, **overrides):
@@ -273,14 +292,15 @@ def listing_command(tmp_path, summary, gh_exit=0, gh_sleep=0, **overrides):
     run = [step["run"] for step in action["runs"]["steps"] if "REVIEWER_LOGIN" in step.get("env", {})][0]
     start = run.index("export REVIEWS_FILE=''")
     block = run[start : run.index('python3 -I "${ACTION_PATH}/build_request.py"\n', start)]
-    # The traps the step sets before this part, as the action writes them.
-    traps = "child_pid=''\ntrap 'exit 130' INT\ntrap 'exit 143' TERM\n"
-    assert "trap 'exit 130' INT\n" in run[:start] and "child_pid=''\n" in run[:start]
+    # The cleanup and the traps the step sets before this part, as the action writes them.
+    cleanup = run[run.index("cleanup() {\n") : run.index("trap 'exit 143' TERM\n") + len("trap 'exit 143' TERM\n")]
+    assert "trap cleanup EXIT\n" in cleanup and "trap 'exit 130' INT\n" in cleanup and run.index(cleanup) < start
+    traps = "interaction_id=''\nfinished='no'\nchild_pid=''\nrequest_file=''\ninteraction_file=''\n" + cleanup
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     calls = tmp_path / "gh-calls.txt"
     (bin_dir / "gh").write_text(
-        f'#!/bin/bash\necho "$*" >> "{calls}"\nsleep {gh_sleep}\necho \'[["listed"]]\'\nexit {gh_exit}\n', encoding="utf-8"
+        f'#!/bin/bash\necho "$*" >> "{calls}"\necho "$$" > "{tmp_path}/gh-pid.txt"\nsleep {gh_sleep}\necho \'[["listed"]]\'\nexit {gh_exit}\n', encoding="utf-8"
     )
     (bin_dir / "gh").chmod(0o755)
     context = tmp_path / "context.json"
@@ -329,6 +349,12 @@ def test_a_cancel_signal_ends_the_step_while_the_reviews_are_listed(tmp_path):
         process.send_signal(signal.SIGINT)
         assert process.wait(timeout=10) == 130
         assert time.monotonic() - sent < 5
+        # The step's own cleanup stopped the listing.
+        gh_pid = int((tmp_path / "gh-pid.txt").read_text(encoding="utf-8"))
+        stopped = time.monotonic()
+        while Path(f"/proc/{gh_pid}").exists():
+            assert time.monotonic() - stopped < 5
+            time.sleep(0.05)
     finally:
         process.kill()
         subprocess.run(["pkill", "-f", str(tmp_path / "bin" / "gh")], check=False)
@@ -600,6 +626,7 @@ def test_a_merge_only_command_takes_the_direct_path_on_a_standing_approval(tmp_p
         [review(40, "DISMISSED", 1), review(41, "APPROVED", 5)],
         # The listing's order does not matter.
         [review(41, "APPROVED", 5), review(40, "CHANGES_REQUESTED", 1)],
+        [review(41, "APPROVED", 5, login=BOT.upper())],
         # As GitHub lists the review of a deleted account: without a user.
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user=None)],
     ],
@@ -680,7 +707,8 @@ NO_STANDING = "no review job ran, and the review account has no standing approva
         [review(True, "APPROVED", 5)],
         [review(41, "APPROVED", 5, user=None)],
         [review(41, "approved", 5)],
-        [review(41, "APPROVED", 5, user={"login": BOT.upper()})],
+        # Account names do not differ by case alone, so this later review is the account's too.
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, login=BOT.upper())],
     ],
 )
 def test_without_a_standing_approval_a_merge_only_command_repeats_the_review(tmp_path, reviews):

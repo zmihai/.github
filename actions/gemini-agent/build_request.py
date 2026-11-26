@@ -236,7 +236,8 @@ def standing_approval(reviews: list, login: str, head: str):
         # empty name, so an account without a name matches none.
         if not isinstance(user, dict) or not isinstance(user.get("login"), str) or not user["login"]:
             return None
-        if user["login"] == login:
+        # GitHub account names do not differ by case alone.
+        if user["login"].lower() == login.lower():
             own.append(review)
     # A state this code does not know could be one that withdraws an approval.
     if any(review.get("state") not in REVIEW_STATES for review in own):
