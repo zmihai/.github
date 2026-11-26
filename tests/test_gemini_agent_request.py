@@ -277,7 +277,9 @@ def listing_step(tmp_path, summary, gh_exit=0, **overrides):
         "REVIEWS_FILE": "/inherited/listing.json",
     }
     env.update(overrides)
-    result = subprocess.run(["bash", "-c", block + '\necho "REVIEWS_FILE=${REVIEWS_FILE}"'], env=env, capture_output=True, text=True)
+    # The flags the runner starts a `shell: bash` step with.
+    script = block + '\necho "REVIEWS_FILE=${REVIEWS_FILE}"'
+    result = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script], env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     return result.stdout, calls.read_text(encoding="utf-8").splitlines() if calls.exists() else []
 
@@ -522,7 +524,9 @@ def test_a_merge_only_command_takes_the_direct_path_on_a_standing_approval(tmp_p
         [review(40, "CHANGES_REQUESTED", 1, commit=OTHER_HEAD), review(41, "APPROVED", 5)],
         [review(41, "APPROVED", 5), review(42, "COMMENTED", 6, body="A note.")],
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, login="someone")],
-        [review(41, "APPROVED", 5), review(42, "PENDING", 6, body="")],
+        # As GitHub lists a pending review: without a submission time.
+        [review(41, "APPROVED", 5), {"id": 42, "state": "PENDING", "commit_id": HEAD, "user": {"login": BOT}, "body": ""}],
+        [review(41, "APPROVED", 5), review(42, "COMMENTED", 6, submitted_at=None)],
         [review(40, "DISMISSED", 1), review(41, "APPROVED", 5)],
         # The listing's order does not matter.
         [review(41, "APPROVED", 5), review(40, "CHANGES_REQUESTED", 1)],
@@ -578,6 +582,13 @@ NO_STANDING = "no review job ran, and the review account has no standing approva
         [review(41, "APPROVED", 5, submitted_at=20260102030500)],
         [review(41, "APPROVED", 5, submitted_at="later?")],
         [review(41, "APPROVED", 5, submitted_at="2026-01-02T03:05:00Z+01:00")],
+        # Digits of another script would sort above every real timestamp; so would a date that does not exist.
+        [review(41, "APPROVED", 5, submitted_at="١٩٩٩-٠١-٠٢T٠٣:٠٥:٠٠Z"), review(42, "CHANGES_REQUESTED", 6)],
+        [review(41, "APPROVED", 5, submitted_at="2026-99-99T99:99:99Z"), review(42, "CHANGES_REQUESTED", 6)],
+        # A real time written without its leading zero would sort above the later review.
+        [review(41, "APPROVED", 5, submitted_at="2026-01-02T3:05:00Z"), review(42, "CHANGES_REQUESTED", 6)],
+        [review(41, "APPROVED", 5, user=BOT)],
+        [review(41, "APPROVED", 5, user=[BOT])],
         [review(41, "APPROVED", 5), review(40, "CHANGES_REQUESTED", 1, submitted_at="")],
         [review(40, "CHANGES_REQUESTED", 1, submitted_at=""), review(41, "APPROVED", 5)],
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 5, submitted_at="2026-01-02T03:05:00.500Z")],
@@ -707,6 +718,27 @@ def test_an_unreadable_listing_means_no_standing_approval(tmp_path, content):
 
     assert merge_path_line(result) == f"Merge path: full ({NO_STANDING})"
     assert DIRECT_HEADING not in prompt
+
+
+def test_a_listing_nested_too_deep_to_read_means_no_standing_approval(tmp_path):
+    listing = tmp_path / "deep.json"
+    listing.write_text("[" * 200000 + "]" * 200000, encoding="utf-8")
+    result, prompt = merge_only(tmp_path, [], REVIEWS_FILE=str(listing))
+
+    assert merge_path_line(result) == f"Merge path: full ({NO_STANDING})"
+    assert DIRECT_HEADING not in prompt
+
+
+def test_line_endings_in_a_standing_approval_are_read_as_the_review_job_reads_them(tmp_path):
+    body = "Looks fine.\r\n\r\n## 🚦 Blocking Findings\r\rNone."
+    result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5, body=body)])
+
+    assert merge_path_line(result).startswith("Merge path: direct (review 41 ")
+    assert input_data(prompt)["review_summary"] == f"## Review (state: APPROVED, head: {HEAD})\n{REVIEW_BODY}\n\n"
+    # Counted after the conversion, as the review job counts: this body is at the cap, not over it.
+    body = ("y\r\n" * 9000 + "z" * (19998 - 18000 - len(BLOCKING_TAIL))) + BLOCKING_TAIL
+    result, _ = merge_only(tmp_path, [review(41, "APPROVED", 5, body=body)])
+    assert merge_path_line(result).startswith("Merge path: direct (review 41 ")
 
 
 def test_an_account_without_a_name_matches_no_review(tmp_path):

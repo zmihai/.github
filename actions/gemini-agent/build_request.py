@@ -6,6 +6,7 @@ pr-merge.toml), with the Input Data placeholder filled in and a short section ap
 describes what differs in this environment. Everything comes from environment variables and
 files; nothing is spliced into a shell command.
 """
+import datetime
 import json
 import os
 import re
@@ -97,7 +98,7 @@ DECISIVE_STATES = ("APPROVED", "CHANGES_REQUESTED", "DISMISSED")
 # Every state a submitted or pending review is known to carry; anything else is not understood.
 REVIEW_STATES = DECISIVE_STATES + ("COMMENTED", "PENDING")
 # How GitHub writes `submitted_at`: UTC, whole seconds, one fixed width, so the values sort as text.
-SUBMITTED_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+SUBMITTED_AT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 
 DIRECT_NOTES = """
 ## Direct merge path (this overrides the workflow and the notes above where they conflict)
@@ -219,6 +220,11 @@ def standing_approval(reviews: list, login: str, head: str):
         stamp = review.get("submitted_at")
         if not isinstance(stamp, str) or not SUBMITTED_AT.fullmatch(stamp):
             return None
+        # The pattern fixes the width; this rejects a date or time that does not exist.
+        try:
+            datetime.datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError:
+            return None
     last = max(review["submitted_at"] for review in decisive)
     latest = [review for review in decisive if review["submitted_at"] == last]
     # Reviews of the same second have no order to rely on, so there has to be exactly one.
@@ -231,9 +237,10 @@ def standing_approval(reviews: list, login: str, head: str):
         return None
     if not isinstance(body, str) or not body.strip() or not isinstance(review_id, int) or isinstance(review_id, bool):
         return None
-    # The review job writes the body and a blank line to a file, cuts that file, and puts its
-    # header line above. (The line break it writes below ends the job output and is not part of it.)
-    text = body + "\n\n"
+    # The review job writes the body and a blank line to a file, reads the file back (which turns
+    # every line ending into a line feed), cuts that text, and puts its header line above. (The
+    # line break it writes below ends the job output and is not part of it.)
+    text = body.replace("\r\n", "\n").replace("\r", "\n") + "\n\n"
     if len(text) > SUMMARY_LIMIT:
         text = text[:SUMMARY_LIMIT] + SUMMARY_CUT_NOTE
     return review_id, APPROVED_HEADER.format(head=head) + "\n" + text
