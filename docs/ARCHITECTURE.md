@@ -295,13 +295,19 @@ reusable-gemini-dispatch.yml
   agent to merge without re-reading the pull request and without a second review, and to
   return to the whole workflow when the summary names a Critical or High issue, and, when
   the merge call fails, to submit an approving review of that head that states the failure. Anything else builds the previous prompt.
-  A merge-only command runs no review job and hands over an empty `review_summary`. For that
-  case only, the action lists the pull request's reviews (`reviewer_login` names the account
-  the review job submits as; the call is given 60 seconds) and `build_request.py` looks in that
+  A merge-only command runs no review job and hands over an empty `review_summary`. The
+  dispatcher says so itself (`merge_only`), because an empty summary alone does not prove that
+  no review job ran; only then does the merge workflow pass `reviewer_login`, the account the
+  review job submits as. For that case only, and only when nothing else in the Input Data
+  rules the direct path out (`build_request.py --wants-reviews` answers that for the shell),
+  the action lists the pull request's reviews (the call is given 60 seconds) and
+  `build_request.py` looks in that
   listing for a standing approval. Among that account's `APPROVED`, `CHANGES_REQUESTED` and
   `DISMISSED` reviews, exactly one must carry the latest `submitted_at`, and it must be
-  `APPROVED` on the head commit with a body. A review of that account in an unknown state, or a
-  timestamp in any other shape than GitHub's whole-second UTC one, means there is none. The
+  `APPROVED` on the head commit with a body. A review of that account in an unknown state, a
+  timestamp in any other shape than GitHub's whole-second UTC one, or any entry in the listing
+  that does not name its author (other than a deleted account's, listed without a user) means
+  there is none. The
   summary is rebuilt from the body exactly as the review job writes it (same first line, same
   20,000-character cut) and then has to pass every condition above; when it does not, or the
   listing fails, the Input Data keeps the empty summary. A summary the review job did hand over

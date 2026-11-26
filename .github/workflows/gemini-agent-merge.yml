@@ -17,8 +17,8 @@ name: '🤖 Gemini Agent Merge (preview)'
 #   section, the direct merge path: merge without repeating the review. build_request.py makes
 #   that choice from the Input Data; it saves tokens and is not a gate. Unset or 'full', every
 #   merge repeats the review; a later release makes 'direct' the default. A merge-only command
-#   hands over no review summary: on the direct path the review account's standing approval of
-#   the head commit, read from the pull request, takes its place.
+#   (the `merge_only` input) hands over no review summary: on the direct path the review
+#   account's standing approval of the head commit, read from the pull request, takes its place.
 
 on:
   workflow_call:
@@ -51,6 +51,12 @@ on:
         required: false
         type: string
         default: '[]'
+
+      merge_only:
+        description: 'Whether this is a merge-only command, for which no review job ran. Only then may the review account''s standing approval of the head commit stand in for a review summary on the direct merge path.'
+        required: false
+        type: boolean
+        default: false
 
       ref:
         description: 'The pull request head commit the dispatcher resolved. The run fails if the head has moved since.'
@@ -260,8 +266,10 @@ jobs:
           mode: 'merge'
           model: "${{ vars.GEMINI_AGENT_MERGE_MODEL || 'gemini-3.8-flash' }}"
           merge_path: '${{ vars.GEMINI_AGENT_MERGE_PATH }}'
-          # The account the review job submits reviews as (gemini-agent-review.yml).
-          reviewer_login: "${{ steps.mint_identity_token.outputs.app-slug && format('{0}[bot]', steps.mint_identity_token.outputs.app-slug) || 'github-actions[bot]' }}"
+          # The account the review job submits reviews as (gemini-agent-review.yml), and only
+          # on a merge-only command: when a review job ran, an empty summary from it must not
+          # be replaced by an older approval.
+          reviewer_login: "${{ inputs.merge_only && (steps.mint_identity_token.outputs.app-slug && format('{0}[bot]', steps.mint_identity_token.outputs.app-slug) || 'github-actions[bot]') || '' }}"
           max_total_tokens: '3000000'
           pull_request_number: '${{ inputs.pull_request_number }}'
           expected_head_sha: '${{ inputs.ref || github.event.pull_request.head.sha }}'

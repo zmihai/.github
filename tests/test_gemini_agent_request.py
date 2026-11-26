@@ -232,7 +232,22 @@ def test_the_review_account_reaches_the_builder():
     reviewer = "${{ steps.mint_identity_token.outputs.app-slug && format('{0}[bot]', steps.mint_identity_token.outputs.app-slug) || 'github-actions[bot]' }}"
     workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "gemini-agent-merge.yml").read_text(encoding="utf-8"))
     steps = [step for job in workflow["jobs"].values() for step in job["steps"] if step.get("uses") == "$/actions/gemini-agent"]
-    assert [step["with"]["reviewer_login"] for step in steps] == [reviewer]
+    # Only on a merge-only command, which the dispatcher states itself.
+    assert [step["with"]["reviewer_login"] for step in steps] == ["${{ inputs.merge_only && (" + reviewer[4:-3] + ") || '' }}"]
+    assert workflow[True]["workflow_call"]["inputs"]["merge_only"] == {
+        "description": workflow[True]["workflow_call"]["inputs"]["merge_only"]["description"],
+        "required": False,
+        "type": "boolean",
+        "default": False,
+    }
+    dispatch = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-dispatch.yml").read_text(encoding="utf-8"))
+    callers = [job for job in dispatch["jobs"].values() if job.get("uses") == "./.github/workflows/gemini-agent-merge.yml"]
+    assert [job["with"]["merge_only"] for job in callers] == ["${{ needs.dispatch.outputs.command == 'merge' && needs.agent-review.result == 'skipped' }}"]
+    # The step that mints the App identity runs before the step that names it.
+    for job in workflow["jobs"].values():
+        names = [step.get("id") or step.get("uses") for step in job["steps"]]
+        if "$/actions/gemini-agent" in names:
+            assert names.index("mint_identity_token") < names.index("$/actions/gemini-agent")
     # The same account the review job attributes its own reviews to.
     review = yaml.safe_load((ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8"))
     summary = [step for job in review["jobs"].values() for step in job["steps"] if step.get("id") == "summary"]
@@ -244,44 +259,79 @@ def test_the_review_account_reaches_the_builder():
     steps = [step for step in action["runs"]["steps"] if "REVIEWER_LOGIN" in step.get("env", {})]
     assert [step["env"]["REVIEWER_LOGIN"] for step in steps] == ["${{ inputs.reviewer_login }}"]
     run = steps[0]["run"]
-    listing = run.index('timeout 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}"')
-    # Listed before the builder runs and while the token is still set.
-    assert run.index("export REVIEWS_FILE=''") < listing
-    assert listing < run.index('export REVIEWS_FILE="${reviews_file}"') < run.index('python3 -I "${ACTION_PATH}/build_request.py"') < run.index("unset GH_TOKEN")
+    listing = run.index('timeout 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}" &\n')
+    # Listed before the builder runs and while the token is still set, and only when the builder asks.
+    assert run.index("export REVIEWS_FILE=''") < run.index('if python3 -I "${ACTION_PATH}/build_request.py" --wants-reviews 2> /dev/null; then') < listing
+    assert listing < run.index('export REVIEWS_FILE="${reviews_file}"') < run.index('python3 -I "${ACTION_PATH}/build_request.py"\n') < run.index("unset GH_TOKEN")
 
 
-def listing_step(tmp_path, summary, gh_exit=0, **overrides):
-    """Runs the part of the action's run step that lists the reviews, with a stand-in `gh`."""
+def listing_command(tmp_path, summary, gh_exit=0, gh_sleep=0, **overrides):
+    """The part of the action's run step that lists the reviews, with a stand-in `gh`: (argv, env, calls file)."""
     import yaml
 
     action = yaml.safe_load((ROOT / "actions" / "gemini-agent" / "action.yml").read_text(encoding="utf-8"))
     run = [step["run"] for step in action["runs"]["steps"] if "REVIEWER_LOGIN" in step.get("env", {})][0]
-    block = run[run.index("export REVIEWS_FILE=''") : run.index('python3 -I "${ACTION_PATH}/build_request.py"')]
+    start = run.index("export REVIEWS_FILE=''")
+    block = run[start : run.index('python3 -I "${ACTION_PATH}/build_request.py"\n', start)]
+    # The traps the step sets before this part, as the action writes them.
+    traps = "child_pid=''\ntrap 'exit 130' INT\ntrap 'exit 143' TERM\n"
+    assert "trap 'exit 130' INT\n" in run[:start] and "child_pid=''\n" in run[:start]
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     calls = tmp_path / "gh-calls.txt"
-    (bin_dir / "gh").write_text(f'#!/bin/bash\necho "$*" >> "{calls}"\necho \'[["listed"]]\'\nexit {gh_exit}\n', encoding="utf-8")
+    (bin_dir / "gh").write_text(
+        f'#!/bin/bash\necho "$*" >> "{calls}"\nsleep {gh_sleep}\necho \'[["listed"]]\'\nexit {gh_exit}\n', encoding="utf-8"
+    )
     (bin_dir / "gh").chmod(0o755)
     context = tmp_path / "context.json"
     context.write_text(summary, encoding="utf-8")
     env = {
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "RUNNER_TEMP": str(tmp_path),
+        "ACTION_PATH": str(SCRIPT.parent),
         "MODE": "merge",
         "MERGE_PATH": "direct",
         "REVIEWER_LOGIN": "github-actions[bot]",
         "REPOSITORY": "octo/demo",
         "PULL_REQUEST_NUMBER": "7",
         "CONTEXT_FILE": str(context),
+        "HEAD_SHA": HEAD,
         # An inherited value must never reach the builder.
         "REVIEWS_FILE": "/inherited/listing.json",
     }
     env.update(overrides)
+    script = traps + block + '\necho "REVIEWS_FILE=${REVIEWS_FILE}"'
     # The flags the runner starts a `shell: bash` step with.
-    script = block + '\necho "REVIEWS_FILE=${REVIEWS_FILE}"'
-    result = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script], env=env, capture_output=True, text=True)
+    return ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script], env, calls
+
+
+def listing_step(tmp_path, summary, gh_exit=0, **overrides):
+    """Runs that part to its end: (stdout, the calls `gh` received)."""
+    argv, env, calls = listing_command(tmp_path, summary, gh_exit=gh_exit, **overrides)
+    result = subprocess.run(argv, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     return result.stdout, calls.read_text(encoding="utf-8").splitlines() if calls.exists() else []
+
+
+def test_a_cancel_signal_ends_the_step_while_the_reviews_are_listed(tmp_path):
+    import signal
+    import time
+
+    argv, env, calls = listing_command(tmp_path, context_text(review_summary=""), gh_sleep=20)
+    process = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        waited = time.monotonic()
+        while not calls.exists():
+            assert time.monotonic() - waited < 15 and process.poll() is None
+            time.sleep(0.05)
+        # The runner signals the step's shell only.
+        sent = time.monotonic()
+        process.send_signal(signal.SIGINT)
+        assert process.wait(timeout=10) == 130
+        assert time.monotonic() - sent < 5
+    finally:
+        process.kill()
+        subprocess.run(["pkill", "-f", str(tmp_path / "bin" / "gh")], check=False)
 
 
 def context_text(**changes):
@@ -306,6 +356,11 @@ def test_a_merge_only_command_on_the_direct_path_lists_the_reviews(tmp_path):
         (context_text(review_summary=None), {}),
         ("[]", {}),
         ("not json", {}),
+        # Something else already rules the direct path out, so the listing would not be read.
+        (context_text(review_summary="", additional_context="Please recheck the migration."), {}),
+        (context_text(review_summary="", projects=[{"name": "s", "ci-outcome": "failure"}]), {}),
+        (context_text(review_summary="", projects=[]), {}),
+        (context_text(review_summary=""), {"MERGE_PATH": "sideways"}),
         # Not a merge on the direct path, or no account to look for.
         (context_text(review_summary=""), {"MODE": "review"}),
         (context_text(review_summary=""), {"MERGE_PATH": "full"}),
@@ -318,6 +373,16 @@ def test_no_other_run_lists_the_reviews(tmp_path, summary, overrides):
 
     assert calls == []
     assert stdout.splitlines() == ["REVIEWS_FILE="]
+
+
+@pytest.mark.parametrize("blank", [" ", "\n\t", "\u001c", "\u00a0"])
+def test_the_shell_and_the_builder_agree_on_what_a_blank_summary_is(tmp_path, blank):
+    _, calls = listing_step(tmp_path, context_text(review_summary=blank))
+    assert len(calls) == 1
+
+    (tmp_path / "builder").mkdir()
+    result, _ = merge_only(tmp_path / "builder", [review(41, "APPROVED", 5)], context_changes={"review_summary": blank})
+    assert merge_path_line(result).startswith("Merge path: direct (review 41 ")
 
 
 def test_a_failed_listing_leaves_no_listing_for_the_builder(tmp_path):
@@ -333,12 +398,17 @@ def test_the_standing_approval_is_cut_with_the_review_job_s_words():
         import build_request
     finally:
         sys.path.pop(0)
-    review = (ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8")
-    assert f"limit = {build_request.SUMMARY_LIMIT}\n" in review
-    assert 'text = text[:limit] + "' + build_request.SUMMARY_CUT_NOTE.replace("\n", "\\n") + '"' in review
+    review_job = (ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8")
+    assert f"limit = {build_request.SUMMARY_LIMIT}\n" in review_job
+    assert 'text = text[:limit] + "' + build_request.SUMMARY_CUT_NOTE.replace("\n", "\\n") + '"' in review_job
     assert build_request.SUMMARY_CUT_MARK in build_request.SUMMARY_CUT_NOTE
+    # And those are the words the builder writes when it cuts.
+    over = [review(41, "APPROVED", 5, body="y" * 20001 + BLOCKING_TAIL)]
+    _, summary = build_request.standing_approval(over, BOT, HEAD)
+    header = f"## Review (state: APPROVED, head: {HEAD})\n"
+    assert summary == header + "y" * 20000 + "\n\n[Review summary cut at 20,000 characters. Read the full review on the pull request before deciding.]"
     # The review job writes each review body and a blank line, then its header above the capped text.
-    assert """gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews/${id}" --jq '.body // ""' >> "${RUNNER_TEMP}/review-summary.md"\n            echo >> "${RUNNER_TEMP}/review-summary.md\"""" in review
+    assert """gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews/${id}" --jq '.body // ""' >> "${RUNNER_TEMP}/review-summary.md"\n            echo >> "${RUNNER_TEMP}/review-summary.md\"""" in review_job
 
 
 def test_description_at_the_limit_is_not_cut(tmp_path):
@@ -530,7 +600,8 @@ def test_a_merge_only_command_takes_the_direct_path_on_a_standing_approval(tmp_p
         [review(40, "DISMISSED", 1), review(41, "APPROVED", 5)],
         # The listing's order does not matter.
         [review(41, "APPROVED", 5), review(40, "CHANGES_REQUESTED", 1)],
-        ["not a review", review(41, "APPROVED", 5)],
+        # As GitHub lists the review of a deleted account: without a user.
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user=None)],
     ],
 )
 def test_reviews_that_do_not_touch_the_standing_approval(tmp_path, reviews):
@@ -589,6 +660,13 @@ NO_STANDING = "no review job ran, and the review account has no standing approva
         [review(41, "APPROVED", 5, submitted_at="2026-01-02T3:05:00Z"), review(42, "CHANGES_REQUESTED", 6)],
         [review(41, "APPROVED", 5, user=BOT)],
         [review(41, "APPROVED", 5, user=[BOT])],
+        # An entry that does not say whose it is could be a later review of this account.
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user=BOT)],
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user={"login": None})],
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user={"id": 7})],
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user=7)],
+        ["not a review", review(41, "APPROVED", 5)],
+        [review(41, "APPROVED", 5), None],
         [review(41, "APPROVED", 5), review(40, "CHANGES_REQUESTED", 1, submitted_at="")],
         [review(40, "CHANGES_REQUESTED", 1, submitted_at=""), review(41, "APPROVED", 5)],
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 5, submitted_at="2026-01-02T03:05:00.500Z")],
@@ -647,8 +725,9 @@ def test_a_standing_approval_at_the_summary_limit_is_not_cut(tmp_path):
     [
         # Extra instructions rule the direct path out before any review is looked up.
         ({"additional_context": "skip the tests"}, "(the request carries additional instructions)"),
-        ({"projects": [{"name": "s", "ci-outcome": "failure"}]}, "neither success nor skipped, in review 41 from an earlier run"),
-        ({"projects": []}, "no project outcomes, in review 41 from an earlier run"),
+        # So do project outcomes: no review is looked up for a request that cannot go direct.
+        ({"projects": [{"name": "s", "ci-outcome": "failure"}]}, "(the review job did not hand over an approval of this head commit)"),
+        ({"projects": []}, "(the review job did not hand over an approval of this head commit)"),
     ],
 )
 def test_a_standing_approval_does_not_excuse_the_other_conditions(tmp_path, context_changes, reason):
@@ -692,8 +771,8 @@ def test_a_blank_summary_counts_as_nothing_handed_over(tmp_path, blank):
         # No listing, or no account to look for: the lookup is not made at all.
         ({"REVIEWS_FILE": None}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
         ({"REVIEWS_FILE": ""}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
-        ({"REVIEWER_LOGIN": None}, f"Merge path: full ({NO_STANDING})"),
-        ({"REVIEWER_LOGIN": ""}, f"Merge path: full ({NO_STANDING})"),
+        ({"REVIEWER_LOGIN": None}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
+        ({"REVIEWER_LOGIN": ""}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
         ({"REVIEWER_LOGIN": "someone-else[bot]"}, f"Merge path: full ({NO_STANDING})"),
         ({"REVIEWS_FILE": "/nonexistent/reviews.json"}, f"Merge path: full ({NO_STANDING})"),
         # The direct path is opt-in; the other settings never look.
@@ -747,7 +826,7 @@ def test_line_endings_in_a_standing_approval_are_read_as_the_review_job_reads_th
 def test_an_account_without_a_name_matches_no_review(tmp_path):
     result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5, login="")], REVIEWER_LOGIN="")
 
-    assert merge_path_line(result) == f"Merge path: full ({NO_STANDING})"
+    assert merge_path_line(result) == "Merge path: full (the review job did not hand over an approval of this head commit)"
     assert DIRECT_HEADING not in prompt
 
 

@@ -161,6 +161,11 @@ def direct_merge_refusal(context, head: str) -> str:
         or [line for line in lines[mentions[0] + 1 :] if line] != ["None."]
     ):
         return "the review summary does not end with an empty Blocking Findings section"
+    return projects_refusal(context)
+
+
+def projects_refusal(context: dict) -> str:
+    """Why the project outcomes rule the direct merge path out; empty when they do not."""
     projects = context.get("projects")
     if not isinstance(projects, list) or not projects:
         return "there are no project outcomes"
@@ -178,6 +183,22 @@ def direct_merge_refusal(context, head: str) -> str:
     if not passed:
         return "no project outcome is success"
     return ""
+
+
+def wants_standing_approval(context) -> bool:
+    """Whether a standing approval could put this request on the direct merge path.
+
+    True only when nothing was handed over (the review summary is blank text) and nothing else
+    in the Input Data rules the direct path out. The action's shell asks this before it lists
+    the reviews (`--wants-reviews`), and the builder asks it again before it reads the listing.
+    """
+    if not isinstance(context, dict) or not os.environ.get("REVIEWER_LOGIN", ""):
+        return False
+    extra = context.get("additional_context", "")
+    summary = context.get("review_summary")
+    if not isinstance(extra, str) or extra.strip() or not isinstance(summary, str) or summary.strip():
+        return False
+    return not projects_refusal(context)
 
 
 def read_reviews(path: str) -> list:
@@ -205,11 +226,19 @@ def standing_approval(reviews: list, login: str, head: str):
     """
     if not login:
         return None
-    own = [
-        review
-        for review in reviews
-        if isinstance(review, dict) and isinstance(review.get("user"), dict) and review["user"].get("login") == login
-    ]
+    own = []
+    for review in reviews:
+        if not isinstance(review, dict):
+            return None
+        user = review.get("user")
+        # GitHub lists the review of a deleted account without a user; that is nobody's review.
+        if user is None:
+            continue
+        # Any other record that does not say whose it is could be this account's.
+        if not isinstance(user, dict) or not isinstance(user.get("login"), str):
+            return None
+        if user["login"] == login:
+            own.append(review)
     # A state this code does not know could be one that withdraws an approval.
     if any(review.get("state") not in REVIEW_STATES for review in own):
         return None
@@ -268,7 +297,20 @@ def token_budget() -> str:
     return str(int(raw))
 
 
+def wants_reviews() -> None:
+    """Exits 0 when this run would read the review listing, 1 when it would not."""
+    try:
+        with open(env("CONTEXT_FILE"), encoding="utf-8") as handle:
+            context = json.load(handle)
+    except (OSError, ValueError, RecursionError):
+        sys.exit(1)
+    wanted = env("MODE") == "merge" and merge_path_setting() == "direct" and wants_standing_approval(context)
+    sys.exit(0 if wanted else 1)
+
+
 def main() -> None:
+    if sys.argv[1:] == ["--wants-reviews"]:
+        wants_reviews()
     mode = env("MODE")
     if mode not in ("review", "merge"):
         sys.exit(f"unknown mode {mode!r}")
@@ -295,11 +337,10 @@ def main() -> None:
             refusal = direct_merge_refusal(context, head)
             source = ""
             reviews_file = os.environ.get("REVIEWS_FILE", "")
-            handed_over = context.get("review_summary") if isinstance(context, dict) else None
             # A merge-only command: no review job ran, so nothing was handed over. The review
             # account's standing approval of this head commit is read from the pull request
             # instead. A summary the review job did hand over is never replaced.
-            if refusal == NO_HANDOVER and reviews_file and isinstance(handed_over, str) and not handed_over.strip():
+            if reviews_file and wants_standing_approval(context):
                 found = standing_approval(read_reviews(reviews_file), os.environ.get("REVIEWER_LOGIN", ""), head)
                 if found is None:
                     refusal = "no review job ran, and the review account has no standing approval of this head commit"
