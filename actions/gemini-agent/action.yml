@@ -44,7 +44,11 @@ inputs:
     required: false
     default: ''
   merge_path:
-    description: "Merge runs only. 'direct': when the review job approved the head and no project outcome failed, the agent is told to merge without repeating the review. 'full': the agent always repeats the review before merging. Empty: the same as 'full' for now, with a notice that a later release changes the default to 'direct'."
+    description: "Merge runs only. 'direct': when the review job approved the head (or, on a merge-only command, the reviewer_login account's standing approval of the head is on the pull request) and no project outcome failed, the agent is told to merge without repeating the review. 'full': the agent always repeats the review before merging. Empty: the same as 'full' for now, with a notice that a later release changes the default to 'direct'."
+    required: false
+    default: ''
+  reviewer_login:
+    description: "Merge runs on the 'direct' merge path only. The account the review job submits reviews as. When the caller hands over no review summary (a merge-only command), that account's standing approval of the head commit is read from the pull request and takes its place. Empty: no such lookup."
     required: false
     default: ''
   github_token:
@@ -172,6 +176,7 @@ runs:
         CONTEXT_FILE: '${{ inputs.context_file }}'
         PROMPT_ARGS: '${{ inputs.prompt_args }}'
         MERGE_PATH: '${{ inputs.merge_path }}'
+        REVIEWER_LOGIN: '${{ inputs.reviewer_login }}'
         GH_TOKEN: '${{ inputs.github_token }}'
         GIT_TOKEN: '${{ inputs.git_token }}'
         GITHUB_MCP_URL: 'https://api.githubcopilot.com/mcp/'
@@ -234,6 +239,17 @@ runs:
         export GIT_AUTH="${git_auth}"
         export COMMANDS_DIR="${ACTION_PATH}/../../.github/commands"
         export REQUEST_FILE="${request_file}"
+        # A merge-only command hands over no review summary. On the direct merge path the builder
+        # then looks in this listing for the review account's standing approval of the head
+        # commit. A listing that fails costs only the direct path.
+        if [[ "${MODE}" == 'merge' && "${MERGE_PATH}" == 'direct' && -n "${REVIEWER_LOGIN}" ]]; then
+          reviews_file="${RUNNER_TEMP}/agent-reviews-${MODE}.json"
+          if gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}"; then
+            export REVIEWS_FILE="${reviews_file}"
+          else
+            echo '::warning::Could not list the pull request reviews; a merge-only command repeats the review.'
+          fi
+        fi
         python3 -I "${ACTION_PATH}/build_request.py"
         # Nothing after this point needs the GitHub tokens.
         unset GH_TOKEN GIT_TOKEN GIT_AUTH git_auth

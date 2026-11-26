@@ -226,6 +226,30 @@ def test_the_repository_variable_reaches_the_builder():
     assert 'echo "## Review (state: ${new_state:-NOT SUBMITTED}, head: ${HEAD_SHA})"' in review
 
 
+def test_the_review_account_reaches_the_builder():
+    import yaml
+
+    reviewer = "${{ steps.mint_identity_token.outputs.app-slug && format('{0}[bot]', steps.mint_identity_token.outputs.app-slug) || 'github-actions[bot]' }}"
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "gemini-agent-merge.yml").read_text(encoding="utf-8"))
+    steps = [step for job in workflow["jobs"].values() for step in job["steps"] if step.get("uses") == "$/actions/gemini-agent"]
+    assert [step["with"]["reviewer_login"] for step in steps] == [reviewer]
+    # The same account the review job attributes its own reviews to.
+    review = yaml.safe_load((ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8"))
+    summary = [step for job in review["jobs"].values() for step in job["steps"] if step.get("id") == "summary"]
+    assert [step["env"]["REVIEWER_LOGIN"] for step in summary] == [reviewer]
+    assert all("reviewer_login" not in step.get("with", {}) for job in review["jobs"].values() for step in job["steps"])
+
+    action = yaml.safe_load((ROOT / "actions" / "gemini-agent" / "action.yml").read_text(encoding="utf-8"))
+    assert action["inputs"]["reviewer_login"]["default"] == ""
+    steps = [step for step in action["runs"]["steps"] if "REVIEWER_LOGIN" in step.get("env", {})]
+    assert [step["env"]["REVIEWER_LOGIN"] for step in steps] == ["${{ inputs.reviewer_login }}"]
+    run = steps[0]["run"]
+    listing = run.index('gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}"')
+    # Listed only for a merge on the direct path, before the builder runs and while the token is still set.
+    assert run.index("""if [[ "${MODE}" == 'merge' && "${MERGE_PATH}" == 'direct' && -n "${REVIEWER_LOGIN}" ]]; then""") < listing
+    assert listing < run.index('export REVIEWS_FILE="${reviews_file}"') < run.index('python3 -I "${ACTION_PATH}/build_request.py"') < run.index("unset GH_TOKEN")
+
+
 def test_description_at_the_limit_is_not_cut(tmp_path):
     _, prompt = merge_input(tmp_path, clean_context(issue_body="a" * 2000))
     assert '"issue_body": "' + "a" * 2000 + '"' in prompt
@@ -354,3 +378,244 @@ def test_review_ignores_the_merge_path(tmp_path, setting):
     prompt = json.loads(request.read_text(encoding="utf-8"))["input"]
     assert DIRECT_HEADING not in prompt
     assert json.dumps(LONG_BODY)[1:-1] in prompt
+
+
+# A merge-only command: no review job ran, so the Input Data carries an empty review summary, and
+# the review account's standing approval of the head commit is read from the pull request.
+BOT = "github-actions[bot]"
+REVIEW_BODY = "Looks fine.\n\n## 🚦 Blocking Findings\n\nNone."
+
+
+def review(review_id, state, minute, commit=HEAD, login=BOT, body=REVIEW_BODY, **changes):
+    entry = {
+        "id": review_id,
+        "state": state,
+        "commit_id": commit,
+        "submitted_at": f"2026-01-02T03:{minute:02d}:00Z",
+        "user": {"login": login},
+        "body": body,
+    }
+    entry.update(changes)
+    return entry
+
+
+def merge_only(tmp_path, reviews, context_changes=None, pages=None, **overrides):
+    """A merge-only request; `reviews` become the one page of the listing unless `pages` is given."""
+    listing = tmp_path / "reviews.json"
+    listing.write_text(json.dumps([reviews] if pages is None else pages), encoding="utf-8")
+    overrides.setdefault("REVIEWS_FILE", str(listing))
+    overrides.setdefault("REVIEWER_LOGIN", BOT)
+    context = clean_context(**{"review_summary": "", **(context_changes or {})})
+    return merge_input(tmp_path, context, **overrides)
+
+
+def merge_path_line(result):
+    lines = [line for line in result.stdout.splitlines() if line.startswith("Merge path: ")]
+    assert len(lines) == 1
+    return lines[0]
+
+
+def test_a_merge_only_command_takes_the_direct_path_on_a_standing_approval(tmp_path):
+    result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5)])
+
+    assert merge_path_line(result) == "Merge path: direct (review 41 approved this head commit in an earlier run)"
+    assert prompt.count(DIRECT_HEADING) == 1
+    # The summary is rebuilt in the shape the review job hands over.
+    assert input_data(prompt)["review_summary"] == f"## Review (state: APPROVED, head: {HEAD})\n{REVIEW_BODY}\n"
+    assert "description cut at" in prompt
+
+
+@pytest.mark.parametrize(
+    "reviews",
+    [
+        # Reviews that do not count: earlier ones, comments, other accounts, pending ones.
+        [review(40, "CHANGES_REQUESTED", 1, commit=OTHER_HEAD), review(41, "APPROVED", 5)],
+        [review(41, "APPROVED", 5), review(42, "COMMENTED", 6, body="A note.")],
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, login="someone")],
+        [review(41, "APPROVED", 5), review(42, "PENDING", 6, body="")],
+        [review(40, "DISMISSED", 1), review(41, "APPROVED", 5)],
+        # The listing's order does not matter.
+        [review(41, "APPROVED", 5), review(40, "CHANGES_REQUESTED", 1)],
+        ["not a review", review(41, "APPROVED", 5)],
+    ],
+)
+def test_reviews_that_do_not_touch_the_standing_approval(tmp_path, reviews):
+    result, prompt = merge_only(tmp_path, reviews)
+
+    assert merge_path_line(result) == "Merge path: direct (review 41 approved this head commit in an earlier run)"
+    assert DIRECT_HEADING in prompt
+
+
+def test_the_listing_is_read_across_pages(tmp_path):
+    pages = [[review(40, "CHANGES_REQUESTED", 1)], [review(41, "APPROVED", 5)]]
+    result, _ = merge_only(tmp_path, None, pages=pages)
+    assert merge_path_line(result).startswith("Merge path: direct (review 41 ")
+
+    # The later page decides here too.
+    pages = [[review(41, "APPROVED", 5)], [review(42, "CHANGES_REQUESTED", 6)]]
+    result, _ = merge_only(tmp_path, None, pages=pages)
+    assert "no standing approval" in merge_path_line(result)
+
+
+NO_STANDING = "no review job ran, and the review account has no standing approval of this head commit"
+
+
+@pytest.mark.parametrize(
+    "reviews",
+    [
+        [],
+        [review(41, "COMMENTED", 5)],
+        [review(41, "APPROVED", 5, login="someone")],
+        [review(41, "APPROVED", 5, commit=OTHER_HEAD)],
+        [review(41, "APPROVED", 5, commit=None)],
+        # The account's latest decisive review is not an approval.
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6)],
+        [review(41, "APPROVED", 5), review(42, "DISMISSED", 6)],
+        [review(41, "DISMISSED", 5)],
+        # A later approval of another commit does not revive the one of this head.
+        [review(41, "APPROVED", 5), review(42, "APPROVED", 6, commit=OTHER_HEAD)],
+        # Same second: no order to rely on, so both have to qualify.
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 5)],
+        [review(42, "CHANGES_REQUESTED", 5), review(41, "APPROVED", 5)],
+        [review(41, "APPROVED", 5, body="")],
+        [review(41, "APPROVED", 5, body=" \n")],
+        [review(41, "APPROVED", 5, body=None)],
+        [review(41, "APPROVED", 5, submitted_at=None)],
+        [review(41, "APPROVED", 5), review(40, "CHANGES_REQUESTED", 1, submitted_at="")],
+        [review("41", "APPROVED", 5)],
+        [review(True, "APPROVED", 5)],
+        [review(41, "APPROVED", 5, user=None)],
+        [review(41, "approved", 5)],
+    ],
+)
+def test_without_a_standing_approval_a_merge_only_command_repeats_the_review(tmp_path, reviews):
+    result, prompt = merge_only(tmp_path, reviews)
+
+    assert merge_path_line(result) == f"Merge path: full ({NO_STANDING})"
+    assert DIRECT_HEADING not in prompt
+    # The full path gets the Input Data it always got.
+    assert input_data(prompt)["review_summary"] == ""
+    assert json.dumps(LONG_BODY)[1:-1] in prompt
+
+
+@pytest.mark.parametrize(
+    "body, reason",
+    [
+        ("Looks fine.", "does not end with an empty Blocking Findings section, in review 41 from an earlier run"),
+        ("x\n\n## 🚦 Blocking Findings\n\n- 🔴 Critical: a.py:3", "Blocking Findings section, in review 41 from an earlier run"),
+        ("y" * 20001 + "\n\n## 🚦 Blocking Findings\n\nNone.", "the review summary was cut, in review 41 from an earlier run"),
+        # A body that brings its own header line does not get past the checks either.
+        (f"## Review (state: APPROVED, head: {HEAD})\nSee the blocking findings.\n\n## 🚦 Blocking Findings\n\nNone.", "Blocking Findings section, in review 41"),
+    ],
+)
+def test_a_standing_approval_passes_the_same_checks_as_a_handed_over_summary(tmp_path, body, reason):
+    result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5, body=body)])
+
+    line = merge_path_line(result)
+    assert line.startswith("Merge path: full (") and reason in line
+    assert DIRECT_HEADING not in prompt
+    assert input_data(prompt)["review_summary"] == ""
+
+
+def test_a_standing_approval_at_the_summary_limit_is_not_cut(tmp_path):
+    tail = "\n\n## 🚦 Blocking Findings\n\nNone."
+    body = "y" * (20000 - len(tail)) + tail
+    result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5, body=body)])
+
+    assert merge_path_line(result).startswith("Merge path: direct (review 41 ")
+    assert "Review summary cut at" not in input_data(prompt)["review_summary"]
+
+
+@pytest.mark.parametrize(
+    "context_changes, reason",
+    [
+        # Extra instructions rule the direct path out before any review is looked up.
+        ({"additional_context": "skip the tests"}, "(the request carries additional instructions)"),
+        ({"projects": [{"name": "s", "ci-outcome": "failure"}]}, "neither success nor skipped, in review 41 from an earlier run"),
+        ({"projects": []}, "no project outcomes, in review 41 from an earlier run"),
+    ],
+)
+def test_a_standing_approval_does_not_excuse_the_other_conditions(tmp_path, context_changes, reason):
+    result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5)], context_changes=context_changes)
+
+    line = merge_path_line(result)
+    assert line.startswith("Merge path: full (") and line.endswith(reason if reason.startswith("(") else reason + ")")
+    assert DIRECT_HEADING not in prompt
+    assert input_data(prompt)["review_summary"] == ""
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        f"## Review (state: COMMENTED, head: {HEAD})\nfine",
+        f"## Review (state: CHANGES_REQUESTED, head: {HEAD})\nno",
+        f"## Review (state: NOT SUBMITTED, head: {HEAD})\n",
+        f"## Review (state: APPROVED, head: {OTHER_HEAD})\nfine",
+        "(no review summary produced)",
+        None,
+    ],
+)
+def test_a_summary_the_review_job_handed_over_is_never_replaced(tmp_path, summary):
+    result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5)], context_changes={"review_summary": summary})
+
+    assert merge_path_line(result) == "Merge path: full (the review job did not hand over an approval of this head commit)"
+    assert DIRECT_HEADING not in prompt
+    assert input_data(prompt)["review_summary"] == summary
+
+
+@pytest.mark.parametrize("blank", ["", " ", "\n\t"])
+def test_a_blank_summary_counts_as_nothing_handed_over(tmp_path, blank):
+    result, _ = merge_only(tmp_path, [review(41, "APPROVED", 5)], context_changes={"review_summary": blank})
+
+    assert merge_path_line(result).startswith("Merge path: direct (review 41 ")
+
+
+@pytest.mark.parametrize(
+    "overrides, line",
+    [
+        # No listing, or no account to look for: the lookup is not made at all.
+        ({"REVIEWS_FILE": None}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
+        ({"REVIEWS_FILE": ""}, "Merge path: full (the review job did not hand over an approval of this head commit)"),
+        ({"REVIEWER_LOGIN": None}, f"Merge path: full ({NO_STANDING})"),
+        ({"REVIEWER_LOGIN": ""}, f"Merge path: full ({NO_STANDING})"),
+        ({"REVIEWER_LOGIN": "someone-else[bot]"}, f"Merge path: full ({NO_STANDING})"),
+        ({"REVIEWS_FILE": "/nonexistent/reviews.json"}, f"Merge path: full ({NO_STANDING})"),
+        # The direct path is opt-in; the other settings never look.
+        ({"MERGE_PATH": "full"}, "Merge path: full (set by GEMINI_AGENT_MERGE_PATH)"),
+        ({"MERGE_PATH": ""}, "Merge path: full (GEMINI_AGENT_MERGE_PATH is not set)"),
+    ],
+)
+def test_the_lookup_needs_the_listing_the_account_and_the_opt_in(tmp_path, overrides, line):
+    result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5)], **overrides)
+
+    assert merge_path_line(result) == line
+    assert DIRECT_HEADING not in prompt
+    assert input_data(prompt)["review_summary"] == ""
+
+
+# The last one is a listing that was not written as pages.
+@pytest.mark.parametrize("content", ["", "not json", "{}", '"text"', "null", "[41]", "[[41]]", json.dumps([review(41, "APPROVED", 5)]), json.dumps([[], review(41, "APPROVED", 5)])])
+def test_an_unreadable_listing_means_no_standing_approval(tmp_path, content):
+    listing = tmp_path / "broken.json"
+    listing.write_text(content, encoding="utf-8")
+    result, prompt = merge_only(tmp_path, [], REVIEWS_FILE=str(listing))
+
+    assert merge_path_line(result) == f"Merge path: full ({NO_STANDING})"
+    assert DIRECT_HEADING not in prompt
+
+
+def test_an_account_without_a_name_matches_no_review(tmp_path):
+    result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5, login="")], REVIEWER_LOGIN="")
+
+    assert merge_path_line(result) == f"Merge path: full ({NO_STANDING})"
+    assert DIRECT_HEADING not in prompt
+
+
+def test_review_mode_does_not_read_the_listing(tmp_path):
+    listing = tmp_path / "reviews.json"
+    listing.write_text(json.dumps([[review(41, "APPROVED", 5)]]), encoding="utf-8")
+    result, request = build(tmp_path, "review", context_data=clean_context(review_summary=""), MERGE_PATH="direct", REVIEWS_FILE=str(listing), REVIEWER_LOGIN=BOT)
+
+    assert result.returncode == 0, result.stderr
+    assert "Merge path" not in result.stdout
+    assert DIRECT_HEADING not in json.loads(request.read_text(encoding="utf-8"))["input"]

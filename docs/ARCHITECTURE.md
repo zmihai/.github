@@ -286,7 +286,7 @@ reusable-gemini-dispatch.yml
   prompt, and cuts `issue_body` to 2,000 characters, when all of these hold in the Input Data:
   `additional_context` is empty; the first line of `review_summary` is exactly
   `## Review (state: APPROVED, head: <the head commit this run resolved>)` (written by the
-  review job, so a merge-only command or a review of an earlier head never qualifies),
+  review job, so a review of an earlier head never qualifies),
   the summary was not cut, and the words "Blocking Findings" appear on one line only, a heading
   that holds nothing else (`## 🚦 Blocking Findings`, any heading level, emoji optional), with
   nothing but `None.` after it; `projects` is a non-empty list of objects that each
@@ -294,7 +294,20 @@ reusable-gemini-dispatch.yml
   at least one is `success`. The section tells the
   agent to merge without re-reading the pull request and without a second review, and to
   return to the whole workflow when the summary names a Critical or High issue, and, when
-  the merge call fails, to submit an approving review of that head that states the failure. Anything else builds the previous prompt. The log line `Merge path: direct` or
+  the merge call fails, to submit an approving review of that head that states the failure. Anything else builds the previous prompt.
+  A merge-only command runs no review job and hands over an empty `review_summary`. For that
+  case the action lists the pull request's reviews (`reviewer_login` names the account the
+  review job submits as) and `build_request.py` looks in that listing for a standing approval: among that
+  account's `APPROVED`, `CHANGES_REQUESTED` and `DISMISSED` reviews the latest one (every one of
+  them, when several share the latest second) must be `APPROVED` on the head commit and carry a
+  body. The summary is rebuilt from that body under the same first line and 20,000-character
+  cut, and then has to pass every condition above; when it does not, the Input Data keeps the
+  empty summary. A summary the review job did hand over is never replaced. An approval the
+  merge agent itself left (approved, not merged) has no `Blocking Findings` section, so a
+  repeated merge-only command after it repeats the review. Any workflow holding the review
+  account's token can submit such a review; the lookup reads the pull request and is not a
+  defence against a workflow written to mislead. The log line `Merge path: direct`,
+  `Merge path: direct (review <id> approved this head commit in an earlier run)` or
   `Merge path: full (<reason>)` records the choice. The direct path is
   opt-in: the variable `GEMINI_AGENT_MERGE_PATH` must be `direct`. Unset or `full`, every
   merge builds the previous prompt (unset also logs a notice that a later release changes the

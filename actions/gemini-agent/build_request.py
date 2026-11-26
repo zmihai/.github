@@ -88,6 +88,10 @@ SUMMARY_CUT_MARK = "[Review summary cut at"
 BLOCKING_WORDS = "blocking findings"
 BLOCKING_HEADING = re.compile(r"#{1,6} (?:🚦 )?Blocking Findings")
 BODY_LIMIT = 2000
+NO_HANDOVER = "the review job did not hand over an approval of this head commit"
+# The cap the review job puts on the summary it hands over (gemini-agent-review.yml).
+SUMMARY_LIMIT = 20000
+DECISIVE_STATES = ("APPROVED", "CHANGES_REQUESTED", "DISMISSED")
 
 DIRECT_NOTES = """
 ## Direct merge path (this overrides the workflow and the notes above where they conflict)
@@ -135,7 +139,7 @@ def direct_merge_refusal(context, head: str) -> str:
     summary = context.get("review_summary")
     # The review job writes this line itself and names the commit it reviewed.
     if not isinstance(summary, str) or summary.split("\n", 1)[0] != APPROVED_HEADER.format(head=head):
-        return "the review job did not hand over an approval of this head commit"
+        return NO_HANDOVER
     if SUMMARY_CUT_MARK in summary:
         return "the review summary was cut"
     # The review prompt asks for one last section that lists every Critical or High finding, or
@@ -167,6 +171,56 @@ def direct_merge_refusal(context, head: str) -> str:
     if not passed:
         return "no project outcome is success"
     return ""
+
+
+def read_reviews(path: str) -> list:
+    """The pull request's reviews from `gh api --paginate --slurp` (a list of pages); empty when unreadable."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            pages = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
+        return []
+    return [review for page in pages for review in page]
+
+
+def standing_approval(reviews: list, login: str, head: str):
+    """The review account's standing approval of the head commit, as (review id, summary); None when there is none.
+
+    A merge-only command runs no review job, so no summary is handed over. The account's own
+    review on the pull request stands in for it: the latest of its approvals, requests for
+    changes and dismissed reviews has to be an approval of this head commit. The summary is
+    rebuilt in the shape the review job writes and then has to pass the same checks as a summary
+    that was handed over. Deliberately blunt: anything unexpected means there is none. Any
+    workflow that holds this account's token can submit such a review; this reads what is on the
+    pull request and is not a defence against a workflow written to mislead.
+    """
+    if not login:
+        return None
+    own = [
+        review
+        for review in reviews
+        if isinstance(review, dict)
+        and isinstance(review.get("user"), dict)
+        and review["user"].get("login") == login
+        and review.get("state") in DECISIVE_STATES
+    ]
+    # GitHub writes these as UTC timestamps of one fixed width, which sort as text.
+    if not own or any(not isinstance(review.get("submitted_at"), str) or not review["submitted_at"] for review in own):
+        return None
+    last = max(review["submitted_at"] for review in own)
+    latest = [review for review in own if review["submitted_at"] == last]
+    # Reviews of the same second have no order to rely on, so every one of them has to qualify.
+    if any(review["state"] != "APPROVED" or review.get("commit_id") != head for review in latest):
+        return None
+    body = latest[-1].get("body")
+    review_id = latest[-1].get("id")
+    if not isinstance(body, str) or not body.strip() or not isinstance(review_id, int) or isinstance(review_id, bool):
+        return None
+    if len(body) > SUMMARY_LIMIT:
+        body = body[:SUMMARY_LIMIT] + f"\n\n{SUMMARY_CUT_MARK} {SUMMARY_LIMIT:,} characters.]"
+    return review_id, APPROVED_HEADER.format(head=head) + "\n" + body + "\n"
 
 
 def shorten_description(context: dict) -> None:
@@ -214,9 +268,28 @@ def main() -> None:
             print("::notice::GEMINI_AGENT_MERGE_PATH is not set, so merge runs repeat the review. That default is deprecated: a later release will merge a clean pull request directly. Set the variable to 'direct' to adopt that now, or to 'full' to keep repeating the review.")
             print("Merge path: full (GEMINI_AGENT_MERGE_PATH is not set)")
         else:
-            refusal = direct_merge_refusal(context, env("HEAD_SHA"))
+            head = env("HEAD_SHA")
+            refusal = direct_merge_refusal(context, head)
+            source = ""
+            reviews_file = os.environ.get("REVIEWS_FILE", "")
+            handed_over = context.get("review_summary") if isinstance(context, dict) else None
+            # A merge-only command: no review job ran, so nothing was handed over. The review
+            # account's standing approval of this head commit is read from the pull request
+            # instead. A summary the review job did hand over is never replaced.
+            if refusal == NO_HANDOVER and reviews_file and isinstance(handed_over, str) and not handed_over.strip():
+                found = standing_approval(read_reviews(reviews_file), os.environ.get("REVIEWER_LOGIN", ""), head)
+                if found is None:
+                    refusal = "no review job ran, and the review account has no standing approval of this head commit"
+                else:
+                    candidate = dict(context, review_summary=found[1])
+                    refusal = direct_merge_refusal(candidate, head)
+                    if refusal:
+                        refusal += f", in review {found[0]} from an earlier run"
+                    else:
+                        context = candidate
+                        source = f" (review {found[0]} approved this head commit in an earlier run)"
             direct = not refusal
-            print("Merge path: direct" if direct else f"Merge path: full ({refusal})")
+            print(f"Merge path: direct{source}" if direct else f"Merge path: full ({refusal})")
         if direct:
             shorten_description(context)
     prompt = prompt.replace(PLACEHOLDER, json.dumps(context, indent=2, ensure_ascii=False))
