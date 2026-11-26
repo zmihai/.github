@@ -303,13 +303,16 @@ def token_budget() -> str:
 
 def wants_reviews() -> None:
     """Exits 0 when this run would read the review listing, 1 when it would not."""
+    # The Input Data is opened only for a run that could look: every other run reads it once,
+    # in main(), as before.
+    if env("MODE") != "merge" or merge_path_setting() != "direct" or not LOGIN.fullmatch(os.environ.get("REVIEWER_LOGIN", "")):
+        sys.exit(1)
     try:
         with open(env("CONTEXT_FILE"), encoding="utf-8") as handle:
             context = json.load(handle)
     except (OSError, ValueError, RecursionError):
         sys.exit(1)
-    wanted = env("MODE") == "merge" and merge_path_setting() == "direct" and wants_standing_approval(context)
-    sys.exit(0 if wanted else 1)
+    sys.exit(0 if wants_standing_approval(context) else 1)
 
 
 def main() -> None:

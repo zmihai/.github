@@ -421,6 +421,31 @@ def test_the_listing_replaces_whatever_holds_its_name(tmp_path):
     assert json.loads((tmp_path / "agent-reviews-merge.json").read_text(encoding="utf-8")) == [["listed"]]
 
 
+def test_a_name_that_cannot_be_cleared_costs_only_the_direct_path(tmp_path):
+    held = tmp_path / "agent-reviews-merge.json"
+    held.mkdir()
+    (held / "left-behind").write_text("x", encoding="utf-8")
+    held.chmod(0o555)
+    try:
+        stdout, _ = listing_step(tmp_path, context_text(review_summary=""))
+    finally:
+        held.chmod(0o755)
+
+    assert stdout.splitlines() == ["::warning::Could not list the pull request reviews; this merge repeats the review.", "REVIEWS_FILE="]
+
+
+@pytest.mark.parametrize("overrides", [{"MODE": "review"}, {"MERGE_PATH": "full"}, {"MERGE_PATH": ""}, {"REVIEWER_LOGIN": ""}])
+def test_only_a_run_that_could_look_opens_the_input_data_twice(tmp_path, overrides):
+    # A pipe nobody writes to: opening it would never return.
+    pipe = tmp_path / "context.pipe"
+    os.mkfifo(pipe)
+    env = {"PATH": os.environ["PATH"], "MODE": "merge", "MERGE_PATH": "direct", "REVIEWER_LOGIN": BOT, "CONTEXT_FILE": str(pipe)}
+    env.update(overrides)
+    result = subprocess.run([sys.executable, "-I", str(SCRIPT), "--wants-reviews"], env=env, capture_output=True, text=True, timeout=20)
+
+    assert result.returncode == 1
+
+
 def test_a_failed_listing_leaves_no_listing_for_the_builder(tmp_path):
     stdout, calls = listing_step(tmp_path, context_text(review_summary=" \n"), gh_exit=1)
 

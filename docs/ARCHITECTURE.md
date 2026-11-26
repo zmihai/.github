@@ -328,7 +328,8 @@ reusable-gemini-dispatch.yml
   merge builds the previous prompt (unset also logs a notice that a later release changes the
   default to `direct`); an unknown value fails the job. The
   path saves tokens; it is not a gate. A blocking review submitted after the pre-run snapshot is
-  not seen on this path; the merge call is the agent's first tool call, so that window is
+  not seen on this path (on a merge-only command the lookup, a little later, still sees one
+  from the review account); the merge call is the agent's first tool call, so that window is
   shorter than the one the full path leaves between its read of the reviews and its merge call.
 - **Models.** `GEMINI_AGENT_REVIEW_MODEL` (default `gemini-3.5-flash-lite`) and
   `GEMINI_AGENT_MERGE_MODEL` (default `gemini-3.8-flash`). The variables in 1.7 do not apply.
