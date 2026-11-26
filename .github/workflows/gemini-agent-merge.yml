@@ -53,7 +53,7 @@ on:
         default: '[]'
 
       merge_only:
-        description: 'Whether this is a merge-only command, for which no review job ran. Only then may the review account''s standing approval of the head commit stand in for a review summary on the direct merge path.'
+        description: 'Whether this is a merge-only command with nothing after it, for which no review job ran. Only then may the review account''s standing approval of the head commit stand in for a review summary on the direct merge path.'
         required: false
         type: boolean
         default: false

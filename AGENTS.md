@@ -72,7 +72,7 @@ prompt, composite action, or template. The summary below is enough for orientati
   to their CI/scan/dispatch calls. Dispatch calls it internally too, so caller-side and
   dispatch-side gates cannot drift.
   - Inputs: `ref` (optional override). Outputs: `proceed`, `command`, `request`,
-    `additional_context`, `merge_instructions`, `resolved_ref`, `is_fork`, `is_pr`,
+    `additional_context`, `merge_instructions`, `merge_bare`, `resolved_ref`, `is_fork`, `is_pr`,
     `issue_number`.
 - **Dispatch** runs the guard, then (for allowed events) posts the acknowledgement
   comment and fans out to review/merge.

@@ -46,8 +46,11 @@ on:
         description: 'Free text following a @gemini-cli review command, if any'
         value: '${{ jobs.guard.outputs.additional_context }}'
       merge_instructions:
-        description: 'Free text following a merge-only command (@gemini-cli /merge), if any, cut at 20,000 characters. Kept apart from additional_context, which stays empty for that command.'
+        description: 'Free text following a merge-only command (@gemini-cli /merge), if any, cut at 20,000 UTF-16 code units. Kept apart from additional_context, which stays empty for that command.'
         value: '${{ jobs.guard.outputs.merge_instructions }}'
+      merge_bare:
+        description: "'true' only for a merge-only command with nothing after it. Stated apart from merge_instructions, because a job output that happens to hold a secret's value is dropped."
+        value: '${{ jobs.guard.outputs.merge_bare }}'
       resolved_ref:
         description: 'The PR head SHA (API-resolved for issue_comment events), the ref input when given, or the event SHA'
         value: '${{ jobs.guard.outputs.resolved_ref }}'
@@ -84,6 +87,7 @@ jobs:
       request: '${{ steps.evaluate.outputs.request }}'
       additional_context: '${{ steps.evaluate.outputs.additional_context }}'
       merge_instructions: '${{ steps.evaluate.outputs.merge_instructions }}'
+      merge_bare: '${{ steps.evaluate.outputs.merge_bare }}'
       resolved_ref: '${{ steps.evaluate.outputs.resolved_ref }}'
       is_fork: '${{ steps.evaluate.outputs.is_fork }}'
       is_pr: '${{ steps.evaluate.outputs.is_pr }}'
@@ -143,6 +147,7 @@ jobs:
               core.setOutput('command', 'fallthrough');
               core.setOutput('additional_context', '');
               core.setOutput('merge_instructions', '');
+              core.setOutput('merge_bare', 'false');
               core.setOutput('is_fork', 'true');
               core.setOutput('resolved_ref', '');
               return;
@@ -155,6 +160,7 @@ jobs:
             // passed off as a PR number.
             let additionalContext = '';
             let mergeInstructions = '';
+            let mergeBare = 'false';
             let command = 'fallthrough';
             if (eventType.startsWith("pull_request.")) {
               if (context.actor === 'dependabot[bot]') {
@@ -176,10 +182,17 @@ jobs:
               // merge job gets what it always got. The agent engine reads it as instructions,
               // which rule out its direct merge path. Cut short: it travels as one environment
               // variable, and a merge-only command never failed for its length.
-              mergeInstructions = request.replace(/^@gemini-cli \/merge/, '').trim().slice(0, 20000);
+              // The cut does not end in half a character.
+              const rest = request.replace(/^@gemini-cli \/merge/, '').trim();
+              mergeInstructions = rest.slice(0, 20000).replace(/[\uD800-\uDBFF]$/, '');
+              // Said outright, and before the cut: the text itself can be lost on the way (a
+              // job output that holds a secret's value is dropped), and only a command with
+              // nothing after it may take the agent engine's direct merge path.
+              mergeBare = rest === '' ? 'true' : 'false';
             }
             core.setOutput('additional_context', additionalContext);
             core.setOutput('merge_instructions', mergeInstructions);
+            core.setOutput('merge_bare', mergeBare);
 
             // 3. Resolve Ref and Fork Status
             let resolvedRef = inputRef || payload.pull_request?.head?.sha || context.sha;

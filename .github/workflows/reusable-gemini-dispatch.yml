@@ -76,6 +76,7 @@ jobs:
       request: '${{ needs.guard.outputs.request }}'
       additional_context: '${{ needs.guard.outputs.additional_context }}'
       merge_instructions: '${{ needs.guard.outputs.merge_instructions }}'
+      merge_bare: '${{ needs.guard.outputs.merge_bare }}'
       issue_number: '${{ github.event.pull_request.number || github.event.issue.number }}'
       projects: '${{ inputs.projects }}'
       resolved_ref: '${{ needs.guard.outputs.resolved_ref }}'
@@ -220,8 +221,8 @@ jobs:
       is_fork: '${{ needs.dispatch.outputs.is_fork }}'
       review_summary: '${{ needs.agent-review.outputs.review_summary }}'
       # Stated here, where it is known: an empty review summary alone does not say that no
-      # review job ran.
-      merge_only: ${{ needs.dispatch.outputs.command == 'merge' && needs.agent-review.result == 'skipped' }}
+      # review job ran, and empty instructions alone do not say that the command carried none.
+      merge_only: ${{ needs.dispatch.outputs.command == 'merge' && needs.agent-review.result == 'skipped' && needs.dispatch.outputs.merge_bare == 'true' }}
       projects: '${{ needs.dispatch.outputs.projects }}'
       ref: ${{ needs.dispatch.outputs.resolved_ref }}
     secrets:

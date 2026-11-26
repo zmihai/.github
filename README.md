@@ -137,7 +137,7 @@ It validates the trigger (non-fork `pull_request` events; `issues` opened/reopen
 - `resolved_ref`: The PR head SHA (or the `ref` input, or the event SHA). Pass it as the `ref` input of `reusable-ci`, `reusable-security-scan`, and `reusable-gemini-dispatch` so every job builds and reviews the same commit.
 - `is_fork` (`'true'`/`'false'`): Fails closed — never build or expose secrets to the ref when `'true'`.
 - `is_pr` (`'true'`/`'false'`): Whether the event relates to a PR. Use it to skip build jobs on plain issues.
-- `command`, `request`, `additional_context`, `merge_instructions`, `issue_number`: The parsed `@gemini-cli` command and its context (`merge_instructions` is the text after a merge-only command, which only the agent engine reads).
+- `command`, `request`, `additional_context`, `merge_instructions`, `merge_bare`, `issue_number`: The parsed `@gemini-cli` command and its context (`merge_instructions` is the text after a merge-only command, which only the agent engine reads; `merge_bare` is `true` when there was none).
 
 **Recommended caller-side gates:**
 

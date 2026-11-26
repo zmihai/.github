@@ -242,7 +242,14 @@ def test_the_review_account_reaches_the_builder():
     }
     dispatch = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-dispatch.yml").read_text(encoding="utf-8"))
     callers = [job for job in dispatch["jobs"].values() if job.get("uses") == "./.github/workflows/gemini-agent-merge.yml"]
-    assert [job["with"]["merge_only"] for job in callers] == ["${{ needs.dispatch.outputs.command == 'merge' && needs.agent-review.result == 'skipped' }}"]
+    # Three facts, each stated outright: the command, a review job that did not run, and nothing after the command.
+    assert [job["with"]["merge_only"] for job in callers] == [
+        "${{ needs.dispatch.outputs.command == 'merge' && needs.agent-review.result == 'skipped' && needs.dispatch.outputs.merge_bare == 'true' }}"
+    ]
+    assert dispatch["jobs"]["dispatch"]["outputs"]["merge_bare"] == "${{ needs.guard.outputs.merge_bare }}"
+    guard = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-guard.yml").read_text(encoding="utf-8"))
+    assert guard[True]["workflow_call"]["outputs"]["merge_bare"]["value"] == "${{ jobs.guard.outputs.merge_bare }}"
+    assert guard["jobs"]["guard"]["outputs"]["merge_bare"] == "${{ steps.evaluate.outputs.merge_bare }}"
     # The step that mints the App identity runs before the step that names it.
     for job in workflow["jobs"].values():
         names = [step.get("id") or step.get("uses") for step in job["steps"]]
@@ -299,26 +306,35 @@ def guard_outputs(tmp_path, comment):
     )
     assert result.returncode == 0, result.stderr
     # The script logs the head it resolved; the outputs are the last line.
-    return json.loads(result.stdout.splitlines()[-1])
+    return json.loads(result.stdout.rstrip("\n").split("\n")[-1])
 
 
 @pytest.mark.parametrize(
-    "comment, command, context, instructions",
+    "comment, command, context, instructions, bare",
     [
-        ("@gemini-cli /merge", "merge", "", ""),
-        ("@gemini-cli /merge please recheck the migration", "merge", "", "please recheck the migration"),
-        ("@gemini-cli /merge\n\nand look at the lockfile ", "merge", "", "and look at the lockfile"),
+        ("@gemini-cli /merge", "merge", "", "", "true"),
+        ("@gemini-cli /merge \n", "merge", "", "", "true"),
+        ("@gemini-cli /merge please recheck the migration", "merge", "", "please recheck the migration", "false"),
+        ("@gemini-cli /merge\n\nand look at the lockfile ", "merge", "", "and look at the lockfile", "false"),
         # Cut short, so that a long comment cannot keep the merge job from starting.
-        ("@gemini-cli /merge " + "界" * 44000, "merge", "", "界" * 20000),
-        ("@gemini-cli /review focus on the tests", "review", "focus on the tests", ""),
-        ("@gemini-cli /review-and-merge focus on the tests", "review-and-merge", "focus on the tests", ""),
+        ("@gemini-cli /merge " + "界" * 44000, "merge", "", "界" * 20000, "false"),
+        # The cut does not end in half a character.
+        ("@gemini-cli /merge " + "a" * 19999 + "😀 more", "merge", "", "a" * 19999, "false"),
+        # Characters Python calls blank and JavaScript does not: still not a bare command.
+        ("@gemini-cli /merge " + "\u0085" * 20000 + "Please recheck the migration.", "merge", "", "\u0085" * 20000, "false"),
+        ("@gemini-cli /merge \u0085", "merge", "", "\u0085", "false"),
+        ("@gemini-cli /review focus on the tests", "review", "focus on the tests", "", "false"),
+        ("@gemini-cli /review-and-merge focus on the tests", "review-and-merge", "focus on the tests", "", "false"),
+        ("@gemini-cli /review-and-merge", "review-and-merge", "", "", "false"),
+        ("@gemini-cli hello", "fallthrough", "", "", "false"),
     ],
 )
-def test_text_after_a_merge_only_command_is_kept_apart(tmp_path, comment, command, context, instructions):
+def test_text_after_a_merge_only_command_is_kept_apart(tmp_path, comment, command, context, instructions, bare):
     outputs = guard_outputs(tmp_path, comment)
 
     assert outputs["proceed"] == "true" and outputs["is_fork"] == "false" and outputs["resolved_ref"] == "head-sha"
     assert (outputs["command"], outputs["additional_context"], outputs["merge_instructions"]) == (command, context, instructions)
+    assert outputs["merge_bare"] == bare
 
 
 def test_text_after_a_merge_only_command_reaches_the_agent_engine_only():

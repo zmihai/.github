@@ -46,7 +46,8 @@ out code and receive secrets). A single `github-script` job:
   the actor is `dependabot[bot]`); `@gemini-cli /review` → `review`,
   `@gemini-cli /review-and-merge` → `review-and-merge`, `@gemini-cli /merge` → `merge`;
   otherwise `fallthrough`. Text after a review command becomes `additional_context`. Text after
-  `/merge` goes to an output of its own (`merge_instructions`, cut at 20,000 characters) that
+  `/merge` goes to an output of its own (`merge_instructions`, cut at 20,000 UTF-16 code units; `merge_bare`
+  says whether there was any) that
   only the agent engine reads, as its `additional_context`: there it reaches the merge agent
   as instructions and rules out the direct merge path. The Gemini CLI merge job never
   received that text and still does not. `@gemini-cli` commands are honored **only from authorized
@@ -64,7 +65,7 @@ out code and receive secrets). A single `github-script` job:
 
 **Inputs:** `ref` (optional override).
 **Outputs:** `proceed`, `command`, `request`, `additional_context`, `merge_instructions`,
-`resolved_ref`, `is_fork`, `is_pr`, `issue_number`.
+`merge_bare`, `resolved_ref`, `is_fork`, `is_pr`, `issue_number`.
 
 Recommended caller gates: CI/build jobs require `proceed == 'true' && is_pr == 'true' &&
 is_fork == 'false'` and check out `resolved_ref`; the dispatch call requires
@@ -300,8 +301,9 @@ reusable-gemini-dispatch.yml
   return to the whole workflow when the summary names a Critical or High issue, and, when
   the merge call fails, to submit an approving review of that head that states the failure. Anything else builds the previous prompt.
   A merge-only command runs no review job and hands over an empty `review_summary`. The
-  dispatcher says so itself (`merge_only`), because an empty summary alone does not prove that
-  no review job ran; only then does the merge workflow pass `reviewer_login`, the account the
+  dispatcher says so itself (`merge_only`: a merge-only command with nothing after it and a
+  skipped review job), because an empty summary alone does not prove that no review job ran,
+  nor empty instructions that the command carried none; only then does the merge workflow pass `reviewer_login`, the account the
   review job submits as. For that case only, and only when nothing else in the Input Data
   rules the direct path out (`build_request.py --wants-reviews` answers that for the shell),
   the action lists the pull request's reviews (the call is asked to stop after 60 seconds
