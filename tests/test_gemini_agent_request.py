@@ -265,22 +265,78 @@ def test_the_review_account_reaches_the_builder():
     assert listing < run.index('export REVIEWS_FILE="${reviews_file}"') < run.index('python3 -I "${ACTION_PATH}/build_request.py"\n') < run.index("unset GH_TOKEN")
 
 
+GUARD_RUNNER = r"""
+const fs = require('fs');
+const yaml = fs.readFileSync(process.argv[2], 'utf8');
+const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+const start = yaml.indexOf("          script: |\n") + "          script: |\n".length;
+const script = yaml.slice(start).split("\n").map((line) => line.slice(12)).join("\n");
+const outputs = {};
+const core = { setOutput: (name, value) => { outputs[name] = value; } };
+const context = {
+  eventName: 'issue_comment', actor: 'someone', sha: 'event-sha', repo: { owner: 'octo', repo: 'demo' },
+  payload: {
+    action: 'created', sender: { type: 'User' }, repository: { id: 1 },
+    comment: { body, author_association: 'OWNER' }, issue: { number: 7, pull_request: {} },
+  },
+};
+const github = { rest: { pulls: { get: async () => ({ data: { head: { sha: 'head-sha', repo: { id: 1 } }, base: { repo: { id: 1 } } } }) } } };
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+new AsyncFunction('context', 'core', 'github', script)(context, core, github).then(() => console.log(JSON.stringify(outputs)));
+"""
+
+
+def guard_outputs(tmp_path, comment):
+    """Runs the guard's own script on a pull request comment from the repository's owner."""
+    (tmp_path / "guard.js").write_text(GUARD_RUNNER, encoding="utf-8")
+    (tmp_path / "comment.json").write_text(json.dumps(comment), encoding="utf-8")
+    guard = ROOT / ".github" / "workflows" / "reusable-gemini-guard.yml"
+    result = subprocess.run(
+        ["node", str(tmp_path / "guard.js"), str(guard), str(tmp_path / "comment.json")],
+        env={"PATH": os.environ["PATH"], "INPUT_REF": ""},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    # The script logs the head it resolved; the outputs are the last line.
+    return json.loads(result.stdout.splitlines()[-1])
+
+
+@pytest.mark.parametrize(
+    "comment, command, context, instructions",
+    [
+        ("@gemini-cli /merge", "merge", "", ""),
+        ("@gemini-cli /merge please recheck the migration", "merge", "", "please recheck the migration"),
+        ("@gemini-cli /merge\n\nand look at the lockfile ", "merge", "", "and look at the lockfile"),
+        # Cut short, so that a long comment cannot keep the merge job from starting.
+        ("@gemini-cli /merge " + "界" * 44000, "merge", "", "界" * 20000),
+        ("@gemini-cli /review focus on the tests", "review", "focus on the tests", ""),
+        ("@gemini-cli /review-and-merge focus on the tests", "review-and-merge", "focus on the tests", ""),
+    ],
+)
+def test_text_after_a_merge_only_command_is_kept_apart(tmp_path, comment, command, context, instructions):
+    outputs = guard_outputs(tmp_path, comment)
+
+    assert outputs["proceed"] == "true" and outputs["is_fork"] == "false" and outputs["resolved_ref"] == "head-sha"
+    assert (outputs["command"], outputs["additional_context"], outputs["merge_instructions"]) == (command, context, instructions)
+
+
 def test_text_after_a_merge_only_command_reaches_the_agent_engine_only():
     import yaml
 
-    guard = (ROOT / ".github" / "workflows" / "reusable-gemini-guard.yml").read_text(encoding="utf-8")
-    # Kept as instructions, which rule the direct merge path out.
-    assert """command = 'merge';""" in guard
-    assert """additionalContext = request.replace(/^@gemini-cli \\/merge/, '').trim();""" in guard
+    guard = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-guard.yml").read_text(encoding="utf-8"))
+    assert guard[True]["workflow_call"]["outputs"]["merge_instructions"]["value"] == "${{ jobs.guard.outputs.merge_instructions }}"
+    assert guard["jobs"]["guard"]["outputs"]["merge_instructions"] == "${{ steps.evaluate.outputs.merge_instructions }}"
     dispatch = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-dispatch.yml").read_text(encoding="utf-8"))
+    assert dispatch["jobs"]["dispatch"]["outputs"]["merge_instructions"] == "${{ needs.guard.outputs.merge_instructions }}"
     handed = {job["uses"]: job["with"]["additional_context"] for job in dispatch["jobs"].values() if "additional_context" in job.get("with", {})}
     passed_on = "${{ needs.dispatch.outputs.additional_context }}"
     assert handed == {
+        # The Gemini CLI jobs are as they were: a merge-only command gives them no text.
         "./.github/workflows/gemini-review.yml": passed_on,
+        "./.github/workflows/gemini-merge.yml": passed_on,
         "./.github/workflows/gemini-agent-review.yml": passed_on,
-        "./.github/workflows/gemini-agent-merge.yml": passed_on,
-        # The Gemini CLI merge job gets what it always got on a merge-only command: nothing.
-        "./.github/workflows/gemini-merge.yml": "${{ needs.dispatch.outputs.command != 'merge' && needs.dispatch.outputs.additional_context || '' }}",
+        "./.github/workflows/gemini-agent-merge.yml": "${{ needs.dispatch.outputs.command == 'merge' && needs.dispatch.outputs.merge_instructions || needs.dispatch.outputs.additional_context }}",
     }
 
 
@@ -368,9 +424,11 @@ def test_a_merge_only_command_on_the_direct_path_lists_the_reviews(tmp_path):
     stdout, calls = listing_step(tmp_path, context_text(review_summary=""))
 
     assert calls == ["api repos/octo/demo/pulls/7/reviews?per_page=100 --paginate --slurp"]
-    listing = tmp_path / "agent-reviews-merge.json"
-    assert stdout.splitlines() == [f"REVIEWS_FILE={listing}"]
-    assert json.loads(listing.read_text(encoding="utf-8")) == [["listed"]]
+    # A new file of its own, whatever else the directory holds.
+    listings = list(tmp_path.glob("agent-reviews.*"))
+    assert len(listings) == 1 and listings[0].stat().st_mode & 0o777 == 0o600
+    assert stdout.splitlines() == [f"REVIEWS_FILE={listings[0]}"]
+    assert json.loads(listings[0].read_text(encoding="utf-8")) == [["listed"]]
 
 
 @pytest.mark.parametrize(
@@ -411,30 +469,14 @@ def test_the_shell_and_the_builder_agree_on_what_a_blank_summary_is(tmp_path, bl
     assert merge_path_line(result).startswith("Merge path: direct (review 41 ")
 
 
-def test_the_listing_replaces_whatever_holds_its_name(tmp_path):
-    (tmp_path / "agent-reviews-merge.json").mkdir()
-    (tmp_path / "agent-reviews-merge.json" / "left-behind").write_text("x", encoding="utf-8")
-    stdout, calls = listing_step(tmp_path, context_text(review_summary=""))
+def test_without_a_file_for_the_listing_only_the_direct_path_is_lost(tmp_path):
+    stdout, calls = listing_step(tmp_path, context_text(review_summary=""), RUNNER_TEMP=str(tmp_path / "missing"))
 
-    assert len(calls) == 1
-    assert stdout.splitlines() == [f"REVIEWS_FILE={tmp_path / 'agent-reviews-merge.json'}"]
-    assert json.loads((tmp_path / "agent-reviews-merge.json").read_text(encoding="utf-8")) == [["listed"]]
-
-
-def test_a_name_that_cannot_be_cleared_costs_only_the_direct_path(tmp_path):
-    held = tmp_path / "agent-reviews-merge.json"
-    held.mkdir()
-    (held / "left-behind").write_text("x", encoding="utf-8")
-    held.chmod(0o555)
-    try:
-        stdout, _ = listing_step(tmp_path, context_text(review_summary=""))
-    finally:
-        held.chmod(0o755)
-
+    assert calls == []
     assert stdout.splitlines() == ["::warning::Could not list the pull request reviews; this merge repeats the review.", "REVIEWS_FILE="]
 
 
-@pytest.mark.parametrize("overrides", [{"MODE": "review"}, {"MERGE_PATH": "full"}, {"MERGE_PATH": ""}, {"REVIEWER_LOGIN": ""}])
+@pytest.mark.parametrize("overrides", [{"MODE": "review"}, {"MERGE_PATH": "full"}, {"MERGE_PATH": ""}, {"REVIEWER_LOGIN": ""}, {"REVIEWER_LOGIN": "invalid name"}])
 def test_only_a_run_that_could_look_opens_the_input_data_twice(tmp_path, overrides):
     # A pipe nobody writes to: opening it would never return.
     pipe = tmp_path / "context.pipe"

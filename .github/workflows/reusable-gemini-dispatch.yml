@@ -75,6 +75,7 @@ jobs:
       command: '${{ needs.guard.outputs.command }}'
       request: '${{ needs.guard.outputs.request }}'
       additional_context: '${{ needs.guard.outputs.additional_context }}'
+      merge_instructions: '${{ needs.guard.outputs.merge_instructions }}'
       issue_number: '${{ github.event.pull_request.number || github.event.issue.number }}'
       projects: '${{ inputs.projects }}'
       resolved_ref: '${{ needs.guard.outputs.resolved_ref }}'
@@ -162,8 +163,7 @@ jobs:
       issues: 'write'
       pull-requests: 'write'
     with:
-      # Text after a merge-only command never reached this engine; it still does not.
-      additional_context: "${{ needs.dispatch.outputs.command != 'merge' && needs.dispatch.outputs.additional_context || '' }}"
+      additional_context: '${{ needs.dispatch.outputs.additional_context }}'
       pull_request_number: '${{ needs.dispatch.outputs.issue_number }}'
       is_fork: '${{ needs.dispatch.outputs.is_fork }}'
       review_summary: '${{ needs.review.outputs.review_summary }}'
@@ -214,7 +214,8 @@ jobs:
       issues: 'write'
       pull-requests: 'write'
     with:
-      additional_context: '${{ needs.dispatch.outputs.additional_context }}'
+      # On a merge-only command the text after it, which only this engine receives.
+      additional_context: "${{ needs.dispatch.outputs.command == 'merge' && needs.dispatch.outputs.merge_instructions || needs.dispatch.outputs.additional_context }}"
       pull_request_number: '${{ needs.dispatch.outputs.issue_number }}'
       is_fork: '${{ needs.dispatch.outputs.is_fork }}'
       review_summary: '${{ needs.agent-review.outputs.review_summary }}'

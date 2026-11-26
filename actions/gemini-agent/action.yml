@@ -248,18 +248,22 @@ runs:
         # and is waited for, so that a cancel signal ends the step at once.
         export REVIEWS_FILE=''
         if python3 -I "${ACTION_PATH}/build_request.py" --wants-reviews 2> /dev/null; then
-          reviews_file="${RUNNER_TEMP}/agent-reviews-${MODE}.json"
-          # Whatever an earlier step left under this name is not written into. If it cannot be
-          # removed, the listing below fails and the merge repeats the review.
-          rm -rf "${reviews_file}" 2> /dev/null || true
-          timeout --kill-after=5 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}" &
-          child_pid="$!"
-          if wait "${child_pid}"; then
+          # A new file under a name nothing else holds; without one there is no listing.
+          reviews_file="$(mktemp "${RUNNER_TEMP}/agent-reviews.XXXXXXXX" 2> /dev/null || true)"
+          listed='no'
+          if [[ -n "${reviews_file}" ]]; then
+            timeout --kill-after=5 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}" &
+            child_pid="$!"
+            if wait "${child_pid}"; then
+              listed='yes'
+            fi
+            child_pid=''
+          fi
+          if [[ "${listed}" == 'yes' ]]; then
             export REVIEWS_FILE="${reviews_file}"
           else
             echo '::warning::Could not list the pull request reviews; this merge repeats the review.'
           fi
-          child_pid=''
         fi
         python3 -I "${ACTION_PATH}/build_request.py"
         # Nothing after this point needs the GitHub tokens.

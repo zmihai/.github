@@ -45,9 +45,11 @@ out code and receive secrets). A single `github-script` job:
 - Resolves a **command**: `pull_request` events → `review` (or `review-and-merge` when
   the actor is `dependabot[bot]`); `@gemini-cli /review` → `review`,
   `@gemini-cli /review-and-merge` → `review-and-merge`, `@gemini-cli /merge` → `merge`;
-  otherwise `fallthrough`. Text after a command becomes `additional_context`; after
-  `/merge` only the agent engine receives it (the dispatcher hands the Gemini CLI merge
-  job an empty one, as before), and there it rules out the direct merge path. `@gemini-cli` commands are honored **only from authorized
+  otherwise `fallthrough`. Text after a review command becomes `additional_context`. Text after
+  `/merge` goes to an output of its own (`merge_instructions`, cut at 20,000 characters) that
+  only the agent engine reads, as its `additional_context`: there it reaches the merge agent
+  as instructions and rules out the direct merge path. The Gemini CLI merge job never
+  received that text and still does not. `@gemini-cli` commands are honored **only from authorized
   human authors and only in PR context** — a command on a plain issue stays
   `fallthrough`, since review/merge would otherwise run against the default branch with
   an issue number passed off as a PR number. (The old dispatch gate checked association
