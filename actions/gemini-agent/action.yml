@@ -241,13 +241,16 @@ runs:
         export REQUEST_FILE="${request_file}"
         # A merge-only command hands over no review summary. On the direct merge path the builder
         # then looks in this listing for the review account's standing approval of the head
-        # commit. A listing that fails costs only the direct path.
-        if [[ "${MODE}" == 'merge' && "${MERGE_PATH}" == 'direct' && -n "${REVIEWER_LOGIN}" ]]; then
+        # commit. Only that case lists the reviews, and a listing that fails or takes too long
+        # costs only the direct path. The variable is set here and nowhere else.
+        export REVIEWS_FILE=''
+        if [[ "${MODE}" == 'merge' && "${MERGE_PATH}" == 'direct' && -n "${REVIEWER_LOGIN}" ]] \
+          && jq -e '.review_summary | type == "string" and test("^\\s*$")' "${CONTEXT_FILE}" > /dev/null 2>&1; then
           reviews_file="${RUNNER_TEMP}/agent-reviews-${MODE}.json"
-          if gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}"; then
+          if timeout 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}"; then
             export REVIEWS_FILE="${reviews_file}"
           else
-            echo '::warning::Could not list the pull request reviews; a merge-only command repeats the review.'
+            echo '::warning::Could not list the pull request reviews; this merge repeats the review.'
           fi
         fi
         python3 -I "${ACTION_PATH}/build_request.py"

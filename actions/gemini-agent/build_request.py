@@ -89,9 +89,15 @@ BLOCKING_WORDS = "blocking findings"
 BLOCKING_HEADING = re.compile(r"#{1,6} (?:🚦 )?Blocking Findings")
 BODY_LIMIT = 2000
 NO_HANDOVER = "the review job did not hand over an approval of this head commit"
-# The cap the review job puts on the summary it hands over (gemini-agent-review.yml).
+# The cap the review job puts on the summary it hands over, and the words it appends at the cut
+# (gemini-agent-review.yml). A standing approval is rebuilt the same way, character for character.
 SUMMARY_LIMIT = 20000
+SUMMARY_CUT_NOTE = "\n\n[Review summary cut at 20,000 characters. Read the full review on the pull request before deciding.]"
 DECISIVE_STATES = ("APPROVED", "CHANGES_REQUESTED", "DISMISSED")
+# Every state a submitted or pending review is known to carry; anything else is not understood.
+REVIEW_STATES = DECISIVE_STATES + ("COMMENTED", "PENDING")
+# How GitHub writes `submitted_at`: UTC, whole seconds, one fixed width, so the values sort as text.
+SUBMITTED_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 
 DIRECT_NOTES = """
 ## Direct merge path (this overrides the workflow and the notes above where they conflict)
@@ -178,7 +184,7 @@ def read_reviews(path: str) -> list:
     try:
         with open(path, encoding="utf-8") as handle:
             pages = json.load(handle)
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return []
     if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
         return []
@@ -191,36 +197,46 @@ def standing_approval(reviews: list, login: str, head: str):
     A merge-only command runs no review job, so no summary is handed over. The account's own
     review on the pull request stands in for it: the latest of its approvals, requests for
     changes and dismissed reviews has to be an approval of this head commit. The summary is
-    rebuilt in the shape the review job writes and then has to pass the same checks as a summary
-    that was handed over. Deliberately blunt: anything unexpected means there is none. Any
-    workflow that holds this account's token can submit such a review; this reads what is on the
-    pull request and is not a defence against a workflow written to mislead.
+    rebuilt exactly as the review job writes it and then has to pass the same checks as a
+    summary that was handed over. Deliberately blunt: anything unexpected means there is none.
+    Any workflow that holds this account's token can submit such a review; this reads what is
+    on the pull request and is not a defence against a workflow written to mislead.
     """
     if not login:
         return None
     own = [
         review
         for review in reviews
-        if isinstance(review, dict)
-        and isinstance(review.get("user"), dict)
-        and review["user"].get("login") == login
-        and review.get("state") in DECISIVE_STATES
+        if isinstance(review, dict) and isinstance(review.get("user"), dict) and review["user"].get("login") == login
     ]
-    # GitHub writes these as UTC timestamps of one fixed width, which sort as text.
-    if not own or any(not isinstance(review.get("submitted_at"), str) or not review["submitted_at"] for review in own):
+    # A state this code does not know could be one that withdraws an approval.
+    if any(review.get("state") not in REVIEW_STATES for review in own):
         return None
-    last = max(review["submitted_at"] for review in own)
-    latest = [review for review in own if review["submitted_at"] == last]
-    # Reviews of the same second have no order to rely on, so every one of them has to qualify.
-    if any(review["state"] != "APPROVED" or review.get("commit_id") != head for review in latest):
+    decisive = [review for review in own if review["state"] in DECISIVE_STATES]
+    if not decisive:
         return None
-    body = latest[-1].get("body")
-    review_id = latest[-1].get("id")
+    for review in decisive:
+        stamp = review.get("submitted_at")
+        if not isinstance(stamp, str) or not SUBMITTED_AT.fullmatch(stamp):
+            return None
+    last = max(review["submitted_at"] for review in decisive)
+    latest = [review for review in decisive if review["submitted_at"] == last]
+    # Reviews of the same second have no order to rely on, so there has to be exactly one.
+    if len(latest) != 1:
+        return None
+    review = latest[0]
+    body = review.get("body")
+    review_id = review.get("id")
+    if review["state"] != "APPROVED" or review.get("commit_id") != head:
+        return None
     if not isinstance(body, str) or not body.strip() or not isinstance(review_id, int) or isinstance(review_id, bool):
         return None
-    if len(body) > SUMMARY_LIMIT:
-        body = body[:SUMMARY_LIMIT] + f"\n\n{SUMMARY_CUT_MARK} {SUMMARY_LIMIT:,} characters.]"
-    return review_id, APPROVED_HEADER.format(head=head) + "\n" + body + "\n"
+    # The review job writes the body and a blank line to a file, cuts that file, and puts its
+    # header line above. (The line break it writes below ends the job output and is not part of it.)
+    text = body + "\n\n"
+    if len(text) > SUMMARY_LIMIT:
+        text = text[:SUMMARY_LIMIT] + SUMMARY_CUT_NOTE
+    return review_id, APPROVED_HEADER.format(head=head) + "\n" + text
 
 
 def shorten_description(context: dict) -> None:

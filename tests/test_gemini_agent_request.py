@@ -244,10 +244,99 @@ def test_the_review_account_reaches_the_builder():
     steps = [step for step in action["runs"]["steps"] if "REVIEWER_LOGIN" in step.get("env", {})]
     assert [step["env"]["REVIEWER_LOGIN"] for step in steps] == ["${{ inputs.reviewer_login }}"]
     run = steps[0]["run"]
-    listing = run.index('gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}"')
-    # Listed only for a merge on the direct path, before the builder runs and while the token is still set.
-    assert run.index("""if [[ "${MODE}" == 'merge' && "${MERGE_PATH}" == 'direct' && -n "${REVIEWER_LOGIN}" ]]; then""") < listing
+    listing = run.index('timeout 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}"')
+    # Listed before the builder runs and while the token is still set.
+    assert run.index("export REVIEWS_FILE=''") < listing
     assert listing < run.index('export REVIEWS_FILE="${reviews_file}"') < run.index('python3 -I "${ACTION_PATH}/build_request.py"') < run.index("unset GH_TOKEN")
+
+
+def listing_step(tmp_path, summary, gh_exit=0, **overrides):
+    """Runs the part of the action's run step that lists the reviews, with a stand-in `gh`."""
+    import yaml
+
+    action = yaml.safe_load((ROOT / "actions" / "gemini-agent" / "action.yml").read_text(encoding="utf-8"))
+    run = [step["run"] for step in action["runs"]["steps"] if "REVIEWER_LOGIN" in step.get("env", {})][0]
+    block = run[run.index("export REVIEWS_FILE=''") : run.index('python3 -I "${ACTION_PATH}/build_request.py"')]
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    calls = tmp_path / "gh-calls.txt"
+    (bin_dir / "gh").write_text(f'#!/bin/bash\necho "$*" >> "{calls}"\necho \'[["listed"]]\'\nexit {gh_exit}\n', encoding="utf-8")
+    (bin_dir / "gh").chmod(0o755)
+    context = tmp_path / "context.json"
+    context.write_text(summary, encoding="utf-8")
+    env = {
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "RUNNER_TEMP": str(tmp_path),
+        "MODE": "merge",
+        "MERGE_PATH": "direct",
+        "REVIEWER_LOGIN": "github-actions[bot]",
+        "REPOSITORY": "octo/demo",
+        "PULL_REQUEST_NUMBER": "7",
+        "CONTEXT_FILE": str(context),
+        # An inherited value must never reach the builder.
+        "REVIEWS_FILE": "/inherited/listing.json",
+    }
+    env.update(overrides)
+    result = subprocess.run(["bash", "-c", block + '\necho "REVIEWS_FILE=${REVIEWS_FILE}"'], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    return result.stdout, calls.read_text(encoding="utf-8").splitlines() if calls.exists() else []
+
+
+def context_text(**changes):
+    return json.dumps(clean_context(**changes))
+
+
+def test_a_merge_only_command_on_the_direct_path_lists_the_reviews(tmp_path):
+    stdout, calls = listing_step(tmp_path, context_text(review_summary=""))
+
+    assert calls == ["api repos/octo/demo/pulls/7/reviews?per_page=100 --paginate --slurp"]
+    listing = tmp_path / "agent-reviews-merge.json"
+    assert stdout.splitlines() == [f"REVIEWS_FILE={listing}"]
+    assert json.loads(listing.read_text(encoding="utf-8")) == [["listed"]]
+
+
+@pytest.mark.parametrize(
+    "summary, overrides",
+    [
+        # A summary was handed over, or the Input Data is not what the lookup expects.
+        (context_text(), {}),
+        (context_text(review_summary="(no review summary produced)"), {}),
+        (context_text(review_summary=None), {}),
+        ("[]", {}),
+        ("not json", {}),
+        # Not a merge on the direct path, or no account to look for.
+        (context_text(review_summary=""), {"MODE": "review"}),
+        (context_text(review_summary=""), {"MERGE_PATH": "full"}),
+        (context_text(review_summary=""), {"MERGE_PATH": ""}),
+        (context_text(review_summary=""), {"REVIEWER_LOGIN": ""}),
+    ],
+)
+def test_no_other_run_lists_the_reviews(tmp_path, summary, overrides):
+    stdout, calls = listing_step(tmp_path, summary, **overrides)
+
+    assert calls == []
+    assert stdout.splitlines() == ["REVIEWS_FILE="]
+
+
+def test_a_failed_listing_leaves_no_listing_for_the_builder(tmp_path):
+    stdout, calls = listing_step(tmp_path, context_text(review_summary=" \n"), gh_exit=1)
+
+    assert len(calls) == 1
+    assert stdout.splitlines() == ["::warning::Could not list the pull request reviews; this merge repeats the review.", "REVIEWS_FILE="]
+
+
+def test_the_standing_approval_is_cut_with_the_review_job_s_words():
+    sys.path.insert(0, str(SCRIPT.parent))
+    try:
+        import build_request
+    finally:
+        sys.path.pop(0)
+    review = (ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8")
+    assert f"limit = {build_request.SUMMARY_LIMIT}\n" in review
+    assert 'text = text[:limit] + "' + build_request.SUMMARY_CUT_NOTE.replace("\n", "\\n") + '"' in review
+    assert build_request.SUMMARY_CUT_MARK in build_request.SUMMARY_CUT_NOTE
+    # The review job writes each review body and a blank line, then its header above the capped text.
+    assert """gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews/${id}" --jq '.body // ""' >> "${RUNNER_TEMP}/review-summary.md"\n            echo >> "${RUNNER_TEMP}/review-summary.md\"""" in review
 
 
 def test_description_at_the_limit_is_not_cut(tmp_path):
@@ -383,7 +472,8 @@ def test_review_ignores_the_merge_path(tmp_path, setting):
 # A merge-only command: no review job ran, so the Input Data carries an empty review summary, and
 # the review account's standing approval of the head commit is read from the pull request.
 BOT = "github-actions[bot]"
-REVIEW_BODY = "Looks fine.\n\n## 🚦 Blocking Findings\n\nNone."
+BLOCKING_TAIL = "\n\n## 🚦 Blocking Findings\n\nNone."
+REVIEW_BODY = "Looks fine." + BLOCKING_TAIL
 
 
 def review(review_id, state, minute, commit=HEAD, login=BOT, body=REVIEW_BODY, **changes):
@@ -420,8 +510,8 @@ def test_a_merge_only_command_takes_the_direct_path_on_a_standing_approval(tmp_p
 
     assert merge_path_line(result) == "Merge path: direct (review 41 approved this head commit in an earlier run)"
     assert prompt.count(DIRECT_HEADING) == 1
-    # The summary is rebuilt in the shape the review job hands over.
-    assert input_data(prompt)["review_summary"] == f"## Review (state: APPROVED, head: {HEAD})\n{REVIEW_BODY}\n"
+    # The summary is rebuilt as the review job hands it over: header, body, a blank line.
+    assert input_data(prompt)["review_summary"] == f"## Review (state: APPROVED, head: {HEAD})\n{REVIEW_BODY}\n\n"
     assert "description cut at" in prompt
 
 
@@ -474,18 +564,33 @@ NO_STANDING = "no review job ran, and the review account has no standing approva
         [review(41, "DISMISSED", 5)],
         # A later approval of another commit does not revive the one of this head.
         [review(41, "APPROVED", 5), review(42, "APPROVED", 6, commit=OTHER_HEAD)],
-        # Same second: no order to rely on, so both have to qualify.
+        # Same second: no order to rely on, so there has to be exactly one.
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 5)],
         [review(42, "CHANGES_REQUESTED", 5), review(41, "APPROVED", 5)],
+        [review(41, "APPROVED", 5), review(42, "APPROVED", 5)],
+        [review(40, "APPROVED", 5, body=None), review(41, "APPROVED", 5)],
         [review(41, "APPROVED", 5, body="")],
         [review(41, "APPROVED", 5, body=" \n")],
         [review(41, "APPROVED", 5, body=None)],
+        [review(41, "APPROVED", 5, body=["Looks fine.", "## 🚦 Blocking Findings", "None."])],
+        # A timestamp in any other shape cannot be ordered against the rest.
         [review(41, "APPROVED", 5, submitted_at=None)],
+        [review(41, "APPROVED", 5, submitted_at=20260102030500)],
+        [review(41, "APPROVED", 5, submitted_at="later?")],
+        [review(41, "APPROVED", 5, submitted_at="2026-01-02T03:05:00Z+01:00")],
         [review(41, "APPROVED", 5), review(40, "CHANGES_REQUESTED", 1, submitted_at="")],
+        [review(40, "CHANGES_REQUESTED", 1, submitted_at=""), review(41, "APPROVED", 5)],
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 5, submitted_at="2026-01-02T03:05:00.500Z")],
+        [review(41, "APPROVED", 5), review(40, "DISMISSED", 1, submitted_at="2026-01-02 03:01:00Z")],
+        # A state this code does not know, on any of the account's reviews.
+        [review(41, "APPROVED", 5), review(42, "changes_requested", 6)],
+        [review(41, "APPROVED", 5), review(42, "WITHDRAWN", 6)],
+        [review(41, "APPROVED", 5), review(42, None, 6)],
         [review("41", "APPROVED", 5)],
         [review(True, "APPROVED", 5)],
         [review(41, "APPROVED", 5, user=None)],
         [review(41, "approved", 5)],
+        [review(41, "APPROVED", 5, user={"login": BOT.upper()})],
     ],
 )
 def test_without_a_standing_approval_a_merge_only_command_repeats_the_review(tmp_path, reviews):
@@ -504,8 +609,8 @@ def test_without_a_standing_approval_a_merge_only_command_repeats_the_review(tmp
         ("Looks fine.", "does not end with an empty Blocking Findings section, in review 41 from an earlier run"),
         ("x\n\n## 🚦 Blocking Findings\n\n- 🔴 Critical: a.py:3", "Blocking Findings section, in review 41 from an earlier run"),
         ("y" * 20001 + "\n\n## 🚦 Blocking Findings\n\nNone.", "the review summary was cut, in review 41 from an earlier run"),
-        # A body that brings its own header line does not get past the checks either.
-        (f"## Review (state: APPROVED, head: {HEAD})\nSee the blocking findings.\n\n## 🚦 Blocking Findings\n\nNone.", "Blocking Findings section, in review 41"),
+        # One character over the cap, counted as the review job counts: the body and a blank line.
+        ("y" * (19999 - len(BLOCKING_TAIL)) + BLOCKING_TAIL, "the review summary was cut, in review 41 from an earlier run"),
     ],
 )
 def test_a_standing_approval_passes_the_same_checks_as_a_handed_over_summary(tmp_path, body, reason):
@@ -518,12 +623,12 @@ def test_a_standing_approval_passes_the_same_checks_as_a_handed_over_summary(tmp
 
 
 def test_a_standing_approval_at_the_summary_limit_is_not_cut(tmp_path):
-    tail = "\n\n## 🚦 Blocking Findings\n\nNone."
-    body = "y" * (20000 - len(tail)) + tail
+    # The cap counts the body and the blank line the review job writes after it.
+    body = "y" * (19998 - len(BLOCKING_TAIL)) + BLOCKING_TAIL
     result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5, body=body)])
 
     assert merge_path_line(result).startswith("Merge path: direct (review 41 ")
-    assert "Review summary cut at" not in input_data(prompt)["review_summary"]
+    assert input_data(prompt)["review_summary"] == f"## Review (state: APPROVED, head: {HEAD})\n{body}\n\n"
 
 
 @pytest.mark.parametrize(
