@@ -240,7 +240,7 @@ def standing_approval(reviews: list, login: str, head: str):
     # The review job writes the body and a blank line to a file, reads the file back (which turns
     # every line ending into a line feed), cuts that text, and puts its header line above. (The
     # line break it writes below ends the job output and is not part of it.)
-    text = body.replace("\r\n", "\n").replace("\r", "\n") + "\n\n"
+    text = (body + "\n\n").replace("\r\n", "\n").replace("\r", "\n")
     if len(text) > SUMMARY_LIMIT:
         text = text[:SUMMARY_LIMIT] + SUMMARY_CUT_NOTE
     return review_id, APPROVED_HEADER.format(head=head) + "\n" + text

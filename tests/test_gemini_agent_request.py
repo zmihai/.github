@@ -739,6 +739,9 @@ def test_line_endings_in_a_standing_approval_are_read_as_the_review_job_reads_th
     body = ("y\r\n" * 9000 + "z" * (19998 - 18000 - len(BLOCKING_TAIL))) + BLOCKING_TAIL
     result, _ = merge_only(tmp_path, [review(41, "APPROVED", 5, body=body)])
     assert merge_path_line(result).startswith("Merge path: direct (review 41 ")
+    # A body that ends in a carriage return: it and the line feed written after it are one line ending.
+    result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5, body=REVIEW_BODY + "\r")])
+    assert input_data(prompt)["review_summary"] == f"## Review (state: APPROVED, head: {HEAD})\n{REVIEW_BODY}\n\n"
 
 
 def test_an_account_without_a_name_matches_no_review(tmp_path):
