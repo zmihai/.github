@@ -63,8 +63,8 @@ out code and receive secrets). A single `github-script` job:
 - Reports **`is_pr`** so callers can skip build jobs on plain issues.
 
 **Inputs:** `ref` (optional override).
-**Outputs:** `proceed`, `command`, `request`, `additional_context`, `resolved_ref`,
-`is_fork`, `is_pr`, `issue_number`.
+**Outputs:** `proceed`, `command`, `request`, `additional_context`, `merge_instructions`,
+`resolved_ref`, `is_fork`, `is_pr`, `issue_number`.
 
 Recommended caller gates: CI/build jobs require `proceed == 'true' && is_pr == 'true' &&
 is_fork == 'false'` and check out `resolved_ref`; the dispatch call requires
