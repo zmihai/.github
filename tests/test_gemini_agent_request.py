@@ -664,6 +664,7 @@ NO_STANDING = "no review job ran, and the review account has no standing approva
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user=BOT)],
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user={"login": None})],
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user={"id": 7})],
+        [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, login="")],
         [review(41, "APPROVED", 5), review(42, "CHANGES_REQUESTED", 6, user=7)],
         ["not a review", review(41, "APPROVED", 5)],
         [review(41, "APPROVED", 5), None],
@@ -725,6 +726,7 @@ def test_a_standing_approval_at_the_summary_limit_is_not_cut(tmp_path):
     [
         # Extra instructions rule the direct path out before any review is looked up.
         ({"additional_context": "skip the tests"}, "(the request carries additional instructions)"),
+        ({"additional_context": None}, "(the request carries additional instructions)"),
         # So do project outcomes: no review is looked up for a request that cannot go direct.
         ({"projects": [{"name": "s", "ci-outcome": "failure"}]}, "(the review job did not hand over an approval of this head commit)"),
         ({"projects": []}, "(the review job did not hand over an approval of this head commit)"),
@@ -821,6 +823,29 @@ def test_line_endings_in_a_standing_approval_are_read_as_the_review_job_reads_th
     # A body that ends in a carriage return: it and the line feed written after it are one line ending.
     result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5, body=REVIEW_BODY + "\r")])
     assert input_data(prompt)["review_summary"] == f"## Review (state: APPROVED, head: {HEAD})\n{REVIEW_BODY}\n\n"
+
+
+def test_input_data_that_is_not_an_object_is_not_looked_up(tmp_path):
+    listing = tmp_path / "reviews.json"
+    listing.write_text(json.dumps([[review(41, "APPROVED", 5)]]), encoding="utf-8")
+    result, prompt = merge_input(tmp_path, ["not", "an", "object"], REVIEWS_FILE=str(listing), REVIEWER_LOGIN=BOT)
+
+    assert merge_path_line(result) == "Merge path: full (the Input Data is not an object)"
+    assert DIRECT_HEADING not in prompt
+
+
+def test_no_account_has_no_standing_approval():
+    sys.path.insert(0, str(SCRIPT.parent))
+    try:
+        import build_request
+    finally:
+        sys.path.pop(0)
+    nameless = dict(review(41, "APPROVED", 5), user={"login": ""})
+    assert build_request.standing_approval([review(41, "APPROVED", 5)], BOT, HEAD) is not None
+    assert build_request.standing_approval([review(41, "APPROVED", 5)], "", HEAD) is None
+    # An entry without a name is nobody's, whatever account is asked for.
+    assert build_request.standing_approval([nameless], "", HEAD) is None
+    assert build_request.standing_approval([nameless], BOT, HEAD) is None
 
 
 def test_an_account_without_a_name_matches_no_review(tmp_path):

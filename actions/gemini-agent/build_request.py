@@ -224,8 +224,6 @@ def standing_approval(reviews: list, login: str, head: str):
     Any workflow that holds this account's token can submit such a review; this reads what is
     on the pull request and is not a defence against a workflow written to mislead.
     """
-    if not login:
-        return None
     own = []
     for review in reviews:
         if not isinstance(review, dict):
@@ -234,8 +232,9 @@ def standing_approval(reviews: list, login: str, head: str):
         # GitHub lists the review of a deleted account without a user; that is nobody's review.
         if user is None:
             continue
-        # Any other record that does not say whose it is could be this account's.
-        if not isinstance(user, dict) or not isinstance(user.get("login"), str):
+        # Any other record that does not say whose it is could be this account's. No entry has an
+        # empty name, so an account without a name matches none.
+        if not isinstance(user, dict) or not isinstance(user.get("login"), str) or not user["login"]:
             return None
         if user["login"] == login:
             own.append(review)
