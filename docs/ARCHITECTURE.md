@@ -295,7 +295,7 @@ reusable-gemini-dispatch.yml
   review job, so a review of an earlier head never qualifies),
   the summary was not cut, and the words "Blocking Findings" appear on one line only, a heading
   that holds nothing else (`## 🚦 Blocking Findings`, any heading level, emoji optional), with
-  nothing but `None.` after it; `projects` is a non-empty list of objects that each
+  nothing but `None.` after it (alone, or as the single list item `- None.` / `* None.`); `projects` is a non-empty list of objects that each
   carry at least one key ending in `outcome`, every such value is `success` or `skipped`, and
   at least one is `success`. The section tells the
   agent to merge without re-reading the pull request and without a second review, and to
