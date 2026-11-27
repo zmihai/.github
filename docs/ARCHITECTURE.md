@@ -48,8 +48,9 @@ out code and receive secrets). A single `github-script` job:
   otherwise `fallthrough`. Text after a review command becomes `additional_context`. Text after
   `/merge` goes to an output of its own (`merge_instructions`, cut at 20,000 UTF-16 code units; `merge_bare`
   says whether there was any) that
-  only the agent engine reads, as its `additional_context`: there it reaches the merge agent
-  as instructions and rules out the direct merge path. The Gemini CLI merge job never
+  only the agent engine reads, as its `additional_context`: there it is passed to the merge
+  agent as instructions and rules out the direct merge path (GitHub drops a job output that
+  holds a secret's value; `merge_bare` keeps text lost that way from opening the direct path). The Gemini CLI merge job never
   received that text and still does not. `@gemini-cli` commands are honored **only from authorized
   human authors and only in PR context** — a command on a plain issue stays
   `fallthrough`, since review/merge would otherwise run against the default branch with
