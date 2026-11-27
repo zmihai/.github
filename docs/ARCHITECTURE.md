@@ -45,7 +45,13 @@ out code and receive secrets). A single `github-script` job:
 - Resolves a **command**: `pull_request` events → `review` (or `review-and-merge` when
   the actor is `dependabot[bot]`); `@gemini-cli /review` → `review`,
   `@gemini-cli /review-and-merge` → `review-and-merge`, `@gemini-cli /merge` → `merge`;
-  otherwise `fallthrough`. `@gemini-cli` commands are honored **only from authorized
+  otherwise `fallthrough`. Text after a review command becomes `additional_context`. Text after
+  `/merge` goes to an output of its own (`merge_instructions`, cut at 20,000 UTF-16 code units; `merge_bare`
+  says whether there was any) that
+  only the agent engine reads, as its `additional_context`: there it is passed to the merge
+  agent as instructions and rules out the direct merge path (GitHub drops a job output that
+  holds a secret's value; `merge_bare` keeps text lost that way from opening the direct path). The Gemini CLI merge job never
+  received that text and still does not. `@gemini-cli` commands are honored **only from authorized
   human authors and only in PR context** — a command on a plain issue stays
   `fallthrough`, since review/merge would otherwise run against the default branch with
   an issue number passed off as a PR number. (The old dispatch gate checked association
@@ -59,8 +65,8 @@ out code and receive secrets). A single `github-script` job:
 - Reports **`is_pr`** so callers can skip build jobs on plain issues.
 
 **Inputs:** `ref` (optional override).
-**Outputs:** `proceed`, `command`, `request`, `additional_context`, `resolved_ref`,
-`is_fork`, `is_pr`, `issue_number`.
+**Outputs:** `proceed`, `command`, `request`, `additional_context`, `merge_instructions`,
+`merge_bare`, `resolved_ref`, `is_fork`, `is_pr`, `issue_number`.
 
 Recommended caller gates: CI/build jobs require `proceed == 'true' && is_pr == 'true' &&
 is_fork == 'false'` and check out `resolved_ref`; the dispatch call requires
@@ -286,7 +292,7 @@ reusable-gemini-dispatch.yml
   prompt, and cuts `issue_body` to 2,000 characters, when all of these hold in the Input Data:
   `additional_context` is empty; the first line of `review_summary` is exactly
   `## Review (state: APPROVED, head: <the head commit this run resolved>)` (written by the
-  review job, so a merge-only command or a review of an earlier head never qualifies),
+  review job, so a review of an earlier head never qualifies),
   the summary was not cut, and the words "Blocking Findings" appear on one line only, a heading
   that holds nothing else (`## 🚦 Blocking Findings`, any heading level, emoji optional), with
   nothing but `None.` after it; `projects` is a non-empty list of objects that each
@@ -294,13 +300,41 @@ reusable-gemini-dispatch.yml
   at least one is `success`. The section tells the
   agent to merge without re-reading the pull request and without a second review, and to
   return to the whole workflow when the summary names a Critical or High issue, and, when
-  the merge call fails, to submit an approving review of that head that states the failure. Anything else builds the previous prompt. The log line `Merge path: direct` or
+  the merge call fails, to submit an approving review of that head that states the failure. Anything else builds the previous prompt.
+  A merge-only command runs no review job and hands over an empty `review_summary`. The
+  dispatcher says so itself (`merge_only`: a merge-only command with nothing after it and a
+  skipped review job), because an empty summary alone does not prove that no review job ran,
+  nor empty instructions that the command carried none; only then does the merge workflow pass `reviewer_login`, the account the
+  review job submits as. For that case only, and only when nothing else in the Input Data
+  rules the direct path out (`build_request.py --wants-reviews` answers that for the shell),
+  the action lists the pull request's reviews (the call is asked to stop after 60 seconds
+  and killed 5 seconds later) and
+  `build_request.py` looks in that
+  listing for a standing approval. Among that account's `APPROVED`, `CHANGES_REQUESTED` and
+  `DISMISSED` reviews, exactly one must carry the latest `submitted_at`, and it must be
+  `APPROVED` on the head commit with a body (account names are compared without regard to
+  case). A review of that account in an unknown state, a timestamp on one of those three
+  kinds of review in any other shape than GitHub's whole-second UTC one, or any entry in the listing
+  that does not name its author in the shape of a GitHub account name (other than a deleted
+  account's, listed without a user) means
+  there is none. The
+  summary is rebuilt from the body exactly as the review job writes it (same first line, same
+  20,000-character cut) and then has to pass every condition above; when it does not, or the
+  listing fails, the Input Data keeps the empty summary. A summary the review job did hand over
+  is never replaced. An approval the merge agent itself left (approved, not merged) qualifies
+  only if its body happens to end with an empty `Blocking Findings` section; its prompt asks
+  for none, so a repeated merge-only command after it normally repeats the review. Any
+  workflow holding the review account's token can submit such a review; the lookup reads the
+  pull request and is not a
+  defence against a workflow written to mislead. The log line `Merge path: direct`,
+  `Merge path: direct (review <id> approved this head commit in an earlier run)` or
   `Merge path: full (<reason>)` records the choice. The direct path is
   opt-in: the variable `GEMINI_AGENT_MERGE_PATH` must be `direct`. Unset or `full`, every
   merge builds the previous prompt (unset also logs a notice that a later release changes the
   default to `direct`); an unknown value fails the job. The
   path saves tokens; it is not a gate. A blocking review submitted after the pre-run snapshot is
-  not seen on this path; the merge call is the agent's first tool call, so that window is
+  not seen on this path (on a merge-only command the lookup, a little later, still sees one
+  from the review account); the merge call is the agent's first tool call, so that window is
   shorter than the one the full path leaves between its read of the reviews and its merge call.
 - **Models.** `GEMINI_AGENT_REVIEW_MODEL` (default `gemini-3.5-flash-lite`) and
   `GEMINI_AGENT_MERGE_MODEL` (default `gemini-3.8-flash`). The variables in 1.7 do not apply.

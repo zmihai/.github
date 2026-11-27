@@ -6,6 +6,7 @@ pr-merge.toml), with the Input Data placeholder filled in and a short section ap
 describes what differs in this environment. Everything comes from environment variables and
 files; nothing is spliced into a shell command.
 """
+import datetime
 import json
 import os
 import re
@@ -88,6 +89,20 @@ SUMMARY_CUT_MARK = "[Review summary cut at"
 BLOCKING_WORDS = "blocking findings"
 BLOCKING_HEADING = re.compile(r"#{1,6} (?:🚦 )?Blocking Findings")
 BODY_LIMIT = 2000
+NO_HANDOVER = "the review job did not hand over an approval of this head commit"
+# The cap the review job puts on the summary it hands over, and the words it appends at the cut
+# (gemini-agent-review.yml). A standing approval is rebuilt the same way, character for character.
+SUMMARY_LIMIT = 20000
+SUMMARY_CUT_NOTE = "\n\n[Review summary cut at 20,000 characters. Read the full review on the pull request before deciding.]"
+DECISIVE_STATES = ("APPROVED", "CHANGES_REQUESTED", "DISMISSED")
+# Every state a submitted or pending review is known to carry; anything else is not understood.
+REVIEW_STATES = DECISIVE_STATES + ("COMMENTED", "PENDING")
+# How GitHub writes `submitted_at`: UTC, whole seconds, one fixed width, so the values sort as text.
+SUBMITTED_AT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
+
+# One strict shape for an account name, as GitHub writes them: ASCII letters, digits, hyphens
+# and underscores, and `[bot]` after an App's. Anything else is not a name this code compares.
+LOGIN = re.compile(r"[A-Za-z0-9_-]+(\[[Bb][Oo][Tt]\])?")
 
 DIRECT_NOTES = """
 ## Direct merge path (this overrides the workflow and the notes above where they conflict)
@@ -135,7 +150,7 @@ def direct_merge_refusal(context, head: str) -> str:
     summary = context.get("review_summary")
     # The review job writes this line itself and names the commit it reviewed.
     if not isinstance(summary, str) or summary.split("\n", 1)[0] != APPROVED_HEADER.format(head=head):
-        return "the review job did not hand over an approval of this head commit"
+        return NO_HANDOVER
     if SUMMARY_CUT_MARK in summary:
         return "the review summary was cut"
     # The review prompt asks for one last section that lists every Critical or High finding, or
@@ -150,6 +165,11 @@ def direct_merge_refusal(context, head: str) -> str:
         or [line for line in lines[mentions[0] + 1 :] if line] != ["None."]
     ):
         return "the review summary does not end with an empty Blocking Findings section"
+    return projects_refusal(context)
+
+
+def projects_refusal(context: dict) -> str:
+    """Why the project outcomes rule the direct merge path out; empty when they do not."""
     projects = context.get("projects")
     if not isinstance(projects, list) or not projects:
         return "there are no project outcomes"
@@ -167,6 +187,96 @@ def direct_merge_refusal(context, head: str) -> str:
     if not passed:
         return "no project outcome is success"
     return ""
+
+
+def wants_standing_approval(context) -> bool:
+    """Whether a standing approval could put this request on the direct merge path.
+
+    True only when nothing was handed over (the review summary is blank text) and nothing else
+    in the Input Data rules the direct path out. The action's shell asks this before it lists
+    the reviews (`--wants-reviews`), and the builder asks it again before it reads the listing.
+    """
+    if not isinstance(context, dict) or not LOGIN.fullmatch(os.environ.get("REVIEWER_LOGIN", "")):
+        return False
+    extra = context.get("additional_context", "")
+    summary = context.get("review_summary")
+    if not isinstance(extra, str) or extra.strip() or not isinstance(summary, str) or summary.strip():
+        return False
+    return not projects_refusal(context)
+
+
+def read_reviews(path: str) -> list:
+    """The pull request's reviews from `gh api --paginate --slurp` (a list of pages); empty when unreadable."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            pages = json.load(handle)
+    except (OSError, ValueError, RecursionError):
+        return []
+    if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
+        return []
+    return [review for page in pages for review in page]
+
+
+def standing_approval(reviews: list, login: str, head: str):
+    """The review account's standing approval of the head commit, as (review id, summary); None when there is none.
+
+    A merge-only command runs no review job, so no summary is handed over. The account's own
+    review on the pull request stands in for it: the latest of its approvals, requests for
+    changes and dismissed reviews has to be an approval of this head commit. The summary is
+    rebuilt exactly as the review job writes it and then has to pass the same checks as a
+    summary that was handed over. Deliberately blunt: anything unexpected means there is none.
+    Any workflow that holds this account's token can submit such a review; this reads what is
+    on the pull request and is not a defence against a workflow written to mislead.
+    """
+    own = []
+    for review in reviews:
+        if not isinstance(review, dict):
+            return None
+        user = review.get("user")
+        # GitHub lists the review of a deleted account without a user; that is nobody's review.
+        if user is None:
+            continue
+        # Any other record that does not say whose it is, in the one shape a name has, could be
+        # this account's. No entry has an empty name, so an account without a name matches none.
+        if not isinstance(user, dict) or not isinstance(user.get("login"), str) or not LOGIN.fullmatch(user["login"]):
+            return None
+        # GitHub account names do not differ by case alone.
+        if user["login"].lower() == login.lower():
+            own.append(review)
+    # A state this code does not know could be one that withdraws an approval.
+    if any(review.get("state") not in REVIEW_STATES for review in own):
+        return None
+    decisive = [review for review in own if review["state"] in DECISIVE_STATES]
+    if not decisive:
+        return None
+    for review in decisive:
+        stamp = review.get("submitted_at")
+        if not isinstance(stamp, str) or not SUBMITTED_AT.fullmatch(stamp):
+            return None
+        # The pattern fixes the width; this rejects a date or time that does not exist.
+        try:
+            datetime.datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError:
+            return None
+    last = max(review["submitted_at"] for review in decisive)
+    latest = [review for review in decisive if review["submitted_at"] == last]
+    # Reviews of the same second have no order to rely on, so there has to be exactly one.
+    if len(latest) != 1:
+        return None
+    review = latest[0]
+    body = review.get("body")
+    review_id = review.get("id")
+    if review["state"] != "APPROVED" or review.get("commit_id") != head:
+        return None
+    if not isinstance(body, str) or not body.strip() or not isinstance(review_id, int) or isinstance(review_id, bool):
+        return None
+    # The review job writes the body and a blank line to a file, reads the file back (which turns
+    # every line ending into a line feed), cuts that text, and puts its header line above. (The
+    # line break it writes below ends the job output and is not part of it.)
+    text = (body + "\n\n").replace("\r\n", "\n").replace("\r", "\n")
+    if len(text) > SUMMARY_LIMIT:
+        text = text[:SUMMARY_LIMIT] + SUMMARY_CUT_NOTE
+    return review_id, APPROVED_HEADER.format(head=head) + "\n" + text
 
 
 def shorten_description(context: dict) -> None:
@@ -191,7 +301,23 @@ def token_budget() -> str:
     return str(int(raw))
 
 
+def wants_reviews() -> None:
+    """Exits 0 when this run would read the review listing, 1 when it would not."""
+    # The Input Data is opened only for a run that could look: every other run reads it once,
+    # in main(), as before.
+    if env("MODE") != "merge" or merge_path_setting() != "direct" or not LOGIN.fullmatch(os.environ.get("REVIEWER_LOGIN", "")):
+        sys.exit(1)
+    try:
+        with open(env("CONTEXT_FILE"), encoding="utf-8") as handle:
+            context = json.load(handle)
+    except (OSError, ValueError, RecursionError):
+        sys.exit(1)
+    sys.exit(0 if wants_standing_approval(context) else 1)
+
+
 def main() -> None:
+    if sys.argv[1:] == ["--wants-reviews"]:
+        wants_reviews()
     mode = env("MODE")
     if mode not in ("review", "merge"):
         sys.exit(f"unknown mode {mode!r}")
@@ -214,9 +340,27 @@ def main() -> None:
             print("::notice::GEMINI_AGENT_MERGE_PATH is not set, so merge runs repeat the review. That default is deprecated: a later release will merge a clean pull request directly. Set the variable to 'direct' to adopt that now, or to 'full' to keep repeating the review.")
             print("Merge path: full (GEMINI_AGENT_MERGE_PATH is not set)")
         else:
-            refusal = direct_merge_refusal(context, env("HEAD_SHA"))
+            head = env("HEAD_SHA")
+            refusal = direct_merge_refusal(context, head)
+            source = ""
+            reviews_file = os.environ.get("REVIEWS_FILE", "")
+            # A merge-only command: no review job ran, so nothing was handed over. The review
+            # account's standing approval of this head commit is read from the pull request
+            # instead. A summary the review job did hand over is never replaced.
+            if reviews_file and wants_standing_approval(context):
+                found = standing_approval(read_reviews(reviews_file), os.environ.get("REVIEWER_LOGIN", ""), head)
+                if found is None:
+                    refusal = "no review job ran, and the review account has no standing approval of this head commit"
+                else:
+                    candidate = dict(context, review_summary=found[1])
+                    refusal = direct_merge_refusal(candidate, head)
+                    if refusal:
+                        refusal += f", in review {found[0]} from an earlier run"
+                    else:
+                        context = candidate
+                        source = f" (review {found[0]} approved this head commit in an earlier run)"
             direct = not refusal
-            print("Merge path: direct" if direct else f"Merge path: full ({refusal})")
+            print(f"Merge path: direct{source}" if direct else f"Merge path: full ({refusal})")
         if direct:
             shorten_description(context)
     prompt = prompt.replace(PLACEHOLDER, json.dumps(context, indent=2, ensure_ascii=False))

@@ -44,7 +44,11 @@ inputs:
     required: false
     default: ''
   merge_path:
-    description: "Merge runs only. 'direct': when the review job approved the head and no project outcome failed, the agent is told to merge without repeating the review. 'full': the agent always repeats the review before merging. Empty: the same as 'full' for now, with a notice that a later release changes the default to 'direct'."
+    description: "Merge runs only. 'direct': when the review job approved the head (or, on a merge-only command, the reviewer_login account's standing approval of the head is on the pull request) and no project outcome failed, the agent is told to merge without repeating the review. 'full': the agent always repeats the review before merging. Empty: the same as 'full' for now, with a notice that a later release changes the default to 'direct'."
+    required: false
+    default: ''
+  reviewer_login:
+    description: "Merge runs on the 'direct' merge path only. The account the review job submits reviews as. When the caller hands over no review summary (a merge-only command), that account's standing approval of the head commit is read from the pull request and takes its place. Empty: no such lookup. Pass it only when no review job ran: an empty summary from a review job that did run must not be replaced."
     required: false
     default: ''
   github_token:
@@ -172,6 +176,7 @@ runs:
         CONTEXT_FILE: '${{ inputs.context_file }}'
         PROMPT_ARGS: '${{ inputs.prompt_args }}'
         MERGE_PATH: '${{ inputs.merge_path }}'
+        REVIEWER_LOGIN: '${{ inputs.reviewer_login }}'
         GH_TOKEN: '${{ inputs.github_token }}'
         GIT_TOKEN: '${{ inputs.git_token }}'
         GITHUB_MCP_URL: 'https://api.githubcopilot.com/mcp/'
@@ -234,6 +239,32 @@ runs:
         export GIT_AUTH="${git_auth}"
         export COMMANDS_DIR="${ACTION_PATH}/../../.github/commands"
         export REQUEST_FILE="${request_file}"
+        # A merge-only command hands over no review summary. On the direct merge path the builder
+        # then looks in this listing for the review account's standing approval of the head
+        # commit. The builder itself says whether it would read the listing, so only that case
+        # lists the reviews, and a listing that fails or takes too long (60 seconds, then 5 more
+        # before it is killed) costs only the direct
+        # path. The variable is set here and nowhere else. The listing runs in the background
+        # and is waited for, so that a cancel signal ends the step at once.
+        export REVIEWS_FILE=''
+        if python3 -I "${ACTION_PATH}/build_request.py" --wants-reviews 2> /dev/null; then
+          # A new file under a name nothing else holds; without one there is no listing.
+          reviews_file="$(mktemp "${RUNNER_TEMP}/agent-reviews.XXXXXXXX" 2> /dev/null || true)"
+          listed='no'
+          if [[ -n "${reviews_file}" ]]; then
+            timeout --kill-after=5 60 gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/reviews?per_page=100" --paginate --slurp > "${reviews_file}" &
+            child_pid="$!"
+            if wait "${child_pid}"; then
+              listed='yes'
+            fi
+            child_pid=''
+          fi
+          if [[ "${listed}" == 'yes' ]]; then
+            export REVIEWS_FILE="${reviews_file}"
+          else
+            echo '::warning::Could not list the pull request reviews; this merge repeats the review.'
+          fi
+        fi
         python3 -I "${ACTION_PATH}/build_request.py"
         # Nothing after this point needs the GitHub tokens.
         unset GH_TOKEN GIT_TOKEN GIT_AUTH git_auth

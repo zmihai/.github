@@ -72,7 +72,8 @@ prompt, composite action, or template. The summary below is enough for orientati
   to their CI/scan/dispatch calls. Dispatch calls it internally too, so caller-side and
   dispatch-side gates cannot drift.
   - Inputs: `ref` (optional override). Outputs: `proceed`, `command`, `request`,
-    `additional_context`, `resolved_ref`, `is_fork`, `is_pr`, `issue_number`.
+    `additional_context`, `merge_instructions`, `merge_bare`, `resolved_ref`, `is_fork`, `is_pr`,
+    `issue_number`.
 - **Dispatch** runs the guard, then (for allowed events) posts the acknowledgement
   comment and fans out to review/merge.
   - Inputs: `projects` (optional JSON string, default `[]`), `ref` (optional).
@@ -106,7 +107,9 @@ prompt, composite action, or template. The summary below is enough for orientati
   Models: `GEMINI_AGENT_REVIEW_MODEL` / `GEMINI_AGENT_MERGE_MODEL`; needs `GEMINI_API_KEY`.
   A clean merge (approving review of the head, no failed project outcome, no extra
   instructions) gets a "direct merge path" prompt section that skips the second review; the
-  choice is made in `build_request.py`, never by the model. It is opt-in
+  choice is made in `build_request.py`, never by the model. A merge-only command hands over
+  no review, so the review account's standing approval of the head commit is read from the
+  pull request and held to the same checks. It is opt-in
   (`GEMINI_AGENT_MERGE_PATH=direct`); unset or `full` repeats the review, and a later release
   makes `direct` the default.
 - Repo-vars consulted: `APP_ID`/`APP_PRIVATE_KEY` (GitHub App identity),
