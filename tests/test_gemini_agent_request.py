@@ -706,10 +706,17 @@ def test_the_review_is_told_what_a_failed_project_outcome_means(tmp_path):
     assert '"scan-outcome": "failure"' in prompt
     notes = prompt.split("\n-----\n")[-1]
     assert "`projects` in the Input Data holds the outcome of the CI run and of the security scan" in notes
-    assert "report that as a High finding and do not approve." in notes
+    # A failed outcome sends the review into the diff; it is not a finding by itself, so the
+    # merge step keeps its own say on failures it can fix or that the change did not cause.
+    assert "is a lead, not a finding" in notes
+    assert "which direction each version moves" in notes
+    assert "Report what you\n  find at the severity it has on its own" in notes
+    assert "name every such outcome\n  in General Feedback" in notes
+    assert "Do not raise a finding only because an outcome failed." in notes
+    assert "do not approve" not in notes.lower()
     # The merge prompt has its own rules for outcomes and does not get this note.
     _, merge_prompt = merge_input(tmp_path, clean_context(projects=projects))
-    assert "do not approve." not in merge_prompt.split("\n-----\n")[-1]
+    assert "a lead, not a finding" not in merge_prompt
 
 
 def test_the_review_job_hands_over_the_project_outcomes_and_both_jobs_default_to_one_model():
@@ -717,6 +724,16 @@ def test_the_review_job_hands_over_the_project_outcomes_and_both_jobs_default_to
 
     dispatch = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-dispatch.yml").read_text(encoding="utf-8"))
     assert dispatch["jobs"]["agent-review"]["with"]["projects"] == "${{ needs.dispatch.outputs.projects }}"
+    assert dispatch["jobs"]["dispatch"]["outputs"]["projects"] == "${{ inputs.projects }}"
+    parsed = yaml.safe_load((ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8"))
+    context_steps = [step for job in parsed["jobs"].values() for step in job["steps"] if "gemini-context.json" in step.get("run", "")]
+    assert [step["env"]["PROJECTS"] for step in context_steps] == ["${{ inputs.projects }}"]
+    # The model each job names is the one the builder puts in the request.
+    action = yaml.safe_load((ROOT / "actions" / "gemini-agent" / "action.yml").read_text(encoding="utf-8"))
+    assert [step["env"]["MODEL"] for step in action["runs"]["steps"] if "MODEL" in step.get("env", {})] == ["${{ inputs.model }}"]
+    for doc in ("README.md", "docs/ARCHITECTURE.md"):
+        text = (ROOT / doc).read_text(encoding="utf-8")
+        assert "gemini-4-hydrogen" in text and "gemini-3.5-flash-lite" not in text and "gemini-3.8-flash" not in text
     review = (ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8")
     assert "additional_context: $context, projects: $projects}' > \"${RUNNER_TEMP}/gemini-context.json\"" in review
     assert "model: \"${{ vars.GEMINI_AGENT_REVIEW_MODEL || 'gemini-4-hydrogen' }}\"" in review
