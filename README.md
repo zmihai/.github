@@ -223,7 +223,7 @@ Uses Gemini to analyze CI/Security results and merge the PR when the changes are
 
 An alternative engine for the same `@gemini-cli` commands. Instead of running the Gemini CLI on the runner, the dispatch workflow starts a Gemini API managed agent (through the pinned `gemini-api` CLI) that works in a sandbox hosted by Google. The trigger policy, the commands, the prompts in `.github/commands/`, the merge policy and the merge gates are the same.
 
-It is off unless the consumer repository sets the variable `GEMINI_ENGINE` to `agent`. Deleting the variable returns the repository to the Gemini CLI workflows; nothing else needs to change, and the caller workflow and its permissions are identical for both engines.
+It is off unless the consumer repository sets the variable `GEMINI_ENGINE` to `agent`. Setting the variable to `cli` returns the repository to the Gemini CLI workflows (so does deleting it, for now, unless the organization sets it too); nothing else needs to change, and the caller workflow and its permissions are identical for both engines.
 
 - `GEMINI_ENGINE`: `agent` (in any letter case) selects this engine; `cli`, or any other value, selects the Gemini CLI. Unset also selects the Gemini CLI for now and logs a notice on each run that handles a review or merge command, because a later release makes `agent` the default: set `cli` to stay on the Gemini CLI. The reason for the change is the model: both agent jobs default to `gemini-4-hydrogen`, and Gemini CLI's own README says it is not optimized for Gemini 4 models (it runs them with its legacy prompts and tool definitions). This repository has not run Hydrogen on the Gemini CLI engine.
 - `GEMINI_AGENT_REVIEW_MODEL`: Review model. Defaults to `gemini-4-hydrogen`.
