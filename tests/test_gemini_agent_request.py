@@ -537,7 +537,16 @@ def test_description_at_the_limit_is_not_cut(tmp_path):
     assert '"issue_body": "' + "a" * 2000 + '\\n\\n[Pull request description cut' in prompt
 
 
-@pytest.mark.parametrize("tail", ["## 🚦 Blocking Findings\nNone.", "### Blocking Findings\n\n  None.  \n\n\n"])
+@pytest.mark.parametrize(
+    "tail",
+    [
+        "## 🚦 Blocking Findings\nNone.",
+        "### Blocking Findings\n\n  None.  \n\n\n",
+        # As a single list item, which review models also write.
+        "## 🚦 Blocking Findings\n\n- None.",
+        "## 🚦 Blocking Findings\n\n* None.\n",
+    ],
+)
 def test_an_empty_blocking_section_in_other_spellings_still_qualifies(tmp_path, tail):
     result, _ = merge_input(tmp_path, clean_context(review_summary=APPROVED + "fine\n\n" + tail))
 
@@ -606,6 +615,15 @@ def test_short_description_is_left_alone_on_the_direct_path(tmp_path):
         ({"review_summary": APPROVED + "- 🔴 Critical: a.py:3\n\n## Non-Blocking Findings\n\nNone.\n"}, "Blocking Findings"),
         ({"review_summary": APPROVED + "See the blocking findings below.\n\n## 🚦 Blocking Findings\n\nNone.\n"}, "Blocking Findings"),
         ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\nNone.\nNone.\n"}, "Blocking Findings"),
+        # A list item is an empty section only when it is the single line and says exactly `None.`.
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- None.\n- 🟠 High: b.py:9\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- None.\n- None.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- None. 🔴 Critical: a.py:3\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- None\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n-None.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- - None.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n1. None.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- none.\n"}, "Blocking Findings"),
         ({"review_summary": APPROVED + "x\n\n####### Blocking Findings\n\nNone.\n"}, "Blocking Findings"),
         ({"projects": [{"name": "s", "ci-outcome": "success"}, {"name": "docs"}]}, "carries no outcome"),
         ({"review_summary": f"## Review (state: APPROVED, head: {HEAD})\nx\n\n[Review summary cut at 20,000 characters. Read the full review on the pull request before deciding.]"}, "summary was cut"),

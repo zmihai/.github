@@ -104,6 +104,9 @@ SUBMITTED_AT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2
 # and underscores, and `[bot]` after an App's. Anything else is not a name this code compares.
 LOGIN = re.compile(r"[A-Za-z0-9_-]+(\[[Bb][Oo][Tt]\])?")
 
+# The one line an empty Blocking Findings section holds: `None.`, alone or as a single list item.
+EMPTY_SECTION = re.compile(r"(?:[-*] )?None\.")
+
 DIRECT_NOTES = """
 ## Direct merge path (this overrides the workflow and the notes above where they conflict)
 
@@ -155,14 +158,15 @@ def direct_merge_refusal(context, head: str) -> str:
         return "the review summary was cut"
     # The review prompt asks for one last section that lists every Critical or High finding, or
     # reads `None.`. One strict shape qualifies: the words appear on one line only, that line is
-    # the heading and nothing else, and only `None.` follows it. This reads what the review model
+    # the heading and nothing else, and only `None.` follows it, alone or as a single list item
+    # (`- None.`, `* None.`), which review models also write. This reads what the review model
     # wrote; it is not a defence against a review written to mislead.
     lines = [line.strip() for line in summary.split("\n")]
     mentions = [number for number, line in enumerate(lines) if BLOCKING_WORDS in line.lower()]
     if (
         len(mentions) != 1
         or not BLOCKING_HEADING.fullmatch(lines[mentions[0]])
-        or [line for line in lines[mentions[0] + 1 :] if line] != ["None."]
+        or [EMPTY_SECTION.fullmatch(line) is not None for line in lines[mentions[0] + 1 :] if line] != [True]
     ):
         return "the review summary does not end with an empty Blocking Findings section"
     return projects_refusal(context)
