@@ -548,9 +548,12 @@ def test_description_at_the_limit_is_not_cut(tmp_path):
     ],
 )
 def test_an_empty_blocking_section_in_other_spellings_still_qualifies(tmp_path, tail):
-    result, _ = merge_input(tmp_path, clean_context(review_summary=APPROVED + "fine\n\n" + tail))
+    result, prompt = merge_input(tmp_path, clean_context(review_summary=APPROVED + "fine\n\n" + tail))
 
     assert "Merge path: direct" in result.stdout.splitlines()
+    # The agent is told so, and reads the summary as it was written.
+    assert prompt.count(DIRECT_HEADING) == 1
+    assert input_data(prompt)["review_summary"] == APPROVED + "fine\n\n" + tail
 
 
 def test_full_setting_keeps_the_previous_request(tmp_path):
@@ -628,6 +631,10 @@ def test_short_description_is_left_alone_on_the_direct_path(tmp_path):
         ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n-  None.\n"}, "Blocking Findings"),
         ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n-\tNone.\n"}, "Blocking Findings"),
         ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n+ None.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n*\tNone.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n*  None.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n-\u00a0None.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n*\u00a0None.\n"}, "Blocking Findings"),
         # Look-alikes: an asterisk operator, a Cyrillic letter in the word, a non-breaking hyphen.
         ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n\u2217 None.\n"}, "Blocking Findings"),
         ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- N\u043ene.\n"}, "Blocking Findings"),
@@ -741,6 +748,7 @@ def test_a_standing_approval_may_write_its_empty_section_as_a_list_item(tmp_path
     result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5, body=body)])
 
     assert merge_path_line(result) == "Merge path: direct (review 41 approved this head commit in an earlier run)"
+    assert prompt.count(DIRECT_HEADING) == 1
     assert input_data(prompt)["review_summary"] == f"## Review (state: APPROVED, head: {HEAD})\n{body}\n\n"
 
 
