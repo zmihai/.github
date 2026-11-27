@@ -696,6 +696,96 @@ def test_review_ignores_the_merge_path(tmp_path, setting):
     assert json.dumps(LONG_BODY)[1:-1] in prompt
 
 
+def test_the_review_is_told_what_a_failed_project_outcome_means(tmp_path):
+    projects = [{"working-directory": "./server", "ci-outcome": "success", "scan-outcome": "failure"}]
+    result, request = build(tmp_path, "review", context_data=clean_context(projects=projects))
+
+    assert result.returncode == 0, result.stderr
+    prompt = json.loads(request.read_text(encoding="utf-8"))["input"]
+    # The outcomes reach the review, and the notes say what one that failed means.
+    assert '"scan-outcome": "failure"' in prompt
+    notes = prompt.split("\n-----\n")[-1]
+    assert "`projects` in the Input Data holds the outcome of the CI run and of the security scan" in notes
+    # A failed outcome sends the review into the diff; it is not a finding by itself, so the
+    # merge step keeps its own say on failures it can fix or that the change did not cause.
+    assert "is a lead, not a finding" in notes
+    assert "which direction each version moves" in notes
+    assert "Report what you\n  find at the severity it has on its own" in notes
+    assert "name every such outcome\n  in General Feedback" in notes
+    assert "Do not raise a finding only because an outcome failed." in notes
+    assert "An outcome that is neither\n  `success` nor `skipped` is a lead" in notes
+    assert "For a failed CI run, check the changed code, tests and configuration." in notes
+    assert '"ci-outcome": "success"' in prompt
+    assert "do not approve" not in notes.lower()
+    # The merge prompt has its own rules for outcomes and does not get this note.
+    _, merge_prompt = merge_input(tmp_path, clean_context(projects=projects))
+    assert "a lead, not a finding" not in merge_prompt
+
+
+def test_the_review_job_hands_over_the_project_outcomes_and_both_jobs_default_to_one_model():
+    import yaml
+
+    dispatch = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-dispatch.yml").read_text(encoding="utf-8"))
+    assert dispatch["jobs"]["agent-review"]["with"]["projects"] == "${{ needs.dispatch.outputs.projects }}"
+    assert dispatch["jobs"]["dispatch"]["outputs"]["projects"] == "${{ inputs.projects }}"
+    parsed = yaml.safe_load((ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8"))
+    context_steps = [step for job in parsed["jobs"].values() for step in job["steps"] if "gemini-context.json" in step.get("run", "")]
+    assert [step["env"]["PROJECTS"] for step in context_steps] == ["${{ inputs.projects }}"]
+    # The model each job names is the one the builder puts in the request.
+    action = yaml.safe_load((ROOT / "actions" / "gemini-agent" / "action.yml").read_text(encoding="utf-8"))
+    assert [step["env"]["MODEL"] for step in action["runs"]["steps"] if "MODEL" in step.get("env", {})] == ["${{ inputs.model }}"]
+    for doc in ("README.md", "docs/ARCHITECTURE.md"):
+        text = (ROOT / doc).read_text(encoding="utf-8")
+        assert "gemini-4-hydrogen" in text and "gemini-3.5-flash-lite" not in text and "gemini-3.8-flash" not in text
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "- `GEMINI_AGENT_REVIEW_MODEL`: Review model. Defaults to `gemini-4-hydrogen`.\n" in readme
+    assert "- `GEMINI_AGENT_MERGE_MODEL`: Merge model. Defaults to `gemini-4-hydrogen`.\n" in readme
+    # The Gemini CLI engine's own fallbacks are as they were.
+    cli_review = (ROOT / ".github" / "workflows" / "gemini-review.yml").read_text(encoding="utf-8")
+    cli_merge = (ROOT / ".github" / "workflows" / "gemini-merge.yml").read_text(encoding="utf-8")
+    assert "gemini_model: \"${{ vars.GEMINI_REVIEW_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}\"" in cli_review
+    assert "gemini_model: \"${{ vars.GEMINI_SECURITY_REVIEW_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}\"" in cli_review
+    assert "gemini_model: \"${{ vars.GEMINI_MERGE_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}\"" in cli_merge
+    review = (ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8")
+    assert "additional_context: $context, projects: $projects}' > \"${RUNNER_TEMP}/gemini-context.json\"" in review
+    assert "model: \"${{ vars.GEMINI_AGENT_REVIEW_MODEL || 'gemini-4-hydrogen' }}\"" in review
+    merge = (ROOT / ".github" / "workflows" / "gemini-agent-merge.yml").read_text(encoding="utf-8")
+    assert "model: \"${{ vars.GEMINI_AGENT_MERGE_MODEL || 'gemini-4-hydrogen' }}\"" in merge
+    # The Gemini CLI engine keeps its own model variables.
+    for name in ("gemini-review.yml", "gemini-merge.yml"):
+        assert "hydrogen" not in (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+
+
+def test_an_unset_engine_is_announced_and_changes_nothing():
+    import yaml
+
+    dispatch = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-dispatch.yml").read_text(encoding="utf-8"))
+    steps = [step for step in dispatch["jobs"]["dispatch"]["steps"] if "GEMINI_ENGINE is not set" in step.get("run", "")]
+    assert len(steps) == 1
+    # Only when the variable is unset, and only on a run that reviews or merges.
+    assert steps[0]["if"] == (
+        "${{ vars.GEMINI_ENGINE == '' && (needs.guard.outputs.command == 'review'"
+        " || needs.guard.outputs.command == 'review-and-merge' || needs.guard.outputs.command == 'merge') }}"
+    )
+    # The whole step is this one line; it says what is deprecated and both ways to choose.
+    assert steps[0]["run"] == (
+        'echo "::notice::GEMINI_ENGINE is not set, so this repository uses the Gemini CLI for reviews and merges.'
+        " That default is deprecated: a later release will use the Gemini agent engine."
+        " Set the repository variable GEMINI_ENGINE to 'agent' to adopt that now, or to 'cli' to keep the Gemini CLI.\""
+    )
+    done = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", steps[0]["run"]], capture_output=True, text=True)
+    assert done.returncode == 0 and done.stdout.startswith("::notice::GEMINI_ENGINE is not set") and done.stdout.count("\n") == 1
+    assert set(steps[0]) == {"name", "if", "run"}
+    # Which engine runs is unchanged: the agent only on 'agent', the Gemini CLI on anything else.
+    jobs = dispatch["jobs"]
+    for name in ("review", "merge"):
+        assert jobs[name]["if"].startswith("${{ vars.GEMINI_ENGINE != 'agent' && ")
+    # A bare merge command still reaches the agent merge job, whose condition names its own status function.
+    assert jobs["agent-merge"]["if"].startswith("${{ !cancelled() && vars.GEMINI_ENGINE == 'agent' && needs.dispatch.result == 'success' && ((needs.dispatch.outputs.command == 'merge' && needs.agent-review.result == 'skipped') || ")
+    assert jobs["agent-review"]["if"].startswith("${{ vars.GEMINI_ENGINE == 'agent' && ")
+    assert "vars.GEMINI_ENGINE == 'agent'" in jobs["agent-merge"]["if"]
+
+
 # A merge-only command: no review job ran, so the Input Data carries an empty review summary, and
 # the review account's standing approval of the head commit is read from the pull request.
 BOT = "github-actions[bot]"

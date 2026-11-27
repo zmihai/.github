@@ -264,7 +264,7 @@ jobs:
         uses: '$/actions/gemini-agent'
         with:
           mode: 'merge'
-          model: "${{ vars.GEMINI_AGENT_MERGE_MODEL || 'gemini-3.8-flash' }}"
+          model: "${{ vars.GEMINI_AGENT_MERGE_MODEL || 'gemini-4-hydrogen' }}"
           merge_path: '${{ vars.GEMINI_AGENT_MERGE_PATH }}'
           # The account the review job submits reviews as (gemini-agent-review.yml), and only
           # on a merge-only command: when a review job ran, an empty summary from it must not

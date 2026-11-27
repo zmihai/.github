@@ -99,7 +99,8 @@ prompt, composite action, or template. The summary below is enough for orientati
   `agent`, dispatch routes the same commands to `gemini-agent-review.yml` /
   `gemini-agent-merge.yml`, which run the same prompt files on a Gemini API managed agent
   through `actions/gemini-agent` (pinned `gemini-api` CLI, checksum-verified). Unset, every
-  job behaves as before — keep it that way: the engine predicate is the only edit the
+  job behaves as before, and the dispatch job logs a notice that a later release makes
+  `agent` the default (`cli` keeps the Gemini CLI) — keep it that way: the engine predicate is the only edit the
   agent path may make to the Gemini CLI jobs. One agent run replaces the two review
   passes; the merge workflow keeps the pre-run snapshot, the blocking-review skip and the
   durable-outcome gate. The run step owns the whole lifecycle (build request, start, poll,

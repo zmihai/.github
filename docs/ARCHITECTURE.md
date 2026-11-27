@@ -252,9 +252,13 @@ Resolved per task, each falling back to a shared var, then a literal default:
 
 ### 1.8 The agent engine (opt-in, preview)
 
-`vars.GEMINI_ENGINE == 'agent'` in the consumer repository switches dispatch from the
+`vars.GEMINI_ENGINE == 'agent'` (GitHub compares without regard to letter case) in the consumer repository switches dispatch from the
 Gemini CLI jobs to two agent jobs. Every Gemini CLI job carries the opposite predicate, so
-exactly one engine runs and an unset variable leaves the behaviour above untouched.
+exactly one engine runs and an unset variable leaves the behaviour above untouched. Unset is
+deprecated as a way to choose the Gemini CLI: the dispatch job logs a notice on every run that handles a review or
+merge command without the variable, and a later release makes `agent` the default (`cli`, like any
+other value, keeps the Gemini CLI). The agent jobs default to `gemini-4-hydrogen`, a model the
+Gemini CLI's README says it is not optimized for; Hydrogen was never run on the CLI engine here.
 
 ```
 reusable-gemini-dispatch.yml
@@ -336,8 +340,9 @@ reusable-gemini-dispatch.yml
   not seen on this path (on a merge-only command the lookup, a little later, still sees one
   from the review account); the merge call is the agent's first tool call, so that window is
   shorter than the one the full path leaves between its read of the reviews and its merge call.
-- **Models.** `GEMINI_AGENT_REVIEW_MODEL` (default `gemini-3.5-flash-lite`) and
-  `GEMINI_AGENT_MERGE_MODEL` (default `gemini-3.8-flash`). The variables in 1.7 do not apply.
+- **Models.** `GEMINI_AGENT_REVIEW_MODEL` and `GEMINI_AGENT_MERGE_MODEL` (both default to
+  `gemini-4-hydrogen`: on the direct merge path the review is the only reading of the change, and a
+  lighter review model approved a dependency downgrade into a vulnerable range in a trial). The variables in 1.7 do not apply.
 - **Preview caveats.** The agent ID and the CLI are preview releases, and the hosted MCP
   server accepting the Actions job token is observed, not documented. Untested so far:
   GitHub App identity and very large pull requests.
