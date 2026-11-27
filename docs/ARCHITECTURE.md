@@ -283,6 +283,13 @@ reusable-gemini-dispatch.yml
   no other network; merge mode has open network for remediation. Git always uses the job
   token, also under a GitHub App identity: a push made with it starts no workflow run, so a
   remediation push cannot cancel the run that made it.
+- **Failed checks in the review.** The review's Input Data carries `projects`. The notes
+  `build_request.py` appends tell the review that an outcome that is neither `success` nor
+  `skipped` is a lead, not a finding: follow it into the diff (for a failed scan, every
+  dependency the change moves and in which direction), report what is found at its own
+  severity, and name the outcome in General Feedback. A failed outcome alone raises no
+  finding, so a review does not request changes for it and the merge step keeps its
+  remediation and its rule for failures the change did not cause.
 - **Review.** Before the run, a pending review left by the agent's account is deleted and
   the existing review IDs are snapshotted. Afterwards only a new, submitted review by that
   account on the resolved head counts; its body becomes `review_summary` (capped at 20,000
