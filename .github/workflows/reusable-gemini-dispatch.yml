@@ -100,7 +100,7 @@ jobs:
       - name: 'Announce the coming engine default'
         if: ${{ vars.GEMINI_ENGINE == '' && (needs.guard.outputs.command == 'review' || needs.guard.outputs.command == 'review-and-merge' || needs.guard.outputs.command == 'merge') }}
         run: |-
-          echo "::notice::GEMINI_ENGINE is not set, so this run uses the Gemini CLI. That default is deprecated: a later release will run reviews and merges on the Gemini agent engine. Set the repository variable GEMINI_ENGINE to 'agent' to adopt that now, or to 'cli' to keep the Gemini CLI."
+          echo "::notice::GEMINI_ENGINE is not set, so this repository uses the Gemini CLI for reviews and merges. That default is deprecated: a later release will use the Gemini agent engine. Set the repository variable GEMINI_ENGINE to 'agent' to adopt that now, or to 'cli' to keep the Gemini CLI."
 
       - name: 'Acknowledge request'
         if: ${{ needs.guard.outputs.command != 'fallthrough' && needs.guard.outputs.command != 'unsupported-fork' }}

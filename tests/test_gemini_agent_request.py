@@ -713,6 +713,9 @@ def test_the_review_is_told_what_a_failed_project_outcome_means(tmp_path):
     assert "Report what you\n  find at the severity it has on its own" in notes
     assert "name every such outcome\n  in General Feedback" in notes
     assert "Do not raise a finding only because an outcome failed." in notes
+    assert "An outcome that is neither\n  `success` nor `skipped` is a lead" in notes
+    assert "For a failed CI run, check the changed code, tests and configuration." in notes
+    assert '"ci-outcome": "success"' in prompt
     assert "do not approve" not in notes.lower()
     # The merge prompt has its own rules for outcomes and does not get this note.
     _, merge_prompt = merge_input(tmp_path, clean_context(projects=projects))
@@ -734,6 +737,15 @@ def test_the_review_job_hands_over_the_project_outcomes_and_both_jobs_default_to
     for doc in ("README.md", "docs/ARCHITECTURE.md"):
         text = (ROOT / doc).read_text(encoding="utf-8")
         assert "gemini-4-hydrogen" in text and "gemini-3.5-flash-lite" not in text and "gemini-3.8-flash" not in text
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "- `GEMINI_AGENT_REVIEW_MODEL`: Review model. Defaults to `gemini-4-hydrogen`.\n" in readme
+    assert "- `GEMINI_AGENT_MERGE_MODEL`: Merge model. Defaults to `gemini-4-hydrogen`.\n" in readme
+    # The Gemini CLI engine's own fallbacks are as they were.
+    cli_review = (ROOT / ".github" / "workflows" / "gemini-review.yml").read_text(encoding="utf-8")
+    cli_merge = (ROOT / ".github" / "workflows" / "gemini-merge.yml").read_text(encoding="utf-8")
+    assert "gemini_model: \"${{ vars.GEMINI_REVIEW_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}\"" in cli_review
+    assert "gemini_model: \"${{ vars.GEMINI_SECURITY_REVIEW_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}\"" in cli_review
+    assert "gemini_model: \"${{ vars.GEMINI_MERGE_MODEL || vars.GEMINI_MODEL || 'gemini-flash-latest' }}\"" in cli_merge
     review = (ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8")
     assert "additional_context: $context, projects: $projects}' > \"${RUNNER_TEMP}/gemini-context.json\"" in review
     assert "model: \"${{ vars.GEMINI_AGENT_REVIEW_MODEL || 'gemini-4-hydrogen' }}\"" in review
@@ -755,13 +767,21 @@ def test_an_unset_engine_is_announced_and_changes_nothing():
         "${{ vars.GEMINI_ENGINE == '' && (needs.guard.outputs.command == 'review'"
         " || needs.guard.outputs.command == 'review-and-merge' || needs.guard.outputs.command == 'merge') }}"
     )
-    assert steps[0]["run"].startswith('echo "::notice::GEMINI_ENGINE is not set, so this run uses the Gemini CLI.')
-    assert "'agent' to adopt that now, or to 'cli' to keep the Gemini CLI." in steps[0]["run"]
+    # The whole step is this one line; it says what is deprecated and both ways to choose.
+    assert steps[0]["run"] == (
+        'echo "::notice::GEMINI_ENGINE is not set, so this repository uses the Gemini CLI for reviews and merges.'
+        " That default is deprecated: a later release will use the Gemini agent engine."
+        " Set the repository variable GEMINI_ENGINE to 'agent' to adopt that now, or to 'cli' to keep the Gemini CLI.\""
+    )
+    done = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", steps[0]["run"]], capture_output=True, text=True)
+    assert done.returncode == 0 and done.stdout.startswith("::notice::GEMINI_ENGINE is not set") and done.stdout.count("\n") == 1
     assert set(steps[0]) == {"name", "if", "run"}
     # Which engine runs is unchanged: the agent only on 'agent', the Gemini CLI on anything else.
     jobs = dispatch["jobs"]
     for name in ("review", "merge"):
         assert jobs[name]["if"].startswith("${{ vars.GEMINI_ENGINE != 'agent' && ")
+    # A bare merge command still reaches the agent merge job, whose condition names its own status function.
+    assert jobs["agent-merge"]["if"].startswith("${{ !cancelled() && vars.GEMINI_ENGINE == 'agent' && needs.dispatch.result == 'success' && ((needs.dispatch.outputs.command == 'merge' && needs.agent-review.result == 'skipped') || ")
     assert jobs["agent-review"]["if"].startswith("${{ vars.GEMINI_ENGINE == 'agent' && ")
     assert "vars.GEMINI_ENGINE == 'agent'" in jobs["agent-merge"]["if"]
 
