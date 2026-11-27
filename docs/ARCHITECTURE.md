@@ -254,7 +254,11 @@ Resolved per task, each falling back to a shared var, then a literal default:
 
 `vars.GEMINI_ENGINE == 'agent'` in the consumer repository switches dispatch from the
 Gemini CLI jobs to two agent jobs. Every Gemini CLI job carries the opposite predicate, so
-exactly one engine runs and an unset variable leaves the behaviour above untouched.
+exactly one engine runs and an unset variable leaves the behaviour above untouched. Unset is
+deprecated as a way to choose the Gemini CLI: the dispatch job logs a notice on every review or
+merge run without the variable, and a later release makes `agent` the default (`cli`, like any
+other value, keeps the Gemini CLI). The agent jobs default to `gemini-4-hydrogen`, a model the
+Gemini CLI's README says it is not optimized for; Hydrogen was never run on the CLI engine here.
 
 ```
 reusable-gemini-dispatch.yml

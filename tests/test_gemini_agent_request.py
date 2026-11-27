@@ -727,6 +727,28 @@ def test_the_review_job_hands_over_the_project_outcomes_and_both_jobs_default_to
         assert "hydrogen" not in (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
 
 
+def test_an_unset_engine_is_announced_and_changes_nothing():
+    import yaml
+
+    dispatch = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-dispatch.yml").read_text(encoding="utf-8"))
+    steps = [step for step in dispatch["jobs"]["dispatch"]["steps"] if "GEMINI_ENGINE is not set" in step.get("run", "")]
+    assert len(steps) == 1
+    # Only when the variable is unset, and only on a run that reviews or merges.
+    assert steps[0]["if"] == (
+        "${{ vars.GEMINI_ENGINE == '' && (needs.guard.outputs.command == 'review'"
+        " || needs.guard.outputs.command == 'review-and-merge' || needs.guard.outputs.command == 'merge') }}"
+    )
+    assert steps[0]["run"].startswith('echo "::notice::GEMINI_ENGINE is not set, so this run uses the Gemini CLI.')
+    assert "'agent' to adopt that now, or to 'cli' to keep the Gemini CLI." in steps[0]["run"]
+    assert set(steps[0]) == {"name", "if", "run"}
+    # Which engine runs is unchanged: the agent only on 'agent', the Gemini CLI on anything else.
+    jobs = dispatch["jobs"]
+    for name in ("review", "merge"):
+        assert jobs[name]["if"].startswith("${{ vars.GEMINI_ENGINE != 'agent' && ")
+    assert jobs["agent-review"]["if"].startswith("${{ vars.GEMINI_ENGINE == 'agent' && ")
+    assert "vars.GEMINI_ENGINE == 'agent'" in jobs["agent-merge"]["if"]
+
+
 # A merge-only command: no review job ran, so the Input Data carries an empty review summary, and
 # the review account's standing approval of the head commit is read from the pull request.
 BOT = "github-actions[bot]"
