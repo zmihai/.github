@@ -624,6 +624,17 @@ def test_short_description_is_left_alone_on_the_direct_path(tmp_path):
         ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- - None.\n"}, "Blocking Findings"),
         ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n1. None.\n"}, "Blocking Findings"),
         ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- none.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- None!\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n-  None.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n-\tNone.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n+ None.\n"}, "Blocking Findings"),
+        # Look-alikes: an asterisk operator, a Cyrillic letter in the word, a non-breaking hyphen.
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n\u2217 None.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- N\u043ene.\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n\u2011 None.\n"}, "Blocking Findings"),
+        # A heading with nothing after it says nothing.
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n"}, "Blocking Findings"),
+        ({"review_summary": APPROVED + "x\n\n## 🚦 Blocking Findings\n\n- \n"}, "Blocking Findings"),
         ({"review_summary": APPROVED + "x\n\n####### Blocking Findings\n\nNone.\n"}, "Blocking Findings"),
         ({"projects": [{"name": "s", "ci-outcome": "success"}, {"name": "docs"}]}, "carries no outcome"),
         ({"review_summary": f"## Review (state: APPROVED, head: {HEAD})\nx\n\n[Review summary cut at 20,000 characters. Read the full review on the pull request before deciding.]"}, "summary was cut"),
@@ -722,6 +733,15 @@ def test_a_merge_only_command_takes_the_direct_path_on_a_standing_approval(tmp_p
     # The summary is rebuilt as the review job hands it over: header, body, a blank line.
     assert input_data(prompt)["review_summary"] == f"## Review (state: APPROVED, head: {HEAD})\n{REVIEW_BODY}\n\n"
     assert "description cut at" in prompt
+
+
+@pytest.mark.parametrize("ending", ["- None.", "* None."])
+def test_a_standing_approval_may_write_its_empty_section_as_a_list_item(tmp_path, ending):
+    body = "Looks fine.\n\n## 🚦 Blocking Findings\n\n" + ending
+    result, prompt = merge_only(tmp_path, [review(41, "APPROVED", 5, body=body)])
+
+    assert merge_path_line(result) == "Merge path: direct (review 41 approved this head commit in an earlier run)"
+    assert input_data(prompt)["review_summary"] == f"## Review (state: APPROVED, head: {HEAD})\n{body}\n\n"
 
 
 @pytest.mark.parametrize(

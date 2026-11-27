@@ -117,7 +117,7 @@ is therefore done, and its result is the Review Summary in the Input Data.
 
 - Do not repeat the review. Do not read the pull request, its files, its diff or its reviews
   with `pull_request_read`, and run no shell command.
-- Read the Review Summary. Its Blocking Findings section reads `None.`, but when anything else
+- Read the Review Summary. Its Blocking Findings section holds only `None.`, but when anything else
   in it describes a Critical or High issue, or anything in the
   Input Data gives you a concrete reason to doubt the change, leave this path: ignore this
   section and carry out the whole workflow above.
