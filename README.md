@@ -50,7 +50,7 @@ permissions:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.18.0
     with:
       language: 'php'
       language-version: '8.4'
@@ -94,7 +94,7 @@ permissions:
 
 jobs:
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.18.0
     with:
       scan-dependencies: true
       scan-code: true
@@ -144,7 +144,7 @@ It validates the trigger (non-fork `pull_request` events; `issues` opened/reopen
 ```yaml
 jobs:
   guard:
-    uses: zmihai/.github/.github/workflows/reusable-gemini-guard.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-gemini-guard.yml@v0.18.0
 
   ci:
     needs: guard
@@ -152,7 +152,7 @@ jobs:
       needs.guard.outputs.proceed == 'true' &&
       needs.guard.outputs.is_pr == 'true' &&
       needs.guard.outputs.is_fork == 'false'
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.18.0
     with:
       language: 'javascript'
       language-version: '20'
@@ -233,7 +233,7 @@ It is off unless the consumer repository sets the variable `GEMINI_ENGINE` to `a
 
 What differs from the Gemini CLI engine:
 
-- **One review instead of two.** The code review and the security analysis are a single agent run that posts one pull request review. Its summary ends with a `Security Analysis` and a `Blocking Findings` section, which is what the merge step reads.
+- **One review instead of two.** The code review and the security analysis are a single agent run that posts one pull request review. Its summary ends with a `Security Analysis` and a `Blocking Findings` section, which is what the merge step reads. The review also receives the CI and scan outcomes in `projects`: one that is neither `success` nor `skipped` is a lead to follow into the diff and to name in the summary, and whatever the review finds is reported at its own severity. A failed outcome alone is not a finding; what it means for the merge is the merge step's decision.
 - **A clean merge can skip the second review (opt-in: `GEMINI_AGENT_MERGE_PATH=direct`).** When the review job approved the head commit and its summary ends with an empty `Blocking Findings` section, every outcome in `projects` (any key ending in `outcome`) is `success` or `skipped`, with at least one `success`, and the command carried no extra instructions, the merge agent is told to call the merge tool directly: no second reading of the diff, no second approving review, and a pull request description cut to 2,000 characters. The runner decides this from the data it hands over; the agent is told to fall back to the whole workflow when the review summary names a Critical or High issue, and, when the merge call fails, to post an approving review that says so instead of retrying. Text after a merge-only command (`@gemini-cli /merge <text>`) counts as extra instructions on this engine and is passed to the merge agent (GitHub drops a job output that holds a secret's value; text lost that way still rules out the direct path). A merge-only command (`@gemini-cli /merge`) runs no review job, so the runner reads the review account's own reviews from the pull request instead: when the latest of its approvals, requests for changes and dismissed reviews is an approval of the head commit (and no other of them carries the same timestamp), that review's summary is held to the same conditions. Every other case (a failed or cancelled outcome, a merge-only command without such an approval, a review that only commented, a review summary cut at 20,000 characters, no `projects`) runs the whole workflow as before (unless a blocking review is active, which skips the merge model on either path). The job log says which path a run took (`Merge path: ...`). This saves tokens and is not a merge gate.
 - **Where the code runs.** The agent clones the repository in its sandbox. It reaches GitHub only through GitHub's hosted MCP server (limited to the pull request read and review tools, plus the merge tool in a merge run) and through git over `github.com`. Two tokens travel to Google inside the request: the one for the MCP server (the GitHub App token when an App identity is configured, otherwise the job token) and the job token for git, which the sandbox's egress proxy attaches to those git requests. Neither is placed in the sandbox.
 - **Network.** A review run can reach `github.com` only. A merge run has open network access, because a remediation installs dependencies and runs the project's checks.
@@ -267,7 +267,7 @@ Sets up Node.js environment with caching and automatic dependency installation.
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-node-env@v0.17.1
+  - uses: zmihai/.github/actions/setup-node-env@v0.18.0
     with:
       node-version: '20'
       cache: 'npm'
@@ -289,7 +289,7 @@ Sets up PHP environment with composer caching and automatic dependency installat
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-php-env@v0.17.1
+  - uses: zmihai/.github/actions/setup-php-env@v0.18.0
     with:
       php-version: '8.2'
       extensions: 'gd, intl, zip'
@@ -311,7 +311,7 @@ Sets up Python environment with pip caching and automatic dependency installatio
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-python-env@v0.17.1
+  - uses: zmihai/.github/actions/setup-python-env@v0.18.0
     with:
       python-version: '3.11'
 ```
@@ -336,7 +336,7 @@ Sets up a JDK (Temurin by default) and auto-detects the build tool (Maven via `p
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: zmihai/.github/actions/setup-java-env@v0.17.1
+  - uses: zmihai/.github/actions/setup-java-env@v0.18.0
     with:
       java-version: '21'
       distribution: 'temurin'
@@ -398,7 +398,7 @@ concurrency:
 jobs:
   ci_project_a:
     name: CI - Project A
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.18.0
     with:
       language: 'python'
       language-version: '3.11'
@@ -406,7 +406,7 @@ jobs:
 
   security_project_a:
     name: Security - Project A
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.18.0
     with:
       language: 'python'
       language-version: '3.11'
@@ -414,7 +414,7 @@ jobs:
 
   ci_project_b:
     name: CI - Project B
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.18.0
     with:
       language: 'javascript'
       language-version: '20'
@@ -422,7 +422,7 @@ jobs:
 
   security_project_b:
     name: Security - Project B
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.18.0
     with:
       language: 'javascript'
       language-version: '20'
@@ -465,7 +465,7 @@ jobs:
   gemini_merge:
     name: Gemini Merge
     needs: aggregate
-    uses: zmihai/.github/.github/workflows/gemini-merge.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/gemini-merge.yml@v0.18.0
     with:
       pull_request_number: ${{ github.event.pull_request.number }}
       projects: ${{ needs.aggregate.outputs.projects_json }}
@@ -495,13 +495,13 @@ permissions:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.18.0
     with:
       language: 'php'
       language-version: '8.5'
 
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.18.0
     with:
       language: 'php'
       language-version: '8.5'
@@ -530,13 +530,13 @@ permissions:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.18.0
     with:
       language: 'python'
       language-version: '3.13'
 
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.18.0
     with:
       language: 'python'
       language-version: '3.13'
@@ -565,7 +565,7 @@ permissions:
 
 jobs:
   ci:
-    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-ci.yml@v0.18.0
     with:
       language: 'java'
       language-version: '21'
@@ -573,7 +573,7 @@ jobs:
       extensions: 'protobuf-compiler'
 
   security:
-    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.17.1
+    uses: zmihai/.github/.github/workflows/reusable-security-scan.yml@v0.18.0
     with:
       language: 'java'
       language-version: '21'
@@ -592,15 +592,15 @@ jobs:
 ### Using Reusable Workflows
 
 1. In your repository, create a workflow file (e.g., `.github/workflows/ci.yml`)
-2. Reference reusable workflows using `uses: zmihai/.github/.github/workflows/<name>.yml@v0.17.1`
-3. Reference composite actions using `uses: zmihai/.github/actions/<name>@v0.17.1`
+2. Reference reusable workflows using `uses: zmihai/.github/.github/workflows/<name>.yml@v0.18.0`
+3. Reference composite actions using `uses: zmihai/.github/actions/<name>@v0.18.0`
 4. Pass required inputs and secrets
 
 ---
 
 ## 📚 Best Practices
 
-1. **Pin versions**: Use specific tags (like `@v0.17.1`) or commit SHAs in production.
+1. **Pin versions**: Use specific tags (like `@v0.18.0`) or commit SHAs in production.
 2. **Security**: Use GitHub Secrets for all sensitive information.
 3. **Testing**: Test workflow changes in a separate branch before merging to master
 4. **Documentation**: Keep this README updated when adding new workflows or actions
