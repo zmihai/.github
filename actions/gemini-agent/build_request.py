@@ -44,6 +44,13 @@ REVIEW_NOTES = """
   for vulnerabilities (injection, cross-site scripting, authentication and access-control flaws,
   secrets exposure, unsafe deserialisation, path traversal, privacy leaks) and report each one
   as an inline comment with its severity, like any other finding.
+- `projects` in the Input Data holds the outcome of the CI run and of the security scan of each
+  project for this head commit (`ci-outcome`, `scan-outcome`). An outcome that is neither
+  `success` nor `skipped` is evidence against the change, and you cannot see that run's logs:
+  look in the diff for what could cause it, and name every such outcome in the summary. When
+  the diff could cause it (for a failed scan: a dependency added, removed or changed in
+  version, a downgrade above all; for a failed CI run: changed code, tests or configuration),
+  report that as a High finding and do not approve.
 - The summary is what the merge step reads, so it must carry every blocking finding itself.
   After General Feedback add two sections, in this order. First `## 🛡️ Security Analysis`: the
   security findings in one line each, or that none was found. Last `## 🚦 Blocking Findings`:

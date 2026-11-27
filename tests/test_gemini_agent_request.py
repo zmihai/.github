@@ -696,6 +696,37 @@ def test_review_ignores_the_merge_path(tmp_path, setting):
     assert json.dumps(LONG_BODY)[1:-1] in prompt
 
 
+def test_the_review_is_told_what_a_failed_project_outcome_means(tmp_path):
+    projects = [{"working-directory": "./server", "ci-outcome": "success", "scan-outcome": "failure"}]
+    result, request = build(tmp_path, "review", context_data=clean_context(projects=projects))
+
+    assert result.returncode == 0, result.stderr
+    prompt = json.loads(request.read_text(encoding="utf-8"))["input"]
+    # The outcomes reach the review, and the notes say what one that failed means.
+    assert '"scan-outcome": "failure"' in prompt
+    notes = prompt.split("\n-----\n")[-1]
+    assert "`projects` in the Input Data holds the outcome of the CI run and of the security scan" in notes
+    assert "report that as a High finding and do not approve." in notes
+    # The merge prompt has its own rules for outcomes and does not get this note.
+    _, merge_prompt = merge_input(tmp_path, clean_context(projects=projects))
+    assert "do not approve." not in merge_prompt.split("\n-----\n")[-1]
+
+
+def test_the_review_job_hands_over_the_project_outcomes_and_both_jobs_default_to_one_model():
+    import yaml
+
+    dispatch = yaml.safe_load((ROOT / ".github" / "workflows" / "reusable-gemini-dispatch.yml").read_text(encoding="utf-8"))
+    assert dispatch["jobs"]["agent-review"]["with"]["projects"] == "${{ needs.dispatch.outputs.projects }}"
+    review = (ROOT / ".github" / "workflows" / "gemini-agent-review.yml").read_text(encoding="utf-8")
+    assert "additional_context: $context, projects: $projects}' > \"${RUNNER_TEMP}/gemini-context.json\"" in review
+    assert "model: \"${{ vars.GEMINI_AGENT_REVIEW_MODEL || 'gemini-4-hydrogen' }}\"" in review
+    merge = (ROOT / ".github" / "workflows" / "gemini-agent-merge.yml").read_text(encoding="utf-8")
+    assert "model: \"${{ vars.GEMINI_AGENT_MERGE_MODEL || 'gemini-4-hydrogen' }}\"" in merge
+    # The Gemini CLI engine keeps its own model variables.
+    for name in ("gemini-review.yml", "gemini-merge.yml"):
+        assert "hydrogen" not in (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+
+
 # A merge-only command: no review job ran, so the Input Data carries an empty review summary, and
 # the review account's standing approval of the head commit is read from the pull request.
 BOT = "github-actions[bot]"

@@ -154,7 +154,7 @@ jobs:
         uses: '$/actions/gemini-agent'
         with:
           mode: 'review'
-          model: "${{ vars.GEMINI_AGENT_REVIEW_MODEL || 'gemini-3.5-flash-lite' }}"
+          model: "${{ vars.GEMINI_AGENT_REVIEW_MODEL || 'gemini-4-hydrogen' }}"
           pull_request_number: '${{ inputs.issue_number }}'
           expected_head_sha: '${{ inputs.ref || github.event.pull_request.head.sha }}'
           context_file: '${{ runner.temp }}/gemini-context.json'

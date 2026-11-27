@@ -336,8 +336,9 @@ reusable-gemini-dispatch.yml
   not seen on this path (on a merge-only command the lookup, a little later, still sees one
   from the review account); the merge call is the agent's first tool call, so that window is
   shorter than the one the full path leaves between its read of the reviews and its merge call.
-- **Models.** `GEMINI_AGENT_REVIEW_MODEL` (default `gemini-3.5-flash-lite`) and
-  `GEMINI_AGENT_MERGE_MODEL` (default `gemini-3.8-flash`). The variables in 1.7 do not apply.
+- **Models.** `GEMINI_AGENT_REVIEW_MODEL` and `GEMINI_AGENT_MERGE_MODEL` (both default to
+  `gemini-4-hydrogen`: on the direct merge path the review is the only reading of the change, and a
+  lighter review model approved a dependency downgrade into a vulnerable range in a trial). The variables in 1.7 do not apply.
 - **Preview caveats.** The agent ID and the CLI are preview releases, and the hosted MCP
   server accepting the Actions job token is observed, not documented. Untested so far:
   GitHub App identity and very large pull requests.
