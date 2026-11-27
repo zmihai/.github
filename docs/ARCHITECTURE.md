@@ -286,7 +286,8 @@ reusable-gemini-dispatch.yml
 - **Failed checks in the review.** The review's Input Data carries `projects`. The notes
   `build_request.py` appends tell the review that an outcome that is neither `success` nor
   `skipped` is a lead, not a finding: follow it into the diff (for a failed scan, every
-  dependency the change moves and in which direction), report what is found at its own
+  dependency the change adds, removes or moves to another version, the direction of each
+  move and what is known about the version it lands on), report what is found at its own
   severity, and name the outcome in General Feedback. A failed outcome alone raises no
   finding, so a review does not request changes for it and the merge step keeps its
   remediation and its rule for failures the change did not cause.
